@@ -24,6 +24,20 @@ pub struct AttributeSchema {
     pub strict: bool,
 }
 
+impl AttributeSchema {
+    pub fn new(name: impl Into<String>, value_type: ValueType) -> Self {
+        Self {
+            id: Id::nil(),
+            name: name.into(),
+            description: None,
+            value_type,
+            unique: false,
+            index: false,
+            strict: false,
+        }
+    }
+}
+
 pub trait AttributeDescriptor {
     const ID: Id;
     const NAME: &'static str;

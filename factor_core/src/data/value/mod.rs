@@ -157,6 +157,14 @@ impl Value {
         matches!(self, Self::Bool(..))
     }
 
+    pub fn as_bool(&self) -> Option<bool> {
+        if let Self::Bool(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
     /// Returns `true` if the value is [`UInt`].
     pub fn is_u_int(&self) -> bool {
         matches!(self, Self::UInt(..))

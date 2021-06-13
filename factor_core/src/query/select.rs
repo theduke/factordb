@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::data::{Ident, Value};
+use crate::data::{Id, Ident, Value};
 
 use super::expr::Expr;
 
@@ -32,7 +32,35 @@ pub struct Select {
     pub sort: Vec<Sort>,
     pub variables: HashMap<String, Value>,
     pub limit: u64,
-    pub cursor: Option<Cursor>,
+    pub cursor: Option<Id>,
+}
+
+impl Select {
+    pub fn new() -> Self {
+        Self {
+            joins: Default::default(),
+            filter: None,
+            sort: Vec::new(),
+            variables: Default::default(),
+            limit: 100,
+            cursor: None,
+        }
+    }
+
+    pub fn with_limit(mut self, limit: u64) -> Self {
+        self.limit = limit;
+        self
+    }
+
+    pub fn with_cursor(mut self, cursor: Id) -> Self {
+        self.cursor = Some(cursor);
+        self
+    }
+
+    pub fn with_filter(mut self, filter: Expr) -> Self {
+        self.filter = Some(filter);
+        self
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
