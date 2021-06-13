@@ -269,3 +269,25 @@ impl EntityDescriptor for EntitySchemaType {
         }
     }
 }
+
+pub fn id_is_builtin_entity_type(id: Id) -> bool {
+    match id {
+        AttributeSchemaType::ID | EntitySchemaType::ID => true,
+        _ => false,
+    }
+}
+
+pub fn id_is_builtin_entity_filter() -> crate::query::expr::Expr {
+    use crate::query::expr::Expr;
+    // TODO: use IN query
+    let a = Expr::neq(
+        Expr::ident(AttrType::ID),
+        Expr::literal(EntitySchemaType::ID),
+    );
+    let b = Expr::neq(
+        Expr::ident(AttrType::ID),
+        Expr::literal(AttributeSchemaType::ID),
+    );
+
+    Expr::or(a, b)
+}

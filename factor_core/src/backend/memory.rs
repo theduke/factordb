@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
@@ -13,7 +14,8 @@ use crate::{
     error,
     query::{self, migrate::Migration},
     registry::SharedRegistry,
-    schema, AnyError,
+    schema::{self, AttributeDescriptor},
+    AnyError,
 };
 
 use super::{BackendFuture, DbOp, TupleCreate, TupleDelete, TupleOp, TuplePatch, TupleReplace};
@@ -355,6 +357,159 @@ impl State {
 
         Ok(())
     }
+
+    fn select(
+        &self,
+        query: query::select::Select,
+    ) -> Result<query::select::Page<DataMap>, AnyError> {
+        // TODO: query validation and planning
+
+        let items: Vec<(&Id, &MemoryTuple)> = if let Some(filter) = query.filter {
+            self.entities
+                .iter()
+                .filter(|(_id, item)| {
+                    // Skip builtin types.
+
+                    if let Some(id) = item
+                        .get(&crate::schema::builtin::AttrType::ID)
+                        .and_then(|x| x.as_id())
+                    {
+                        if crate::schema::builtin::id_is_builtin_entity_type(id) {
+                            return false;
+                        }
+                    }
+
+                    let flag = self.entity_filter(item, &filter);
+                    flag
+                })
+                .collect()
+        } else {
+            self.entities
+                .iter()
+                .filter(|(_id, item)| {
+                    if let Some(id) = item
+                        .get(&crate::schema::builtin::AttrType::ID)
+                        .and_then(|x| x.as_id())
+                    {
+                        if crate::schema::builtin::id_is_builtin_entity_type(id) {
+                            return false;
+                        }
+                    }
+                    true
+                })
+                .collect()
+        };
+
+        if !query.sort.is_empty() {
+            todo!()
+        }
+
+        let items = if let Some(cursor) = query.cursor {
+            items
+                .into_iter()
+                .skip_while(|(id, _)| **id != cursor)
+                .take(query.limit as usize)
+                .map(|(_id, data)| self.tuple_to_data_map(data))
+                .collect::<Result<_, _>>()?
+        } else {
+            items
+                .into_iter()
+                .take(query.limit as usize)
+                .map(|(_id, data)| self.tuple_to_data_map(data))
+                .collect::<Result<_, _>>()?
+        };
+
+        Ok(query::select::Page {
+            items,
+            next_cursor: None,
+        })
+    }
+
+    fn eval_expr<'a>(&self, entity: &MemoryTuple, expr: &'a query::expr::Expr) -> Cow<'a, Value> {
+        let out = match expr {
+            query::expr::Expr::Literal(v) => Cow::Borrowed(v),
+            query::expr::Expr::Ident(ident) => match ident {
+                Ident::Id(id) => entity
+                    .get(id)
+                    .map(|x| Cow::Owned(x.to_value()))
+                    .unwrap_or(cowal_unit()),
+                Ident::Name(name) => self
+                    .registry
+                    .read()
+                    .unwrap()
+                    .attr_by_name(name)
+                    .and_then(|attr| entity.get(&attr.id).map(|x| Cow::Owned(x.to_value())))
+                    .unwrap_or(cowal_unit()),
+            },
+            query::expr::Expr::Variable(_) => todo!(),
+            query::expr::Expr::UnaryOp { op, expr } => {
+                let value = self.eval_expr(entity, expr);
+                match op {
+                    query::expr::UnaryOp::Not => {
+                        let flag = value.as_bool().unwrap_or(false);
+                        Cow::Owned(Value::Bool(!flag))
+                    }
+                }
+            }
+            query::expr::Expr::BinaryOp { left, op, right } => match op {
+                query::expr::BinaryOp::And => {
+                    let left_flag = self.eval_expr(entity, left).as_bool().unwrap_or(false);
+                    let flag = if left_flag {
+                        self.eval_expr(entity, right).as_bool().unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    Cow::Owned(Value::Bool(flag))
+                }
+                query::expr::BinaryOp::Or => {
+                    let left_flag = self.eval_expr(entity, left).as_bool().unwrap_or(false);
+                    let flag = if left_flag {
+                        true
+                    } else {
+                        self.eval_expr(entity, right).as_bool().unwrap_or(false)
+                    };
+                    Cow::Owned(Value::Bool(flag))
+                }
+                other => {
+                    let left = self.eval_expr(entity, left);
+                    let right = self.eval_expr(entity, right);
+
+                    let flag = match other {
+                        query::expr::BinaryOp::Eq => left == right,
+                        query::expr::BinaryOp::Neq => left != right,
+                        query::expr::BinaryOp::Gt => left > right,
+                        query::expr::BinaryOp::Gte => left >= right,
+                        query::expr::BinaryOp::Lt => left < right,
+                        query::expr::BinaryOp::Lte => left <= right,
+                        query::expr::BinaryOp::In(_) => todo!(),
+
+                        // Covered above.
+                        query::expr::BinaryOp::And | query::expr::BinaryOp::Or => {
+                            unreachable!()
+                        }
+                    };
+                    Cow::Owned(Value::Bool(flag))
+                }
+            },
+            query::expr::Expr::If { value, then, or } => {
+                let flag = self.eval_expr(entity, &*value).as_bool().unwrap_or(false);
+                if flag {
+                    self.eval_expr(entity, &*then)
+                } else {
+                    self.eval_expr(entity, &*or)
+                }
+            }
+        };
+        out
+    }
+
+    fn entity_filter(&self, entity: &MemoryTuple, expr: &query::expr::Expr) -> bool {
+        self.eval_expr(entity, expr).as_bool().unwrap_or(false)
+    }
+}
+
+fn cowal_unit<'a>() -> Cow<'a, Value> {
+    Cow::Owned(Value::Unit)
 }
 
 #[derive(Clone, Hash, Debug, PartialOrd, Ord)]
@@ -374,6 +529,7 @@ impl PartialEq for SharedStr {
 
 impl Eq for SharedStr {}
 
+#[derive(Debug)]
 struct MemoryTuple(FnvHashMap<Id, MemoryValue>);
 
 impl std::ops::Deref for MemoryTuple {
@@ -398,7 +554,7 @@ impl std::ops::DerefMut for MemoryTuple {
 
 // Value for in-memory storage.
 // Uses shared strings to save memory usage.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 enum MemoryValue {
     Unit,
 
@@ -415,25 +571,39 @@ enum MemoryValue {
     Id(Id),
 }
 
-impl<'a> From<&'a MemoryValue> for Value {
-    fn from(v: &'a MemoryValue) -> Self {
+impl MemoryValue {
+    fn to_value(&self) -> Value {
         use MemoryValue as V;
-        match v {
-            V::Unit => Self::Unit,
-            V::Bool(v) => Self::Bool(*v),
-            V::UInt(v) => Self::UInt(*v),
-            V::Int(v) => Self::Int(*v),
-            V::Float(v) => Self::Float(*v),
-            V::String(v) => Self::String(v.to_string()),
-            V::Bytes(v) => Self::Bytes(v.clone()),
-            V::List(v) => Self::List(v.into_iter().map(Into::into).collect()),
-            V::Map(v) => Self::Map(
+        match self {
+            V::Unit => Value::Unit,
+            V::Bool(v) => Value::Bool(*v),
+            V::UInt(v) => Value::UInt(*v),
+            V::Int(v) => Value::Int(*v),
+            V::Float(v) => Value::Float(*v),
+            V::String(v) => Value::String(v.to_string()),
+            V::Bytes(v) => Value::Bytes(v.clone()),
+            V::List(v) => Value::List(v.into_iter().map(Into::into).collect()),
+            V::Map(v) => Value::Map(
                 v.into_iter()
                     .map(|(key, value)| (key.into(), value.into()))
                     .collect(),
             ),
-            V::Id(v) => Self::Id(*v),
+            V::Id(v) => Value::Id(*v),
         }
+    }
+
+    fn as_id(&self) -> Option<Id> {
+        if let Self::Id(id) = self {
+            Some(*id)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> From<&'a MemoryValue> for Value {
+    fn from(v: &'a MemoryValue) -> Self {
+        v.to_value()
     }
 }
 
@@ -516,11 +686,9 @@ impl super::Backend for MemoryDb {
         ready(res).boxed()
     }
 
-    fn select(
-        &self,
-        _query: query::select::Select,
-    ) -> super::BackendFuture<query::select::Page<DataMap>> {
-        todo!()
+    fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<DataMap>> {
+        let res = self.state.read().unwrap().select(query);
+        ready(res).boxed()
     }
 
     fn apply_batch(&self, batch: query::update::BatchUpdate) -> BackendFuture<()> {

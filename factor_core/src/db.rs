@@ -25,9 +25,9 @@ impl Db {
 
     pub async fn select(
         &self,
-        _query: query::select::Select,
+        query: query::select::Select,
     ) -> Result<query::select::Page<DataMap>, AnyError> {
-        todo!()
+        self.backend.select(query).await
     }
 
     pub async fn create(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
