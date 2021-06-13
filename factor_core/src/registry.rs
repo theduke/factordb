@@ -47,6 +47,8 @@ impl Registry {
     }
 
     fn add_builtins(&mut self) {
+        self.register_attr(builtin::AttrType::schema()).unwrap();
+
         self.register_attr(builtin::AttrId::schema()).unwrap();
         self.register_attr(builtin::AttrIdent::schema()).unwrap();
         self.register_attr(builtin::AttrValueType::schema())

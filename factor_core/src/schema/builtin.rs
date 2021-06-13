@@ -44,7 +44,7 @@ impl AttributeDescriptor for AttrIdent {
 pub struct AttrType;
 
 impl AttributeDescriptor for AttrType {
-    const ID: Id = Id::from_u128(2);
+    const ID: Id = Id::from_u128(12);
     const NAME: &'static str = "factor/type";
 
     fn schema() -> AttributeSchema {

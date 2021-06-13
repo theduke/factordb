@@ -1,10 +1,12 @@
 use crate::{
     backend::{DbOp, TupleCreate, TupleOp},
-    data::{value, Id},
+    data::value,
     query::migrate::{Migration, SchemaAction},
     registry::Registry,
     AnyError,
 };
+
+use super::{builtin::AttrType, AttributeDescriptor, EntityDescriptor};
 
 pub fn validate_migration(
     reg: &mut Registry,
@@ -15,13 +17,17 @@ pub fn validate_migration(
     for action in &mut mig.actions {
         match action {
             SchemaAction::AttributeCreate(create) => {
-                if create.schema.id.is_nil() {
-                    create.schema.id = Id::random();
-                }
+                create.schema.id = create.schema.id.into_non_nil();
 
                 reg.register_attr(create.schema.clone())?;
 
-                let data = value::to_value_map(create.schema.clone())?;
+                let mut data = value::to_value_map(create.schema.clone())?;
+                // Add tye factor/type attr.
+                data.insert(
+                    AttrType::NAME.to_string(),
+                    super::builtin::AttributeSchemaType::ID.into(),
+                );
+
                 ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
                     id: create.schema.id,
                     data,
@@ -31,13 +37,17 @@ pub fn validate_migration(
                 todo!()
             }
             SchemaAction::EntityCreate(create) => {
-                if create.schema.id.is_nil() {
-                    create.schema.id = Id::random();
-                }
+                create.schema.id = create.schema.id.into_non_nil();
 
                 reg.register_entity(create.schema.clone(), true)?;
 
-                let data = value::to_value_map(create.schema.clone())?;
+                let mut data = value::to_value_map(create.schema.clone())?;
+                // Add tye factor/type attr.
+                data.insert(
+                    AttrType::NAME.to_string(),
+                    super::builtin::EntitySchemaType::ID.into(),
+                );
+
                 ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
                     id: create.schema.id,
                     data,
