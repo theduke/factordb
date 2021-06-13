@@ -2,7 +2,7 @@ pub mod memory;
 
 use crate::{
     data::{DataMap, Id, Ident, Value},
-    query,
+    query::{self, expr::Expr},
     registry::SharedRegistry,
     schema, AnyError,
 };
@@ -76,11 +76,19 @@ pub struct TupleDelete {
 }
 
 #[derive(Clone, Debug)]
+pub struct TupleSelectRemove {
+    pub selector: Expr,
+    pub attrs: Vec<Id>,
+}
+
+#[derive(Clone, Debug)]
 pub enum TupleOp {
     Create(TupleCreate),
     Replace(TupleReplace),
     Patch(TuplePatch),
     Delete(TupleDelete),
+
+    SelectRemove(TupleSelectRemove),
 }
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,6 @@
 use crate::{
     backend::{DbOp, TupleCreate, TupleOp},
-    data::value,
+    data::{self, value},
     query::migrate::{Migration, SchemaAction},
     registry::Registry,
     AnyError,
@@ -33,8 +33,19 @@ pub fn validate_migration(
                     data,
                 })));
             }
-            SchemaAction::AttributeDelete(_del) => {
-                todo!()
+            SchemaAction::AttributeDelete(del) => {
+                let attr = reg.require_attr_by_name(&del.name)?.clone();
+
+                let mut patch_data = data::DataMap::new();
+                // TODO: better handling of removal than with a Unit replace?
+                patch_data.insert(attr.name.to_string(), data::Value::Unit);
+
+                let op = DbOp::Tuple(TupleOp::SelectRemove(crate::backend::TupleSelectRemove {
+                    selector: crate::query::expr::Expr::literal(true),
+                    attrs: vec![attr.id],
+                }));
+
+                ops.push(op);
             }
             SchemaAction::EntityCreate(create) => {
                 create.schema.id = create.schema.id.into_non_nil();

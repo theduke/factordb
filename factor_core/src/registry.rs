@@ -143,6 +143,25 @@ impl Registry {
         Ok(())
     }
 
+    pub fn validate_remove_attr(
+        &mut self,
+        id: Id,
+    ) -> Result<crate::schema::AttributeSchema, AnyError> {
+        let attr = self
+            .attrs
+            .remove(&id)
+            .ok_or_else(|| anyhow!("Attribute not found: {}", id))?;
+
+        self.entities.values_mut().for_each(|entity| {
+            entity.attributes.retain(|ident| match ident {
+                Ident::Id(ent_id) => *ent_id != id,
+                Ident::Name(name) => name.as_ref() != attr.name,
+            });
+        });
+
+        Ok(attr)
+    }
+
     pub fn entity_by_name(&self, name: &str) -> Option<&schema::EntitySchema> {
         self.entity_idents
             .get(name)

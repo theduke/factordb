@@ -19,8 +19,11 @@ impl Db {
         }
     }
 
-    pub async fn entity(&self, id: Ident) -> Result<DataMap, AnyError> {
-        self.backend.entity(id).await
+    pub async fn entity<I>(&self, id: I) -> Result<DataMap, AnyError>
+    where
+        I: Into<Ident>,
+    {
+        self.backend.entity(id.into()).await
     }
 
     pub async fn select(

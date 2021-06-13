@@ -5,8 +5,9 @@ use crate::{
     backend::Backend,
     data::{Id, Value, ValueType},
     error, map,
-    query::{self, expr::Expr, select::Select},
-    schema, Db,
+    query::{self, expr::Expr, migrate::Migration, select::Select},
+    schema::{self, builtin::AttrId, AttributeDescriptor},
+    Db,
 };
 
 pub fn test_backend<F>(b: impl Backend + Send + Sync + 'static, spawner: F)
@@ -37,7 +38,9 @@ async fn test_db(db: Db) {
     test_assert_fails_with_incorrect_value_type(&db).await;
     db.purge_all_data().await.unwrap();
 
+    test_remove_attr(&db).await;
     db.purge_all_data().await.unwrap();
+
     test_db_with_test_schema(&db).await;
 }
 
@@ -88,7 +91,7 @@ async fn test_create_attribute(f: &Db) {
     .await
     .unwrap();
 
-    let data = f.entity(id.into()).await.unwrap();
+    let data = f.entity(id).await.unwrap();
     assert_eq!(Value::from("hello"), data["test/text"]);
 }
 
@@ -96,7 +99,7 @@ async fn test_assert_simple(f: &Db) {
     let id = Id::random();
 
     // Check that inexistant id returns EntityNotFound error.
-    let err = f.entity(id.into()).await.unwrap_err();
+    let err = f.entity(id).await.unwrap_err();
     assert!(err.is::<error::EntityNotFound>());
 
     // Check that a query returns nothing.
@@ -111,7 +114,7 @@ async fn test_assert_simple(f: &Db) {
     f.create(id, data.clone()).await.unwrap();
 
     // Load and compare.
-    let data1 = f.entity(id.into()).await.unwrap();
+    let data1 = f.entity(id).await.unwrap();
     let mut expected = map! {
         "factor/description": "a",
         // "factor/ident": ident.clone(),
@@ -131,14 +134,14 @@ async fn test_assert_simple(f: &Db) {
 
     // Load and compare again.
     expected.insert("factor/description".into(), "b".into());
-    let data3 = f.entity(id.into()).await.unwrap();
+    let data3 = f.entity(id).await.unwrap();
     assert_eq!(expected, data3);
 
     // Delete
     f.delete(id).await.unwrap();
 
     // Ensure entity is gone.
-    let err = f.entity(id.into()).await.unwrap_err();
+    let err = f.entity(id).await.unwrap_err();
     assert!(err.is::<error::EntityNotFound>());
 }
 
@@ -162,4 +165,32 @@ async fn test_select(db: &Db) {
         .await
         .unwrap();
     assert_eq!(page.items, page_match);
+}
+
+async fn test_remove_attr(db: &Db) {
+    // Create new attribute.
+    let mig = Migration::new().attr_create(AttributeSchema::new("t/removeAttr", ValueType::String));
+    db.migrate(mig).await.unwrap();
+
+    // Insert an entity.
+    let id = Id::random();
+    let mut data = map! {
+        "factor/description": "lala",
+        "t/removeAttr": "toRemove",
+    };
+    db.create(id, data.clone()).await.unwrap();
+    data.insert(AttrId::NAME.into(), id.into());
+
+    // Check data is as expected.
+    let data2 = db.entity(id).await.unwrap();
+    assert_eq!(data, data2);
+
+    // Delete the attribute.
+    let mig2 = Migration::new().attr_delete("t/removeAttr");
+    db.migrate(mig2).await.unwrap();
+
+    // Assert that attribute has been removed from entity.
+    data.remove("t/removeAttr");
+    let data3 = db.entity(id).await.unwrap();
+    assert_eq!(data, data3);
 }

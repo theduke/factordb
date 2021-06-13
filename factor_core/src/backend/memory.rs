@@ -13,7 +13,7 @@ use crate::{
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
     query::{self, migrate::Migration},
-    registry::SharedRegistry,
+    registry::{Registry, SharedRegistry},
     schema::{self, AttributeDescriptor},
     AnyError,
 };
@@ -259,6 +259,21 @@ impl State {
             .ok_or_else(|| error::EntityNotFound::new(del.id.into()).into())
     }
 
+    fn tuple_select_remove(&mut self, rem: super::TupleSelectRemove) -> Result<(), AnyError> {
+        let reg = self.registry.clone();
+
+        // TODO: use query logic instead of full table scan for speedup.
+        for entity in self.entities.values_mut() {
+            if Self::entity_filter(entity, &rem.selector, &*reg.read().unwrap()) {
+                for attr_id in &rem.attrs {
+                    entity.remove(&attr_id);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn apply_db_ops(&mut self, ops: Vec<DbOp>) -> Result<(), AnyError> {
         // FIXME: revert changes if anything fails.
         for op in ops {
@@ -275,6 +290,9 @@ impl State {
                     }
                     TupleOp::Delete(del) => {
                         self.tuple_delete(del)?;
+                    }
+                    TupleOp::SelectRemove(remove) => {
+                        self.tuple_select_remove(remove)?;
                     }
                 },
             }
@@ -364,6 +382,8 @@ impl State {
     ) -> Result<query::select::Page<DataMap>, AnyError> {
         // TODO: query validation and planning
 
+        let reg = self.registry.read().unwrap();
+
         let items: Vec<(&Id, &MemoryTuple)> = if let Some(filter) = query.filter {
             self.entities
                 .iter()
@@ -379,7 +399,7 @@ impl State {
                         }
                     }
 
-                    let flag = self.entity_filter(item, &filter);
+                    let flag = Self::entity_filter(item, &filter, &*reg);
                     flag
                 })
                 .collect()
@@ -425,7 +445,11 @@ impl State {
         })
     }
 
-    fn eval_expr<'a>(&self, entity: &MemoryTuple, expr: &'a query::expr::Expr) -> Cow<'a, Value> {
+    fn eval_expr<'a>(
+        entity: &MemoryTuple,
+        expr: &'a query::expr::Expr,
+        reg: &Registry,
+    ) -> Cow<'a, Value> {
         let out = match expr {
             query::expr::Expr::Literal(v) => Cow::Borrowed(v),
             query::expr::Expr::Ident(ident) => match ident {
@@ -433,17 +457,14 @@ impl State {
                     .get(id)
                     .map(|x| Cow::Owned(x.to_value()))
                     .unwrap_or(cowal_unit()),
-                Ident::Name(name) => self
-                    .registry
-                    .read()
-                    .unwrap()
+                Ident::Name(name) => reg
                     .attr_by_name(name)
                     .and_then(|attr| entity.get(&attr.id).map(|x| Cow::Owned(x.to_value())))
                     .unwrap_or(cowal_unit()),
             },
             query::expr::Expr::Variable(_) => todo!(),
             query::expr::Expr::UnaryOp { op, expr } => {
-                let value = self.eval_expr(entity, expr);
+                let value = Self::eval_expr(entity, expr, reg);
                 match op {
                     query::expr::UnaryOp::Not => {
                         let flag = value.as_bool().unwrap_or(false);
@@ -453,26 +474,34 @@ impl State {
             }
             query::expr::Expr::BinaryOp { left, op, right } => match op {
                 query::expr::BinaryOp::And => {
-                    let left_flag = self.eval_expr(entity, left).as_bool().unwrap_or(false);
+                    let left_flag = Self::eval_expr(entity, left, reg)
+                        .as_bool()
+                        .unwrap_or(false);
                     let flag = if left_flag {
-                        self.eval_expr(entity, right).as_bool().unwrap_or(false)
+                        Self::eval_expr(entity, right, reg)
+                            .as_bool()
+                            .unwrap_or(false)
                     } else {
                         false
                     };
                     Cow::Owned(Value::Bool(flag))
                 }
                 query::expr::BinaryOp::Or => {
-                    let left_flag = self.eval_expr(entity, left).as_bool().unwrap_or(false);
+                    let left_flag = Self::eval_expr(entity, left, reg)
+                        .as_bool()
+                        .unwrap_or(false);
                     let flag = if left_flag {
                         true
                     } else {
-                        self.eval_expr(entity, right).as_bool().unwrap_or(false)
+                        Self::eval_expr(entity, right, reg)
+                            .as_bool()
+                            .unwrap_or(false)
                     };
                     Cow::Owned(Value::Bool(flag))
                 }
                 other => {
-                    let left = self.eval_expr(entity, left);
-                    let right = self.eval_expr(entity, right);
+                    let left = Self::eval_expr(entity, left, reg);
+                    let right = Self::eval_expr(entity, right, reg);
 
                     let flag = match other {
                         query::expr::BinaryOp::Eq => left == right,
@@ -492,19 +521,23 @@ impl State {
                 }
             },
             query::expr::Expr::If { value, then, or } => {
-                let flag = self.eval_expr(entity, &*value).as_bool().unwrap_or(false);
+                let flag = Self::eval_expr(entity, &*value, reg)
+                    .as_bool()
+                    .unwrap_or(false);
                 if flag {
-                    self.eval_expr(entity, &*then)
+                    Self::eval_expr(entity, &*then, reg)
                 } else {
-                    self.eval_expr(entity, &*or)
+                    Self::eval_expr(entity, &*or, reg)
                 }
             }
         };
         out
     }
 
-    fn entity_filter(&self, entity: &MemoryTuple, expr: &query::expr::Expr) -> bool {
-        self.eval_expr(entity, expr).as_bool().unwrap_or(false)
+    fn entity_filter(entity: &MemoryTuple, expr: &query::expr::Expr, reg: &Registry) -> bool {
+        Self::eval_expr(entity, expr, reg)
+            .as_bool()
+            .unwrap_or(false)
     }
 }
 
