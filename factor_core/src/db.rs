@@ -5,8 +5,7 @@ use data::DataMap;
 use crate::{
     backend::Backend,
     data::{self, Id, Ident},
-    query,
-    AnyError,
+    query, AnyError,
 };
 
 pub struct Db {

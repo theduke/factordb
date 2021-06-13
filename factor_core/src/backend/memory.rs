@@ -10,6 +10,7 @@ use ordered_float::OrderedFloat;
 
 use crate::{
     data::{value::ValueMap, DataMap, Id, Ident, Value},
+    error,
     query::{self, migrate::Migration},
     registry::SharedRegistry,
     schema, AnyError,
@@ -60,6 +61,14 @@ impl State {
     fn resolve_entity(&self, ident: &Ident) -> Option<&MemoryTuple> {
         let id = self.resolve_ident(ident)?;
         self.entities.get(&id)
+    }
+
+    fn must_resolve_entity_ident(
+        &self,
+        ident: &Ident,
+    ) -> Result<&MemoryTuple, error::EntityNotFound> {
+        self.resolve_entity(ident)
+            .ok_or_else(|| error::EntityNotFound::new(ident.clone()))
     }
 
     // fn resolve_entity_mut(&mut self, ident: &Ident) -> Option<&mut MemoryTuple> {
@@ -229,7 +238,7 @@ impl State {
         let old = self
             .entities
             .get_mut(&update.id)
-            .ok_or_else(|| anyhow!("Entity not found: '{}'", update.id))?;
+            .ok_or_else(|| error::EntityNotFound::new(update.id.into()))?;
 
         let reg = self.registry.read().unwrap();
         for (key, value) in update.data.0 {
@@ -245,7 +254,7 @@ impl State {
     fn tuple_delete(&mut self, del: TupleDelete) -> Result<MemoryTuple, AnyError> {
         self.entities
             .remove(&del.id)
-            .ok_or_else(|| anyhow!("Entity not found: '{}'", del.id))
+            .ok_or_else(|| error::EntityNotFound::new(del.id.into()).into())
     }
 
     fn apply_db_ops(&mut self, ops: Vec<DbOp>) -> Result<(), AnyError> {
@@ -501,8 +510,8 @@ impl super::Backend for MemoryDb {
     fn entity(&self, id: Ident) -> super::BackendFuture<DataMap> {
         let state = self.state.read().unwrap();
         let res = state
-            .resolve_entity(&id)
-            .ok_or_else(|| anyhow!("Entity not found: {:?}", id))
+            .must_resolve_entity_ident(&id)
+            .map_err(AnyError::from)
             .and_then(|tuple| state.tuple_to_data_map(tuple));
         ready(res).boxed()
     }

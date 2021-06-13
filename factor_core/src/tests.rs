@@ -3,7 +3,7 @@ use futures::{future::BoxFuture, FutureExt};
 use crate::{
     backend::Backend,
     data::{Id, Value, ValueType},
-    map, query, schema, Db,
+    error, map, query, schema, Db,
 };
 
 pub fn test_backend<F>(b: impl Backend + Send + Sync + 'static, spawner: F)
@@ -68,6 +68,9 @@ async fn test_create_attribute(f: &Db) {
 async fn test_assert_simple(f: &Db) {
     let id = Id::random();
 
+    let err = f.entity(id.into()).await.unwrap_err();
+    assert!(err.is::<error::EntityNotFound>());
+
     let data = map! {
         "factor/description": "a",
     };
@@ -90,4 +93,9 @@ async fn test_assert_simple(f: &Db) {
     expected.insert("factor/description".into(), "b".into());
     let data3 = f.entity(id.into()).await.unwrap();
     assert_eq!(expected, data3);
+
+    f.delete(id).await.unwrap();
+
+    let err = f.entity(id.into()).await.unwrap_err();
+    assert!(err.is::<error::EntityNotFound>());
 }

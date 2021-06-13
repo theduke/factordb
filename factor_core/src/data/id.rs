@@ -77,6 +77,13 @@ impl Ident {
             Self::Name(v) => (None, Some(v)),
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Ident::Id(id) => id.to_string(),
+            Ident::Name(n) => n.to_string(),
+        }
+    }
 }
 
 impl From<Id> for Ident {
