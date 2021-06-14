@@ -362,7 +362,8 @@ impl MemoryStore {
     /// [RevertOp]s are collected into the provided revert list, which allows
     /// undoing operations.
     fn apply_db_ops(&mut self, ops: Vec<DbOp>, revert: &mut RevertList) -> Result<(), AnyError> {
-        // FIXME: revert changes if anything fails.
+        // FIXME: implement validate_ checks via registry for all operations.
+        // FIXME: guard against schema changes outside of a migration.
         for op in ops {
             match op {
                 DbOp::Tuple(tuple) => match tuple {
