@@ -376,6 +376,12 @@ impl State {
         Ok(())
     }
 
+    fn entity(&self, id: Ident) -> Result<DataMap, AnyError> {
+        self.must_resolve_entity_ident(&id)
+            .map_err(AnyError::from)
+            .and_then(|tuple| self.tuple_to_data_map(tuple))
+    }
+
     fn select(
         &self,
         query: query::select::Select,
@@ -538,6 +544,13 @@ impl State {
         Self::eval_expr(entity, expr, reg)
             .as_bool()
             .unwrap_or(false)
+    }
+
+    fn purge_all_data(&mut self) -> Result<(), AnyError> {
+        self.entities.clear();
+        self.idents.clear();
+        self.interner.clear();
+        Ok(())
     }
 }
 
@@ -703,19 +716,12 @@ impl super::Backend for MemoryDb {
     }
 
     fn purge_all_data(&self) -> BackendFuture<()> {
-        let mut state = self.state.write().unwrap();
-        state.entities.clear();
-        state.idents.clear();
-        state.interner.clear();
-        ready(Ok(())).boxed()
+        let res = self.state.write().unwrap().purge_all_data();
+        ready(res).boxed()
     }
 
     fn entity(&self, id: Ident) -> super::BackendFuture<DataMap> {
-        let state = self.state.read().unwrap();
-        let res = state
-            .must_resolve_entity_ident(&id)
-            .map_err(AnyError::from)
-            .and_then(|tuple| state.tuple_to_data_map(tuple));
+        let res = self.state.read().unwrap().entity(id);
         ready(res).boxed()
     }
 
