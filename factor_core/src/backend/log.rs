@@ -63,13 +63,27 @@ impl LogDb {
         let s = Self {
             state: Arc::new(state),
         };
-        let s = s.restore().await?;
+        s.restore().await?;
         Ok(s)
     }
 
-    async fn restore(self) -> Result<Self, AnyError> {
+    /// Get access to the store.
+    ///
+    /// Since the store is behind a Mutex, you must provide a closure.
+    pub async fn with_store<F, O>(&self, f: F) -> O
+    where
+        F: FnOnce(&dyn LogStore) -> O,
+    {
+        let state = self.state.mutable.lock().await;
+        f(&*state.store)
+    }
+
+    async fn restore(&self) -> Result<(), AnyError> {
         {
             let mut mutable = self.state.mutable.lock().await;
+
+            self.state.mem.write().unwrap().purge_all_data();
+
             let mut event_id = 0;
             {
                 let mut stream = mutable.store.iter_events(0, EventId::MAX).await?;
@@ -111,7 +125,15 @@ impl LogDb {
             }
             mutable.current_event_id = event_id;
         }
-        Ok(self)
+        Ok(())
+    }
+
+    /// Reset the in-memory state and rebuild from the log store.
+    ///
+    /// Primarily used for testing.
+    pub async fn force_rebuild(&self) -> Result<(), AnyError> {
+        self.restore().await?;
+        Ok(())
     }
 
     async fn write_event(
@@ -321,6 +343,12 @@ impl MemoryLogStore {
             events: Default::default(),
         }
     }
+
+    pub fn duplicate(&self) -> Self {
+        Self {
+            events: self.events.clone(),
+        }
+    }
 }
 
 type StreamFuture<'a> = BoxFuture<'a, Result<BoxStream<'a, Result<Vec<u8>, AnyError>>, AnyError>>;
@@ -378,6 +406,8 @@ impl LogConverter for JsonConverter {
 
 #[cfg(test)]
 mod tests {
+    use crate::{data::Id, schema};
+
     use super::*;
 
     #[test]
@@ -388,5 +418,53 @@ mod tests {
                 .unwrap()
         });
         crate::tests::test_backend(log, |f| futures::executor::block_on(f));
+    }
+
+    #[test]
+    fn test_log_backend_with_memory_store_restore() {
+        // Test that restores work.
+        futures::executor::block_on(async {
+            let log = LogDb::open(MemoryLogStore::new(), JsonConverter)
+                .await
+                .unwrap();
+            let db = crate::Db::new(log.clone());
+
+            let mig = query::migrate::Migration {
+                actions: vec![query::migrate::SchemaAction::AttributeCreate(
+                    query::migrate::AttributeCreate {
+                        schema: schema::AttributeSchema {
+                            id: Id::nil(),
+                            name: "test/text".into(),
+                            description: None,
+                            value_type: crate::data::ValueType::String,
+                            unique: false,
+                            index: false,
+                            strict: true,
+                        },
+                    },
+                )],
+            };
+            db.migrate(mig).await.unwrap();
+
+            let id = Id::random();
+            db.create(
+                id,
+                crate::map! {
+                    "test/text": "hello",
+                },
+            )
+            .await
+            .unwrap();
+
+            let data = db.entity(id).await.unwrap();
+            assert_eq!(data::Value::from("hello"), data["test/text"]);
+
+            // Restore.
+            log.restore().await.unwrap();
+
+            // Test that data is still there.
+            let data = db.entity(id).await.unwrap();
+            assert_eq!(data::Value::from("hello"), data["test/text"]);
+        });
     }
 }
