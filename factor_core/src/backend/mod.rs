@@ -1,5 +1,7 @@
 pub mod memory;
 
+pub mod log;
+
 use crate::{
     data::{DataMap, Id, Ident, Value},
     query::{self, expr::Expr},
