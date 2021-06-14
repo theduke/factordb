@@ -1,5 +1,5 @@
 [package]
-name = "factor_core"
+name = "factordb"
 version = "0.1.0"
 authors = ["Christoph Herzog <chris@theduke.at>"]
 edition = "2018"

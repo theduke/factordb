@@ -227,7 +227,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
         if field_attrs.extend {
             extends_field = Some((*field_name).clone());
             schema_extends.push(quote! {
-                <#field_ty as factor_core::schema::EntityDescriptor>::TYPE.into(),
+                <#field_ty as factordb::schema::EntityDescriptor>::TYPE.into(),
             });
         } else if field_attrs.is_relation {
             if let Some(_inner_ty) = option_inner(&field.ty) {
@@ -247,7 +247,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
 
             if field_name.to_string() != "id" {
                 schema_attributes.push(quote! {
-                    <#prop as factor_core::schema::AttributeDescriptor>::IDENT,
+                    <#prop as factordb::schema::AttributeDescriptor>::IDENT,
                 });
             } else {
                 have_id = true;
@@ -266,13 +266,13 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
     let full_name = format!("{}/{}", namespace.value(), name);
 
     TokenStream::from(quote! {
-        impl factor_core::schema::EntityDescriptor for #struct_name {
+        impl factordb::schema::EntityDescriptor for #struct_name {
             const NAME: &'static str = #full_name;
-            const IDENT: factor_core::data::Ident = factor_core::data::Ident::new_static(Self::NAME);
+            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::NAME);
 
-            fn schema() -> factor_core::schema::EntitySchema {
-                factor_core::schema::EntitySchema{
-                    id: factor_core::data::Id::nil(),
+            fn schema() -> factordb::schema::EntitySchema {
+                factordb::schema::EntitySchema{
+                    id: factordb::data::Id::nil(),
                     name: Self::NAME.into(),
                     description: None,
                     attributes: vec![
@@ -287,13 +287,13 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             }
         }
 
-        impl factor_core::schema::EntityContainer for #struct_name {
-            fn id(&self) -> factor_core::data::Id {
+        impl factordb::schema::EntityContainer for #struct_name {
+            fn id(&self) -> factordb::data::Id {
                 *#id_accessor
             }
 
-            fn entity_type(&self) -> factor_core::data::Ident {
-                <Self as factor_core::schema::EntityDescriptor>::IDENT
+            fn entity_type(&self) -> factordb::data::Ident {
+                <Self as factordb::schema::EntityDescriptor>::IDENT
             }
         }
 

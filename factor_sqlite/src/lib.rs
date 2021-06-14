@@ -3,7 +3,7 @@
 mod pool;
 
 use anyhow::Context;
-use factor_core::{
+use factordb::{
     data::{DataMap, Ident},
     registry::SharedRegistry,
     AnyError,
@@ -30,13 +30,13 @@ impl SqliteDb {
             .await?;
 
         // First register all attributes.
-        let mut registry = factor_core::registry::Registry::new();
+        let mut registry = factordb::registry::Registry::new();
         for item in schema_items {
             match item {
-                factor_core::schema::SchemaItem::Attribute(attr) => {
+                factordb::schema::SchemaItem::Attribute(attr) => {
                     registry.register_attr(attr)?;
                 }
-                factor_core::schema::SchemaItem::Entity(entity) => {
+                factordb::schema::SchemaItem::Entity(entity) => {
                     registry.register_entity(entity, false)?;
                 }
             }
@@ -52,7 +52,7 @@ impl SqliteDb {
         })
     }
 
-    fn migrate(con: &Connection) -> Result<Vec<factor_core::schema::SchemaItem>, AnyError> {
+    fn migrate(con: &Connection) -> Result<Vec<factordb::schema::SchemaItem>, AnyError> {
         let res = con.query_row_and_then("SELECT MAX(version) FROM migrations", [], |row| {
             row.get::<_, u64>(0)
         });
@@ -97,11 +97,11 @@ impl SqliteDb {
         Self::load_schema(con)
     }
 
-    fn load_schema(con: &Connection) -> Result<Vec<factor_core::schema::SchemaItem>, AnyError> {
+    fn load_schema(con: &Connection) -> Result<Vec<factordb::schema::SchemaItem>, AnyError> {
         con.prepare("SELECT id, content FROM schema_entities")?
             .query_and_then([], |row| -> Result<_, AnyError> {
                 let content: Vec<u8> = row.get("content")?;
-                let item: factor_core::schema::SchemaItem = serde_json::from_slice(&content)?;
+                let item: factordb::schema::SchemaItem = serde_json::from_slice(&content)?;
                 Ok(item)
             })?
             .collect()
@@ -133,7 +133,7 @@ impl SqliteDb {
         let data = match res {
             Ok(data) => data,
             Err(rusqlite::Error::QueryReturnedNoRows) => {
-                return Err(factor_core::error::EntityNotFound::new(ident).into());
+                return Err(factordb::error::EntityNotFound::new(ident).into());
             }
             Err(other) => {
                 return Err(other.into());
@@ -153,43 +153,42 @@ impl SqliteDb {
     }
 }
 
-impl factor_core::backend::Backend for SqliteDb {
+impl factordb::backend::Backend for SqliteDb {
     fn registry(&self) -> &SharedRegistry {
         &self.registry
     }
 
     fn entity(
         &self,
-        id: factor_core::data::Ident,
-    ) -> factor_core::backend::BackendFuture<factor_core::data::DataMap> {
+        id: factordb::data::Ident,
+    ) -> factordb::backend::BackendFuture<factordb::data::DataMap> {
         let s = self.clone();
         async move { s.entity(id).await }.boxed()
     }
 
     fn select(
         &self,
-        _query: factor_core::query::select::Select,
-    ) -> factor_core::backend::BackendFuture<
-        factor_core::query::select::Page<factor_core::data::DataMap>,
-    > {
+        _query: factordb::query::select::Select,
+    ) -> factordb::backend::BackendFuture<factordb::query::select::Page<factordb::data::DataMap>>
+    {
         todo!()
     }
 
     fn apply_batch(
         &self,
-        _batch: factor_core::query::update::BatchUpdate,
-    ) -> factor_core::backend::BackendFuture<()> {
+        _batch: factordb::query::update::BatchUpdate,
+    ) -> factordb::backend::BackendFuture<()> {
         todo!()
     }
 
     fn migrate(
         &self,
-        _migration: factor_core::query::migrate::Migration,
-    ) -> factor_core::backend::BackendFuture<()> {
+        _migration: factordb::query::migrate::Migration,
+    ) -> factordb::backend::BackendFuture<()> {
         todo!()
     }
 
-    fn purge_all_data(&self) -> factor_core::backend::BackendFuture<()> {
+    fn purge_all_data(&self) -> factordb::backend::BackendFuture<()> {
         let s = self.clone();
         async move { s.purge_all_data().await }.boxed()
     }

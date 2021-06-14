@@ -1,8 +1,8 @@
-use factor_core::{
+use factor_macros::{Attribute, Entity};
+use factordb::{
     data::{Id, ValueType},
     schema::AttributeDescriptor,
 };
-use factor_macros::{Attribute, Entity};
 
 #[derive(Attribute)]
 #[factor(namespace = "test", value = ValueType::String)]
@@ -20,7 +20,7 @@ struct Entity1 {
 #[test]
 fn test_attr_derive() {
     assert_eq!(
-        factor_core::schema::AttributeSchema {
+        factordb::schema::AttributeSchema {
             id: Id::nil(),
             description: None,
             index: false,

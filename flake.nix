@@ -60,7 +60,7 @@
             RUST_BACKTRACE = "1";
             # Use lld linker for speedup.
             RUSTFLAGS = "-C link-arg=-fuse-ld=lld";
-            RUST_LOG= "factor_core=trace";
+            RUST_LOG= "factordb=trace";
         };
       }
     );

@@ -98,13 +98,13 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
     let full_name = format!("{}/{}", namespace.value(), name);
 
     let out = quote! {
-        impl factor_core::schema::AttributeDescriptor for #ident {
+        impl factordb::schema::AttributeDescriptor for #ident {
             const NAME: &'static str = #full_name;
-            const IDENT: factor_core::data::Ident = factor_core::data::Ident::new_static(Self::NAME);
+            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::NAME);
 
-            fn schema() -> factor_core::schema::AttributeSchema {
-                factor_core::schema::AttributeSchema {
-                    id: factor_core::data::Id::nil(),
+            fn schema() -> factordb::schema::AttributeSchema {
+                factordb::schema::AttributeSchema {
+                    id: factordb::data::Id::nil(),
                     name: #full_name.into(),
                     description: None,
                     value_type: #value_type,
