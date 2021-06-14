@@ -79,6 +79,12 @@ pub trait EntityDescriptor {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum SchemaItem {
+    Attribute(AttributeSchema),
+    Entity(EntitySchema),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DbSchema {
     pub attributes: Vec<AttributeSchema>,
     pub entities: Vec<EntitySchema>,
