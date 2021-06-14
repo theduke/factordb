@@ -4,7 +4,7 @@ use crate::{
     backend::{self, DbOp},
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
-    query::{self, migrate::Migration},
+    query::{self, migrate::Migration, select::Item},
     schema, AnyError,
 };
 
@@ -593,7 +593,7 @@ impl MemoryStore {
     pub fn select(
         &self,
         query: query::select::Select,
-    ) -> Result<query::select::Page<DataMap>, AnyError> {
+    ) -> Result<query::select::Page<Item>, AnyError> {
         // TODO: query validation and planning
 
         let reg = self.registry.read().unwrap();
@@ -643,14 +643,24 @@ impl MemoryStore {
                 .into_iter()
                 .skip_while(|(id, _)| **id != cursor)
                 .take(query.limit as usize)
-                .map(|(_id, data)| self.tuple_to_data_map(data))
-                .collect::<Result<_, _>>()?
+                .map(|(_id, data)| {
+                    Ok(Item {
+                        data: self.tuple_to_data_map(data)?,
+                        joins: Vec::new(),
+                    })
+                })
+                .collect::<Result<_, AnyError>>()?
         } else {
             items
                 .into_iter()
                 .take(query.limit as usize)
-                .map(|(_id, data)| self.tuple_to_data_map(data))
-                .collect::<Result<_, _>>()?
+                .map(|(_id, data)| {
+                    Ok(Item {
+                        data: self.tuple_to_data_map(data)?,
+                        joins: Vec::new(),
+                    })
+                })
+                .collect::<Result<_, AnyError>>()?
         };
 
         Ok(query::select::Page {

@@ -10,6 +10,11 @@ pub mod registry;
 
 mod db;
 
-pub use db::Db;
+pub use self::{
+    data::{Id, Ident},
+    db::Db,
+};
+
+pub use factor_macros::{Attribute, Entity};
 
 pub mod tests;

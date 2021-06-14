@@ -16,7 +16,7 @@ use query::update::BatchUpdate;
 
 use crate::{
     data,
-    query::{self, migrate::Migration},
+    query::{self, migrate::Migration, select::Item},
     registry, AnyError,
 };
 
@@ -219,7 +219,7 @@ impl Backend for LogDb {
     fn select(
         &self,
         query: query::select::Select,
-    ) -> super::BackendFuture<query::select::Page<data::DataMap>> {
+    ) -> super::BackendFuture<query::select::Page<Item>> {
         let res = self.state.mem.read().unwrap().select(query);
         ready(res).boxed()
     }

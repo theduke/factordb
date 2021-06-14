@@ -5,6 +5,7 @@ mod pool;
 use anyhow::Context;
 use factordb::{
     data::{DataMap, Ident},
+    query::select::{Item, Page},
     registry::SharedRegistry,
     AnyError,
 };
@@ -169,8 +170,7 @@ impl factordb::backend::Backend for SqliteDb {
     fn select(
         &self,
         _query: factordb::query::select::Select,
-    ) -> factordb::backend::BackendFuture<factordb::query::select::Page<factordb::data::DataMap>>
-    {
+    ) -> factordb::backend::BackendFuture<Page<Item>> {
         todo!()
     }
 

@@ -4,7 +4,10 @@ pub mod store;
 
 use futures::{future::ready, FutureExt};
 
-use crate::{data, query};
+use crate::{
+    data,
+    query::{self, select::Item},
+};
 
 use super::BackendFuture;
 
@@ -45,10 +48,7 @@ impl super::Backend for MemoryDb {
         ready(res).boxed()
     }
 
-    fn select(
-        &self,
-        query: query::select::Select,
-    ) -> BackendFuture<query::select::Page<data::DataMap>> {
+    fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<Item>> {
         let res = self.state.read().unwrap().select(query);
         ready(res).boxed()
     }

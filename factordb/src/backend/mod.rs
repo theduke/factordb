@@ -3,7 +3,7 @@ pub mod memory;
 
 use crate::{
     data::{DataMap, Id, Ident, Value},
-    query::{self, expr::Expr},
+    query::{self, expr::Expr, select::Item},
     registry::SharedRegistry,
     schema, AnyError,
 };
@@ -26,7 +26,7 @@ pub trait Backend {
     fn registry(&self) -> &SharedRegistry;
 
     fn entity(&self, id: Ident) -> BackendFuture<DataMap>;
-    fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<DataMap>>;
+    fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<Item>>;
 
     fn apply_batch(&self, batch: query::update::BatchUpdate) -> BackendFuture<()>;
     fn migrate(&self, migration: query::migrate::Migration) -> BackendFuture<()>;

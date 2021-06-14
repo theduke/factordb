@@ -123,8 +123,8 @@ async fn test_assert_simple(f: &Db) {
     assert_eq!(expected, data1);
 
     // Load via unfiltered select query.
-    let page = f.select(Select::new()).await.unwrap();
-    assert_eq!(vec![expected.clone()], page.items);
+    let items = f.select(Select::new()).await.unwrap().take_data();
+    assert_eq!(vec![expected.clone()], items);
 
     // Now change an attribute.
     let data2 = map! {
@@ -157,14 +157,15 @@ async fn test_select(db: &Db) {
 
     let page_match = vec![data];
 
-    let page = db.select(Select::new()).await.unwrap();
-    assert_eq!(page.items, page_match);
+    let items = db.select(Select::new()).await.unwrap().take_data();
+    assert_eq!(items, page_match);
 
-    let page = db
+    let items = db
         .select(Select::new().with_filter(Expr::eq(Expr::ident("t/text"), Expr::literal("hello"))))
         .await
-        .unwrap();
-    assert_eq!(page.items, page_match);
+        .unwrap()
+        .take_data();
+    assert_eq!(items, page_match);
 }
 
 async fn test_remove_attr(db: &Db) {

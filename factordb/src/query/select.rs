@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::data::{Id, Ident, Value};
+use crate::data::{DataMap, Id, Ident, Value};
 
 use super::expr::Expr;
 
@@ -64,7 +64,26 @@ impl Select {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct JoinItem<T> {
+    pub name: String,
+    pub items: Vec<Item<T>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Item<T = DataMap> {
+    pub data: T,
+    pub joins: Vec<JoinItem<T>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Page<T> {
     pub items: Vec<T>,
     pub next_cursor: Option<Cursor>,
+}
+
+impl<T> Page<Item<T>> {
+    /// Extract each the item.data, dropping joins.
+    pub fn take_data(self) -> Vec<T> {
+        self.items.into_iter().map(|item| item.data).collect()
+    }
 }

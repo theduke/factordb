@@ -16,3 +16,5 @@ serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.64"
 tracing = "0.1.26"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
+
+factor_macros = { version = "0.1", path = "../factor_macros" }

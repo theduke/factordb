@@ -29,7 +29,7 @@ impl Db {
     pub async fn select(
         &self,
         query: query::select::Select,
-    ) -> Result<query::select::Page<DataMap>, AnyError> {
+    ) -> Result<query::select::Page<query::select::Item>, AnyError> {
         self.backend.select(query).await
     }
 
