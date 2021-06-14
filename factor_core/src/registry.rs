@@ -38,6 +38,18 @@ impl Registry {
         s
     }
 
+    /// Reset all state.
+    /// Removes all registered entities and attributes, but restores the
+    /// builtins.
+    pub fn reset(&mut self) {
+        self.entities.clear();
+        self.entity_idents.clear();
+        self.attrs.clear();
+        self.attr_idents.clear();
+
+        self.add_builtins();
+    }
+
     pub fn into_shared(self) -> SharedRegistry {
         Arc::new(RwLock::new(self))
     }

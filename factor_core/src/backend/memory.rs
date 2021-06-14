@@ -774,6 +774,7 @@ impl MemoryStore {
         self.entities.clear();
         self.idents.clear();
         self.interner.clear();
+        self.registry.write().unwrap().reset();
     }
 }
 
