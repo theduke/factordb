@@ -5,13 +5,14 @@ use crate::{
 
 pub struct AttrId;
 
+pub const ATTR_ID: Id = Id::from_u128(1);
+
 impl AttributeDescriptor for AttrId {
-    const ID: Id = Id::from_u128(1);
     const NAME: &'static str = "factor/id";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_ID,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Ref,
@@ -24,13 +25,14 @@ impl AttributeDescriptor for AttrId {
 
 pub struct AttrIdent;
 
+pub const ATTR_IDENT: Id = Id::from_u128(2);
+
 impl AttributeDescriptor for AttrIdent {
-    const ID: Id = Id::from_u128(2);
     const NAME: &'static str = "factor/ident";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_IDENT,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::String,
@@ -43,13 +45,14 @@ impl AttributeDescriptor for AttrIdent {
 
 pub struct AttrType;
 
+pub const ATTR_TYPE: Id = Id::from_u128(12);
+
 impl AttributeDescriptor for AttrType {
-    const ID: Id = Id::from_u128(12);
     const NAME: &'static str = "factor/type";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_TYPE,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Ref,
@@ -62,13 +65,14 @@ impl AttributeDescriptor for AttrType {
 
 pub struct AttrValueType;
 
+pub const ATTR_VALUETYPE: Id = Id::from_u128(3);
+
 impl AttributeDescriptor for AttrValueType {
-    const ID: Id = Id::from_u128(3);
     const NAME: &'static str = "factor/valueType";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_VALUETYPE,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::String,
@@ -81,13 +85,14 @@ impl AttributeDescriptor for AttrValueType {
 
 pub struct AttrUnique;
 
+pub const ATTR_UNIQUE: Id = Id::from_u128(4);
+
 impl AttributeDescriptor for AttrUnique {
-    const ID: Id = Id::from_u128(4);
     const NAME: &'static str = "factor/unique";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_UNIQUE,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Bool,
@@ -100,13 +105,14 @@ impl AttributeDescriptor for AttrUnique {
 
 pub struct AttrIndex;
 
+pub const ATTR_INDEX: Id = Id::from_u128(6);
+
 impl AttributeDescriptor for AttrIndex {
-    const ID: Id = Id::from_u128(6);
     const NAME: &'static str = "factor/index";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_INDEX,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Bool,
@@ -119,13 +125,14 @@ impl AttributeDescriptor for AttrIndex {
 
 pub struct AttrDescription;
 
+pub const ATTR_DESCRIPTION: Id = Id::from_u128(7);
+
 impl AttributeDescriptor for AttrDescription {
-    const ID: Id = Id::from_u128(7);
     const NAME: &'static str = "factor/description";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_DESCRIPTION,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::String,
@@ -138,13 +145,14 @@ impl AttributeDescriptor for AttrDescription {
 
 pub struct AttrStrict;
 
+pub const ATTR_STRICT: Id = Id::from_u128(8);
+
 impl AttributeDescriptor for AttrStrict {
-    const ID: Id = Id::from_u128(8);
     const NAME: &'static str = "factor/isStrict";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_STRICT,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Bool,
@@ -157,23 +165,24 @@ impl AttributeDescriptor for AttrStrict {
 
 pub struct AttributeSchemaType;
 
+pub const ATTRIBUTE_ID: Id = Id::from_u128(1000);
+
 impl EntityDescriptor for AttributeSchemaType {
-    const ID: Id = Id::from_u128(1000);
     const NAME: &'static str = "factor/Attr";
 
     fn schema() -> EntitySchema {
         EntitySchema {
-            id: Self::ID,
+            id: ATTRIBUTE_ID,
             name: Self::NAME.to_string(),
             description: None,
             attributes: vec![
-                AttrId::ID.into(),
-                AttrIdent::ID.into(),
-                AttrDescription::ID.into(),
-                AttrValueType::ID.into(),
-                AttrUnique::ID.into(),
-                AttrIndex::ID.into(),
-                AttrStrict::ID.into(),
+                ATTR_ID.into(),
+                ATTR_IDENT.into(),
+                ATTR_DESCRIPTION.into(),
+                ATTR_VALUETYPE.into(),
+                ATTR_UNIQUE.into(),
+                ATTR_INDEX.into(),
+                ATTR_STRICT.into(),
             ],
             extend: None,
             strict: true,
@@ -186,13 +195,14 @@ impl EntityDescriptor for AttributeSchemaType {
 
 pub struct AttrAttributes;
 
+const ATTR_ATTRIBUTES: Id = Id::from_u128(9);
+
 impl AttributeDescriptor for AttrAttributes {
-    const ID: Id = Id::from_u128(9);
     const NAME: &'static str = "factor/attributes";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_ATTRIBUTES,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Ref,
@@ -205,13 +215,14 @@ impl AttributeDescriptor for AttrAttributes {
 
 pub struct AttrExtend;
 
+const ATTR_EXTEND: Id = Id::from_u128(10);
+
 impl AttributeDescriptor for AttrExtend {
-    const ID: Id = Id::from_u128(10);
     const NAME: &'static str = "factor/extend";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_EXTEND,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Bool,
@@ -224,13 +235,14 @@ impl AttributeDescriptor for AttrExtend {
 
 pub struct AttrIsRelation;
 
+const ATTR_ISRELATION: Id = Id::from_u128(11);
+
 impl AttributeDescriptor for AttrIsRelation {
-    const ID: Id = Id::from_u128(11);
     const NAME: &'static str = "factor/isRelation";
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
-            id: Self::ID,
+            id: ATTR_ISRELATION,
             name: Self::NAME.to_string(),
             description: None,
             value_type: ValueType::Bool,
@@ -243,23 +255,24 @@ impl AttributeDescriptor for AttrIsRelation {
 
 pub struct EntitySchemaType;
 
+pub const ENTITY_ID: Id = Id::from_u128(1001);
+
 impl EntityDescriptor for EntitySchemaType {
-    const ID: Id = Id::from_u128(1001);
     const NAME: &'static str = "factor/Entity";
 
     fn schema() -> EntitySchema {
         EntitySchema {
-            id: Self::ID,
+            id: ENTITY_ID,
             name: Self::NAME.to_string(),
             description: None,
             attributes: vec![
-                AttrId::ID.into(),
-                AttrIdent::ID.into(),
-                AttrDescription::ID.into(),
-                AttrAttributes::ID.into(),
-                AttrExtend::ID.into(),
-                AttrStrict::ID.into(),
-                AttrIsRelation::ID.into(),
+                ATTR_ID.into(),
+                ATTR_IDENT.into(),
+                ATTR_DESCRIPTION.into(),
+                ATTR_ATTRIBUTES.into(),
+                ATTR_EXTEND.into(),
+                ATTR_STRICT.into(),
+                ATTR_ISRELATION.into(),
             ],
             extend: None,
             strict: true,
@@ -272,7 +285,7 @@ impl EntityDescriptor for EntitySchemaType {
 
 pub fn id_is_builtin_entity_type(id: Id) -> bool {
     match id {
-        AttributeSchemaType::ID | EntitySchemaType::ID => true,
+        ATTRIBUTE_ID | ENTITY_ID => true,
         _ => false,
     }
 }
@@ -280,14 +293,8 @@ pub fn id_is_builtin_entity_type(id: Id) -> bool {
 pub fn id_is_builtin_entity_filter() -> crate::query::expr::Expr {
     use crate::query::expr::Expr;
     // TODO: use IN query
-    let a = Expr::neq(
-        Expr::ident(AttrType::ID),
-        Expr::literal(EntitySchemaType::ID),
-    );
-    let b = Expr::neq(
-        Expr::ident(AttrType::ID),
-        Expr::literal(AttributeSchemaType::ID),
-    );
+    let a = Expr::neq(Expr::ident(ATTR_ID), Expr::literal(ATTRIBUTE_ID));
+    let b = Expr::neq(Expr::ident(ATTR_ID), Expr::literal(ENTITY_ID));
 
     Expr::or(a, b)
 }

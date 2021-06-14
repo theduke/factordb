@@ -5,8 +5,7 @@ use crate::{
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
     query::{self, migrate::Migration},
-    schema::{self, AttributeDescriptor},
-    AnyError,
+    schema, AnyError,
 };
 
 use super::memory_data::MemoryTuple;
@@ -606,7 +605,7 @@ impl MemoryStore {
                     // Skip builtin types.
 
                     if let Some(id) = item
-                        .get(&crate::schema::builtin::AttrType::ID)
+                        .get(&crate::schema::builtin::ATTR_TYPE)
                         .and_then(|x| x.as_id())
                     {
                         if crate::schema::builtin::id_is_builtin_entity_type(id) {
@@ -623,7 +622,7 @@ impl MemoryStore {
                 .iter()
                 .filter(|(_id, item)| {
                     if let Some(id) = item
-                        .get(&crate::schema::builtin::AttrType::ID)
+                        .get(&crate::schema::builtin::ATTR_TYPE)
                         .and_then(|x| x.as_id())
                     {
                         if crate::schema::builtin::id_is_builtin_entity_type(id) {

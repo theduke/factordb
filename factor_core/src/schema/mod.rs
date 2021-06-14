@@ -39,7 +39,6 @@ impl AttributeSchema {
 }
 
 pub trait AttributeDescriptor {
-    const ID: Id;
     const NAME: &'static str;
     const IDENT: Ident = Ident::new_static(Self::NAME);
     fn schema() -> AttributeSchema;
@@ -71,11 +70,15 @@ pub struct EntitySchema {
     pub to: Option<Ident>,
 }
 
+/// Trait that provides a static metadata for an entity.
 pub trait EntityDescriptor {
-    const ID: Id;
     const NAME: &'static str;
     const IDENT: Ident = Ident::new_static(Self::NAME);
     fn schema() -> EntitySchema;
+}
+
+pub trait EntityContainer {
+    fn id(&self) -> Id;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

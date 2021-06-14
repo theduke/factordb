@@ -6,7 +6,7 @@ use crate::{
     AnyError,
 };
 
-use super::{builtin::AttrType, AttributeDescriptor, EntityDescriptor};
+use super::{builtin::AttrType, AttributeDescriptor};
 
 pub fn validate_migration(
     reg: &mut Registry,
@@ -25,7 +25,7 @@ pub fn validate_migration(
                 // Add tye factor/type attr.
                 data.insert(
                     AttrType::NAME.to_string(),
-                    super::builtin::AttributeSchemaType::ID.into(),
+                    super::builtin::ATTRIBUTE_ID.into(),
                 );
 
                 ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
@@ -57,10 +57,7 @@ pub fn validate_migration(
 
                 let mut data = value::to_value_map(create.schema.clone())?;
                 // Add tye factor/type attr.
-                data.insert(
-                    AttrType::NAME.to_string(),
-                    super::builtin::EntitySchemaType::ID.into(),
-                );
+                data.insert(AttrType::NAME.to_string(), super::builtin::ENTITY_ID.into());
 
                 ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
                     id: create.schema.id,
