@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "factor_core",
+    "factor_macros",
 
     # Backends
     "factor_sqlite",
