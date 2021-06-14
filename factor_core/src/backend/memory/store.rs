@@ -1,68 +1,43 @@
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    sync::{Arc, RwLock},
-};
-
 use anyhow::anyhow;
-use fnv::FnvHashMap;
-use futures::{future::ready, FutureExt};
-use ordered_float::OrderedFloat;
 
 use crate::{
+    backend::{self, DbOp},
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
-    query::{self, expr::Expr, migrate::Migration},
-    registry::{Registry, SharedRegistry},
+    query::{self, migrate::Migration},
     schema::{self, AttributeDescriptor},
     AnyError,
 };
 
-use super::{BackendFuture, DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace};
-
-#[derive(Clone)]
-pub struct MemoryDb {
-    registry: SharedRegistry,
-    state: Arc<RwLock<MemoryStore>>,
-}
-
-impl MemoryDb {
-    pub fn new() -> Self {
-        let registry = crate::registry::Registry::new().into_shared();
-        Self {
-            registry: registry.clone(),
-            state: Arc::new(RwLock::new(MemoryStore::new(registry))),
-        }
-    }
-}
+use super::memory_data::MemoryTuple;
 
 /// Memory store for building a backend.
 ///
 /// The [MemoryDb] is a simple memory-only backend, but the store can also
 /// be used by other backends as a caching layer or for other purposes.
 pub struct MemoryStore {
-    interner: Interner,
-    registry: SharedRegistry,
-    entities: FnvHashMap<Id, MemoryTuple>,
-    idents: HashMap<String, Id>,
+    interner: super::interner::Interner,
+    registry: crate::registry::SharedRegistry,
+    entities: fnv::FnvHashMap<Id, MemoryTuple>,
+    idents: std::collections::HashMap<String, Id>,
 
     revert_epoch: RevertEpoch,
     revert_ops: Option<(RevertEpoch, RevertList)>,
 }
 
 impl MemoryStore {
-    pub fn new(registry: SharedRegistry) -> Self {
+    pub fn new(registry: crate::registry::SharedRegistry) -> Self {
         Self {
-            interner: Interner::new(),
+            interner: super::interner::Interner::new(),
             registry,
-            entities: FnvHashMap::default(),
-            idents: HashMap::new(),
+            entities: fnv::FnvHashMap::default(),
+            idents: std::collections::HashMap::new(),
             revert_epoch: 0,
             revert_ops: None,
         }
     }
 
-    pub fn registry(&self) -> &SharedRegistry {
+    pub fn registry(&self) -> &crate::registry::SharedRegistry {
         &self.registry
     }
 
@@ -115,7 +90,7 @@ impl MemoryStore {
     fn tuple_to_data_map(&self, tuple: &MemoryTuple) -> Result<DataMap, AnyError> {
         let reg = self.registry.read().unwrap();
 
-        let map: BTreeMap<_, _> = tuple
+        let map: std::collections::BTreeMap<_, _> = tuple
             .0
             .iter()
             .map(|(id, value)| -> Result<_, AnyError> {
@@ -233,7 +208,7 @@ impl MemoryStore {
 
     fn tuple_create(
         &mut self,
-        create: TupleCreate,
+        create: backend::TupleCreate,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         if self.entities.contains_key(&create.id) {
@@ -247,7 +222,7 @@ impl MemoryStore {
 
     fn tuple_replace(
         &mut self,
-        replace: TupleReplace,
+        replace: backend::TupleReplace,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let old = self.entities.remove(&replace.id);
@@ -260,7 +235,11 @@ impl MemoryStore {
         Ok(())
     }
 
-    fn tuple_merge(&mut self, update: TupleMerge, revert: &mut RevertList) -> Result<(), AnyError> {
+    fn tuple_merge(
+        &mut self,
+        update: backend::TupleMerge,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         let old = self
             .entities
             .get_mut(&update.id)
@@ -291,7 +270,7 @@ impl MemoryStore {
 
     fn tuple_remove_attrs(
         &mut self,
-        rem: super::TupleRemoveAttrs,
+        rem: backend::TupleRemoveAttrs,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let old = self
@@ -318,7 +297,11 @@ impl MemoryStore {
         Ok(())
     }
 
-    fn tuple_delete(&mut self, del: TupleDelete, revert: &mut RevertList) -> Result<(), AnyError> {
+    fn tuple_delete(
+        &mut self,
+        del: backend::TupleDelete,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         match self.entities.remove(&del.id) {
             Some(data) => {
                 revert.push(RevertOp::TupleDeleted { id: del.id, data });
@@ -330,8 +313,8 @@ impl MemoryStore {
 
     fn tuple_select_remove(
         &mut self,
-        selector: &Expr,
-        rem: &super::TupleRemoveAttrs,
+        selector: &query::expr::Expr,
+        rem: &backend::TupleRemoveAttrs,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let reg = self.registry.clone();
@@ -362,6 +345,8 @@ impl MemoryStore {
     /// [RevertOp]s are collected into the provided revert list, which allows
     /// undoing operations.
     fn apply_db_ops(&mut self, ops: Vec<DbOp>, revert: &mut RevertList) -> Result<(), AnyError> {
+        use crate::backend::TupleOp;
+
         // FIXME: implement validate_ checks via registry for all operations.
         // FIXME: guard against schema changes outside of a migration.
         for op in ops {
@@ -678,8 +663,10 @@ impl MemoryStore {
     fn eval_expr<'a>(
         entity: &MemoryTuple,
         expr: &'a query::expr::Expr,
-        reg: &Registry,
-    ) -> Cow<'a, Value> {
+        reg: &crate::registry::Registry,
+    ) -> std::borrow::Cow<'a, Value> {
+        use std::borrow::Cow;
+
         let out = match expr {
             query::expr::Expr::Literal(v) => Cow::Borrowed(v),
             query::expr::Expr::Ident(ident) => match ident {
@@ -764,7 +751,11 @@ impl MemoryStore {
         out
     }
 
-    fn entity_filter(entity: &MemoryTuple, expr: &query::expr::Expr, reg: &Registry) -> bool {
+    fn entity_filter(
+        entity: &MemoryTuple,
+        expr: &query::expr::Expr,
+        reg: &crate::registry::Registry,
+    ) -> bool {
         Self::eval_expr(entity, expr, reg)
             .as_bool()
             .unwrap_or(false)
@@ -778,42 +769,8 @@ impl MemoryStore {
     }
 }
 
-fn cowal_unit<'a>() -> Cow<'a, Value> {
-    Cow::Owned(Value::Unit)
-}
-
-#[derive(Clone, Hash, Debug, PartialOrd, Ord)]
-struct SharedStr(Arc<str>);
-
-impl SharedStr {
-    fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-}
-
-impl PartialEq for SharedStr {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.as_ptr() == other.0.as_ptr()
-    }
-}
-
-impl Eq for SharedStr {}
-
-#[derive(Debug)]
-struct MemoryTuple(FnvHashMap<Id, MemoryValue>);
-
-impl std::ops::Deref for MemoryTuple {
-    type Target = FnvHashMap<Id, MemoryValue>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for MemoryTuple {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+fn cowal_unit<'a>() -> std::borrow::Cow<'a, Value> {
+    std::borrow::Cow::Owned(Value::Unit)
 }
 
 /// An identifier for the current version of a database.
@@ -834,11 +791,11 @@ enum RevertOp {
     },
     TupleMerged {
         id: Id,
-        replaced_data: Vec<(Id, Option<MemoryValue>)>,
+        replaced_data: Vec<(Id, Option<super::memory_data::MemoryValue>)>,
     },
     TupleAttrsRemoved {
         id: Id,
-        attrs: Vec<(Id, MemoryValue)>,
+        attrs: Vec<(Id, super::memory_data::MemoryValue)>,
     },
     TupleDeleted {
         id: Id,
@@ -847,163 +804,3 @@ enum RevertOp {
 }
 
 type RevertList = Vec<RevertOp>;
-
-// fn memory_to_id_map(mem: &MemoryTuple) -> IdMap {
-//     mem.iter()
-//         .map(|(key, value)| (*key, value.into()))
-//         .collect()
-// }
-
-// Value for in-memory storage.
-// Uses shared strings to save memory usage.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-enum MemoryValue {
-    Unit,
-
-    Bool(bool),
-    UInt(u64),
-    Int(i64),
-    Float(OrderedFloat<f64>),
-    String(SharedStr),
-    Bytes(Vec<u8>),
-
-    List(Vec<Self>),
-    Map(BTreeMap<Self, Self>),
-
-    Id(Id),
-}
-
-impl MemoryValue {
-    fn to_value(&self) -> Value {
-        use MemoryValue as V;
-        match self {
-            V::Unit => Value::Unit,
-            V::Bool(v) => Value::Bool(*v),
-            V::UInt(v) => Value::UInt(*v),
-            V::Int(v) => Value::Int(*v),
-            V::Float(v) => Value::Float(*v),
-            V::String(v) => Value::String(v.to_string()),
-            V::Bytes(v) => Value::Bytes(v.clone()),
-            V::List(v) => Value::List(v.into_iter().map(Into::into).collect()),
-            V::Map(v) => Value::Map(
-                v.into_iter()
-                    .map(|(key, value)| (key.into(), value.into()))
-                    .collect(),
-            ),
-            V::Id(v) => Value::Id(*v),
-        }
-    }
-
-    fn as_id(&self) -> Option<Id> {
-        if let Self::Id(id) = self {
-            Some(*id)
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a> From<&'a MemoryValue> for Value {
-    fn from(v: &'a MemoryValue) -> Self {
-        v.to_value()
-    }
-}
-
-struct Interner {
-    strings: HashMap<SharedStr, SharedStr>,
-}
-
-impl Interner {
-    fn new() -> Self {
-        Self {
-            strings: HashMap::new(),
-        }
-    }
-
-    fn clear(&mut self) {
-        self.strings.clear();
-    }
-
-    fn intern_str(&mut self, value: String) -> SharedStr {
-        let shared: SharedStr = SharedStr(Arc::from(value));
-        match self.strings.get(&shared) {
-            Some(v) => v.clone(),
-            None => {
-                self.strings.insert(shared.clone(), shared.clone());
-                shared
-            }
-        }
-    }
-
-    fn intern_value(&mut self, value: Value) -> MemoryValue {
-        use MemoryValue as M;
-        match value {
-            Value::Unit => M::Unit,
-            Value::Bool(v) => M::Bool(v),
-            Value::UInt(v) => M::UInt(v),
-            Value::Int(v) => M::Int(v),
-            Value::Float(v) => M::Float(v),
-            Value::String(v) => M::String(self.intern_str(v)),
-            Value::Bytes(v) => M::Bytes(v),
-            Value::List(v) => M::List(v.into_iter().map(|v| self.intern_value(v)).collect()),
-            Value::Map(v) => M::Map(
-                v.0.into_iter()
-                    .map(|(key, value)| (self.intern_value(key), self.intern_value(value)))
-                    .collect(),
-            ),
-            Value::Id(v) => M::Id(v),
-        }
-    }
-}
-
-impl super::Dao for MemoryTuple {
-    fn get(&self, attr: &schema::AttributeSchema) -> Result<Option<Value>, AnyError> {
-        Ok(self.0.get(&attr.id).map(|v| v.into()))
-    }
-
-    fn set(&mut self, _attr: &schema::AttributeSchema, _value: Value) {
-        todo!()
-    }
-}
-
-impl super::Backend for MemoryDb {
-    fn registry(&self) -> &SharedRegistry {
-        &self.registry
-    }
-
-    fn purge_all_data(&self) -> BackendFuture<()> {
-        self.state.write().unwrap().purge_all_data();
-        ready(Ok(())).boxed()
-    }
-
-    fn entity(&self, id: Ident) -> super::BackendFuture<DataMap> {
-        let res = self.state.read().unwrap().entity(id);
-        ready(res).boxed()
-    }
-
-    fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<DataMap>> {
-        let res = self.state.read().unwrap().select(query);
-        ready(res).boxed()
-    }
-
-    fn apply_batch(&self, batch: query::update::BatchUpdate) -> BackendFuture<()> {
-        let res = self.state.write().unwrap().apply_batch(batch);
-        ready(res).boxed()
-    }
-
-    fn migrate(&self, migration: query::migrate::Migration) -> super::BackendFuture<()> {
-        let res = self.state.write().unwrap().migrate(migration).map(|_| ());
-        ready(res).boxed()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_memory_backend() {
-        let mem = MemoryDb::new();
-        crate::tests::test_backend(mem, |f| futures::executor::block_on(f));
-    }
-}

@@ -15,13 +15,15 @@ use futures::{
 use query::update::BatchUpdate;
 
 use crate::{
-    backend::memory,
     data,
     query::{self, migrate::Migration},
     registry, AnyError,
 };
 
-use super::{memory::MemoryStore, Backend, BackendFuture};
+use super::{
+    memory::store::{MemoryStore, RevertEpoch},
+    Backend, BackendFuture,
+};
 
 pub struct LogConfig {}
 
@@ -151,7 +153,7 @@ impl LogDb {
         &self,
         mutable: &mut MutableState,
         event: LogEvent,
-        revert_epoch: memory::RevertEpoch,
+        revert_epoch: RevertEpoch,
     ) -> Result<(), AnyError> {
         match self.write_event(mutable, event).await {
             Ok(_) => Ok(()),
@@ -283,19 +285,19 @@ impl LogEvent {
     //     self.id
     // }
 
-    fn from_op(op: super::DbOp) -> Option<Self> {
-        use super::{DbOp, TupleOp};
-        match op {
-            DbOp::Tuple(t) => match t {
-                TupleOp::Create(_) => todo!(),
-                TupleOp::Replace(_) => todo!(),
-                TupleOp::Merge(_) => todo!(),
-                TupleOp::Delete(_) => todo!(),
-                TupleOp::RemoveAttrs(_) => todo!(),
-            },
-            DbOp::Select(_) => todo!(),
-        }
-    }
+    // fn from_op(op: super::DbOp) -> Option<Self> {
+    //     use super::{DbOp, TupleOp};
+    //     match op {
+    //         DbOp::Tuple(t) => match t {
+    //             TupleOp::Create(_) => todo!(),
+    //             TupleOp::Replace(_) => todo!(),
+    //             TupleOp::Merge(_) => todo!(),
+    //             TupleOp::Delete(_) => todo!(),
+    //             TupleOp::RemoveAttrs(_) => todo!(),
+    //         },
+    //         DbOp::Select(_) => todo!(),
+    //     }
+    // }
 }
 
 /// A log operation stored in a log event.
