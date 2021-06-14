@@ -79,6 +79,7 @@ pub trait EntityDescriptor {
 
 pub trait EntityContainer {
     fn id(&self) -> Id;
+    fn entity_type(&self) -> Ident;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
