@@ -221,6 +221,10 @@ impl Backend for LogDb {
         }
         .boxed()
     }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(&*self)
+    }
 }
 
 struct State {

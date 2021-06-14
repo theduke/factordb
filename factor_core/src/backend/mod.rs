@@ -33,6 +33,10 @@ pub trait Backend {
     fn migrate(&self, migration: query::migrate::Migration) -> BackendFuture<()>;
 
     fn purge_all_data(&self) -> BackendFuture<()>;
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
 }
 
 // pub enum SchemaOp {
