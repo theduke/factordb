@@ -1,4 +1,7 @@
 [workspace]
 members = [
     "factor_core",
+
+    # Backends
+    "factor_sqlite",
 ]
