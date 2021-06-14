@@ -1,6 +1,5 @@
-pub mod memory;
-
 pub mod log;
+pub mod memory;
 
 use crate::{
     data::{DataMap, Id, Ident, Value},

@@ -1,10 +1,10 @@
 //! A simple event log based db backend.
 //! See [LogDb] for details.
 
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, RwLock},
-};
+pub mod convert_json;
+pub mod log_memory;
+
+use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
 use futures::{
@@ -333,79 +333,6 @@ pub trait LogConverter {
     fn deserialize(&self, data: Vec<u8>) -> Result<LogEvent, AnyError>;
 }
 
-/// Mock memory log store.
-/// Only useful for testing.
-pub struct MemoryLogStore {
-    events: BTreeMap<EventId, Vec<u8>>,
-}
-
-impl MemoryLogStore {
-    pub fn new() -> Self {
-        Self {
-            events: Default::default(),
-        }
-    }
-
-    pub fn duplicate(&self) -> Self {
-        Self {
-            events: self.events.clone(),
-        }
-    }
-}
-
-type StreamFuture<'a> = BoxFuture<'a, Result<BoxStream<'a, Result<Vec<u8>, AnyError>>, AnyError>>;
-
-impl LogStore for MemoryLogStore {
-    fn iter_events(&self, from: EventId, until: EventId) -> StreamFuture {
-        let stream = self
-            .events
-            .range(from..until)
-            .map(|(_key, value)| Ok(value.clone()));
-        let boxed_stream = futures::stream::iter(stream).boxed();
-        let res = Ok(boxed_stream);
-        ready(res).boxed()
-    }
-
-    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<Vec<u8>>, AnyError>> {
-        let res = self.events.get(&id).cloned().map(Ok).transpose();
-        ready(res).boxed()
-    }
-
-    fn write_event(&mut self, id: EventId, event: Vec<u8>) -> BoxFuture<Result<EventId, AnyError>> {
-        let expected_id = self.events.len() as u64 + 1;
-
-        let res = if id != expected_id {
-            Err(anyhow::anyhow!(
-                "Event id mismatch - expected {}, got {}",
-                expected_id,
-                id,
-            ))
-        } else {
-            self.events.insert(id, event);
-            Ok(id)
-        };
-
-        ready(res).boxed()
-    }
-
-    fn clear(&mut self) -> BoxFuture<'static, Result<(), AnyError>> {
-        self.events.clear();
-        ready(Ok(())).boxed()
-    }
-}
-
-struct JsonConverter;
-
-impl LogConverter for JsonConverter {
-    fn serialize(&self, event: &LogEvent) -> Result<Vec<u8>, AnyError> {
-        serde_json::to_vec(event).map_err(Into::into)
-    }
-
-    fn deserialize(&self, data: Vec<u8>) -> Result<LogEvent, AnyError> {
-        serde_json::from_slice(&data).map_err(Into::into)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{data::Id, schema};
@@ -415,9 +342,12 @@ mod tests {
     #[test]
     fn test_log_backend_with_memory_store() {
         let log = futures::executor::block_on(async {
-            LogDb::open(MemoryLogStore::new(), JsonConverter)
-                .await
-                .unwrap()
+            LogDb::open(
+                log_memory::MemoryLogStore::new(),
+                convert_json::JsonConverter,
+            )
+            .await
+            .unwrap()
         });
         crate::tests::test_backend(log, |f| futures::executor::block_on(f));
     }
@@ -426,9 +356,12 @@ mod tests {
     fn test_log_backend_with_memory_store_restore() {
         // Test that restores work.
         futures::executor::block_on(async {
-            let log = LogDb::open(MemoryLogStore::new(), JsonConverter)
-                .await
-                .unwrap();
+            let log = LogDb::open(
+                log_memory::MemoryLogStore::new(),
+                convert_json::JsonConverter,
+            )
+            .await
+            .unwrap();
             let db = crate::Db::new(log.clone());
 
             let mig = query::migrate::Migration {
