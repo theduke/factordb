@@ -65,7 +65,7 @@ pub struct TupleReplace {
 }
 
 #[derive(Clone, Debug)]
-pub struct TuplePatch {
+pub struct TupleMerge {
     pub id: Id,
     pub data: DataMap,
 }
@@ -76,8 +76,8 @@ pub struct TupleDelete {
 }
 
 #[derive(Clone, Debug)]
-pub struct TupleSelectRemove {
-    pub selector: Expr,
+pub struct TupleRemoveAttrs {
+    pub id: Id,
     pub attrs: Vec<Id>,
 }
 
@@ -85,13 +85,21 @@ pub struct TupleSelectRemove {
 pub enum TupleOp {
     Create(TupleCreate),
     Replace(TupleReplace),
-    Patch(TuplePatch),
+    Merge(TupleMerge),
+    RemoveAttrs(TupleRemoveAttrs),
     Delete(TupleDelete),
+}
 
-    SelectRemove(TupleSelectRemove),
+#[derive(Clone, Debug)]
+pub struct SelectOpt {
+    pub selector: Expr,
+    /// Reusing TupleOp for convenience.
+    /// Note that the Id on these TupleOps is always nil.
+    pub op: TupleOp,
 }
 
 #[derive(Clone, Debug)]
 pub enum DbOp {
     Tuple(TupleOp),
+    Select(SelectOpt),
 }

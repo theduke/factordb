@@ -12,18 +12,18 @@ use ordered_float::OrderedFloat;
 use crate::{
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
-    query::{self, migrate::Migration},
+    query::{self, expr::Expr, migrate::Migration},
     registry::{Registry, SharedRegistry},
     schema::{self, AttributeDescriptor},
     AnyError,
 };
 
-use super::{BackendFuture, DbOp, TupleCreate, TupleDelete, TupleOp, TuplePatch, TupleReplace};
+use super::{BackendFuture, DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace};
 
 #[derive(Clone)]
 pub struct MemoryDb {
     registry: SharedRegistry,
-    state: Arc<RwLock<State>>,
+    state: Arc<RwLock<MemoryStore>>,
 }
 
 impl MemoryDb {
@@ -31,26 +31,39 @@ impl MemoryDb {
         let registry = crate::registry::Registry::new().into_shared();
         Self {
             registry: registry.clone(),
-            state: Arc::new(RwLock::new(State::new(registry))),
+            state: Arc::new(RwLock::new(MemoryStore::new(registry))),
         }
     }
 }
 
-struct State {
+/// Memory store for building a backend.
+///
+/// The [MemoryDb] is a simple memory-only backend, but the store can also
+/// be used by other backends as a caching layer or for other purposes.
+pub struct MemoryStore {
     interner: Interner,
     registry: SharedRegistry,
     entities: FnvHashMap<Id, MemoryTuple>,
     idents: HashMap<String, Id>,
+
+    revert_epoch: RevertEpoch,
+    revert_ops: Option<(RevertEpoch, RevertList)>,
 }
 
-impl State {
-    fn new(registry: SharedRegistry) -> Self {
+impl MemoryStore {
+    pub fn new(registry: SharedRegistry) -> Self {
         Self {
             interner: Interner::new(),
             registry,
             entities: FnvHashMap::default(),
             idents: HashMap::new(),
+            revert_epoch: 0,
+            revert_ops: None,
         }
+    }
+
+    pub fn registry(&self) -> &SharedRegistry {
+        &self.registry
     }
 
     fn resolve_ident(&self, ident: &Ident) -> Option<Id> {
@@ -65,10 +78,7 @@ impl State {
         self.entities.get(&id)
     }
 
-    fn must_resolve_entity_ident(
-        &self,
-        ident: &Ident,
-    ) -> Result<&MemoryTuple, error::EntityNotFound> {
+    fn must_resolve_entity(&self, ident: &Ident) -> Result<&MemoryTuple, error::EntityNotFound> {
         self.resolve_entity(ident)
             .ok_or_else(|| error::EntityNotFound::new(ident.clone()))
     }
@@ -221,52 +231,126 @@ impl State {
     //     self.persist_tuple(persist)
     // }
 
-    fn tuple_create(&mut self, create: TupleCreate) -> Result<(), AnyError> {
+    fn tuple_create(
+        &mut self,
+        create: TupleCreate,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         if self.entities.contains_key(&create.id) {
             return Err(anyhow!("Entity id already exists: '{}'", create.id));
         }
         let map = self.intern_data_map(create.data)?;
         self.entities.insert(create.id, map);
+        revert.push(RevertOp::TupleCreated { id: create.id });
         Ok(())
     }
 
-    fn tuple_replace(&mut self, create: TupleReplace) -> Result<(), AnyError> {
-        let map = self.intern_data_map(create.data)?;
-        self.entities.insert(create.id, map);
+    fn tuple_replace(
+        &mut self,
+        replace: TupleReplace,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        let old = self.entities.remove(&replace.id);
+        let map = self.intern_data_map(replace.data)?;
+        self.entities.insert(replace.id, map);
+        revert.push(RevertOp::TupleReplaced {
+            id: replace.id,
+            data: old,
+        });
         Ok(())
     }
 
-    fn tuple_patch(&mut self, update: TuplePatch) -> Result<(), AnyError> {
+    fn tuple_merge(&mut self, update: TupleMerge, revert: &mut RevertList) -> Result<(), AnyError> {
         let old = self
             .entities
             .get_mut(&update.id)
             .ok_or_else(|| error::EntityNotFound::new(update.id.into()))?;
 
         let reg = self.registry.read().unwrap();
+
+        let mut replaced_values = Vec::new();
+
         for (key, value) in update.data.0 {
             // FIXME: properly patch!
             let attr = reg.require_attr_by_name(&key)?;
             let value = self.interner.intern_value(value);
+            let old_value = old.0.remove(&attr.id);
+            replaced_values.push((attr.id, old_value));
             old.0.insert(attr.id, value);
+        }
+
+        if !replaced_values.is_empty() {
+            revert.push(RevertOp::TupleMerged {
+                id: update.id,
+                replaced_data: replaced_values,
+            });
         }
 
         Ok(())
     }
 
-    fn tuple_delete(&mut self, del: TupleDelete) -> Result<MemoryTuple, AnyError> {
-        self.entities
-            .remove(&del.id)
-            .ok_or_else(|| error::EntityNotFound::new(del.id.into()).into())
+    fn tuple_remove_attrs(
+        &mut self,
+        rem: super::TupleRemoveAttrs,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        let old = self
+            .entities
+            .get_mut(&rem.id)
+            .ok_or_else(|| error::EntityNotFound::new(rem.id.into()))?;
+
+        let reg = self.registry.read().unwrap();
+        let mut removed = Vec::new();
+        for attr_id in rem.attrs {
+            let attr = reg.require_attr(attr_id)?;
+            if let Some(value) = old.0.remove(&attr.id) {
+                removed.push((attr_id, value));
+            }
+        }
+
+        if !removed.is_empty() {
+            revert.push(RevertOp::TupleAttrsRemoved {
+                id: rem.id,
+                attrs: removed,
+            });
+        }
+
+        Ok(())
     }
 
-    fn tuple_select_remove(&mut self, rem: super::TupleSelectRemove) -> Result<(), AnyError> {
+    fn tuple_delete(&mut self, del: TupleDelete, revert: &mut RevertList) -> Result<(), AnyError> {
+        match self.entities.remove(&del.id) {
+            Some(data) => {
+                revert.push(RevertOp::TupleDeleted { id: del.id, data });
+                Ok(())
+            }
+            None => Err(error::EntityNotFound::new(del.id.into()).into()),
+        }
+    }
+
+    fn tuple_select_remove(
+        &mut self,
+        selector: &Expr,
+        rem: &super::TupleRemoveAttrs,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         let reg = self.registry.clone();
 
         // TODO: use query logic instead of full table scan for speedup.
-        for entity in self.entities.values_mut() {
-            if Self::entity_filter(entity, &rem.selector, &*reg.read().unwrap()) {
+        for (id, entity) in self.entities.iter_mut() {
+            if Self::entity_filter(entity, selector, &*reg.read().unwrap()) {
+                let mut removed = Vec::new();
                 for attr_id in &rem.attrs {
-                    entity.remove(&attr_id);
+                    if let Some(value) = entity.remove(&attr_id) {
+                        removed.push((*attr_id, value));
+                    }
+                }
+
+                if !removed.is_empty() {
+                    revert.push(RevertOp::TupleAttrsRemoved {
+                        id: *id,
+                        attrs: removed,
+                    })
                 }
             }
         }
@@ -274,26 +358,38 @@ impl State {
         Ok(())
     }
 
-    fn apply_db_ops(&mut self, ops: Vec<DbOp>) -> Result<(), AnyError> {
+    /// Apply database operations.
+    /// [RevertOp]s are collected into the provided revert list, which allows
+    /// undoing operations.
+    fn apply_db_ops(&mut self, ops: Vec<DbOp>, revert: &mut RevertList) -> Result<(), AnyError> {
         // FIXME: revert changes if anything fails.
         for op in ops {
             match op {
                 DbOp::Tuple(tuple) => match tuple {
                     TupleOp::Create(create) => {
-                        self.tuple_create(create)?;
+                        self.tuple_create(create, revert)?;
                     }
                     TupleOp::Replace(repl) => {
-                        self.tuple_replace(repl)?;
+                        self.tuple_replace(repl, revert)?;
                     }
-                    TupleOp::Patch(update) => {
-                        self.tuple_patch(update)?;
+                    TupleOp::Merge(update) => {
+                        self.tuple_merge(update, revert)?;
+                    }
+                    TupleOp::RemoveAttrs(remove) => {
+                        self.tuple_remove_attrs(remove, revert)?;
                     }
                     TupleOp::Delete(del) => {
-                        self.tuple_delete(del)?;
+                        self.tuple_delete(del, revert)?;
                     }
-                    TupleOp::SelectRemove(remove) => {
-                        self.tuple_select_remove(remove)?;
+                },
+                DbOp::Select(sel) => match sel.op {
+                    TupleOp::Create(_) => todo!(),
+                    TupleOp::Replace(_) => todo!(),
+                    TupleOp::Merge(_) => todo!(),
+                    TupleOp::RemoveAttrs(remove) => {
+                        self.tuple_select_remove(&sel.selector, &remove, revert)?;
                     }
+                    TupleOp::Delete(_) => todo!(),
                 },
             }
         }
@@ -301,24 +397,36 @@ impl State {
         Ok(())
     }
 
-    fn apply_create(&mut self, create: query::update::Create) -> Result<(), AnyError> {
+    fn apply_create(
+        &mut self,
+        create: query::update::Create,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         let ops = self.registry.read().unwrap().validate_create(create)?;
-        self.apply_db_ops(ops)?;
+        self.apply_db_ops(ops, revert)?;
         Ok(())
     }
 
-    fn apply_replace(&mut self, repl: query::update::Replace) -> Result<(), AnyError> {
+    fn apply_replace(
+        &mut self,
+        repl: query::update::Replace,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         let old = match self.entities.get(&repl.id) {
             Some(tuple) => Some(self.tuple_to_data_map(&tuple)?),
             None => None,
         };
 
         let ops = self.registry.read().unwrap().validate_replace(repl, old)?;
-        self.apply_db_ops(ops)?;
+        self.apply_db_ops(ops, revert)?;
         Ok(())
     }
 
-    fn apply_patch(&mut self, patch: query::update::Patch) -> Result<(), AnyError> {
+    fn apply_patch(
+        &mut self,
+        patch: query::update::Patch,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         let old = self
             .entities
             .get(&patch.id)
@@ -326,11 +434,15 @@ impl State {
             .and_then(|t| self.tuple_to_data_map(t))?;
 
         let ops = self.registry.read().unwrap().validate_patch(patch, old)?;
-        self.apply_db_ops(ops)?;
+        self.apply_db_ops(ops, revert)?;
         Ok(())
     }
 
-    fn apply_delete(&mut self, delete: query::update::Delete) -> Result<(), AnyError> {
+    fn apply_delete(
+        &mut self,
+        delete: query::update::Delete,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
         let old = self
             .entities
             .get(&delete.id)
@@ -338,51 +450,162 @@ impl State {
             .and_then(|t| self.tuple_to_data_map(t))?;
 
         let ops = self.registry.read().unwrap().validate_delete(delete, old)?;
-        self.apply_db_ops(ops)?;
+        self.apply_db_ops(ops, revert)?;
         Ok(())
     }
 
-    fn apply_batch(&mut self, batch: query::update::BatchUpdate) -> Result<(), AnyError> {
+    /// Apply a batch of operations.
+    fn apply_batch_impl(
+        &mut self,
+        batch: query::update::BatchUpdate,
+    ) -> Result<RevertList, AnyError> {
         // FIXME: rollback when errors happen.
 
+        let mut revert = Vec::new();
+
         for action in batch.actions {
-            match action {
-                query::update::Update::Create(create) => {
-                    self.apply_create(create)?;
-                }
-                query::update::Update::Replace(repl) => {
-                    self.apply_replace(repl)?;
-                }
-                query::update::Update::Patch(patch) => {
-                    self.apply_patch(patch)?;
-                }
-                query::update::Update::Delete(del) => {
-                    self.apply_delete(del)?;
-                }
+            let res = match action {
+                query::update::Update::Create(create) => self.apply_create(create, &mut revert),
+                query::update::Update::Replace(repl) => self.apply_replace(repl, &mut revert),
+                query::update::Update::Patch(patch) => self.apply_patch(patch, &mut revert),
+                query::update::Update::Delete(del) => self.apply_delete(del, &mut revert),
+            };
+
+            if let Err(err) = res {
+                // An error happened, so revert changes before returning.
+                self.apply_revert(revert);
+                return Err(err);
             }
         }
 
+        Ok(revert)
+    }
+
+    pub fn apply_batch(
+        &mut self,
+        batch: crate::query::update::BatchUpdate,
+    ) -> Result<(), AnyError> {
+        self.apply_batch_impl(batch)?;
         Ok(())
     }
 
-    fn migrate(&mut self, mig: Migration) -> Result<(), AnyError> {
+    fn persist_revert_epoch(&mut self, revert: RevertList) -> RevertEpoch {
+        self.revert_epoch = self.revert_epoch.wrapping_add(1);
+        let epoch = self.revert_epoch;
+        self.revert_ops = Some((epoch, revert));
+        epoch
+    }
+
+    /// Apply a batch update and internally retain a revert list that allows
+    /// undoing the change.
+    /// The returned [RevertEpoch] can be passed to [Self::revert_changes] to
+    /// apply the revert.
+    pub fn apply_batch_revertable(
+        &mut self,
+        batch: crate::query::update::BatchUpdate,
+    ) -> Result<RevertEpoch, AnyError> {
+        let ops = self.apply_batch_impl(batch)?;
+        let epoch = self.persist_revert_epoch(ops);
+        Ok(epoch)
+    }
+
+    /// Revert a list of changes.
+    fn apply_revert(&mut self, revert: RevertList) {
+        dbg!("applying revert", &revert);
+
+        // NOTE: MUST revert in reverse order to preserve consistency.
+        for op in revert.into_iter().rev() {
+            match op {
+                RevertOp::TupleCreated { id } => {
+                    self.entities.remove(&id);
+                }
+                RevertOp::TupleReplaced { id, data } => {
+                    if let Some(old) = data {
+                        self.entities.insert(id, old);
+                    } else {
+                        self.entities.remove(&id);
+                    }
+                }
+                RevertOp::TupleMerged { id, replaced_data } => {
+                    let data = self.entities.get_mut(&id).expect(
+                        "Consistency error: can't revert change because tuple was not found",
+                    );
+
+                    for (attr_id, value_opt) in replaced_data {
+                        if let Some(value) = value_opt {
+                            data.insert(attr_id, value);
+                        } else {
+                            data.remove(&id);
+                        }
+                    }
+                }
+                RevertOp::TupleAttrsRemoved { id, attrs } => {
+                    let data = self.entities.get_mut(&id).expect(
+                        "Consistency error: can't revert change because tuple was not found",
+                    );
+                    for (attr_id, value) in attrs {
+                        data.insert(attr_id, value);
+                    }
+                }
+                RevertOp::TupleDeleted { id, data } => {
+                    self.entities.insert(id, data);
+                }
+            }
+        }
+    }
+
+    /// Revert the last change to the database.
+    /// Fails if the given [RevertEpoch] does not match the last change.
+    pub fn revert_changes(&mut self, epoch: RevertEpoch) -> Result<(), AnyError> {
+        match self.revert_ops.take() {
+            None => Err(anyhow!(
+                "Invalid revert epoch - epoch does not match last change"
+            )),
+            Some((current_epoch, ops)) => {
+                if current_epoch != epoch {
+                    Err(anyhow!(
+                        "Invalid revert epoch - epoch does not match last change"
+                    ))
+                } else {
+                    self.apply_revert(ops);
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    fn migrate_impl(&mut self, mig: Migration) -> Result<RevertList, AnyError> {
         let mut reg = self.registry.read().unwrap().duplicate();
         let (_mig, ops) = schema::logic::validate_migration(&mut reg, mig)?;
 
-        self.apply_db_ops(ops)?;
+        let mut revert = Vec::new();
+        if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert) {
+            self.apply_revert(revert);
+            Err(err)
+        } else {
+            *self.registry.write().unwrap() = reg;
+            Ok(revert)
+        }
+    }
 
-        *self.registry.write().unwrap() = reg;
-
+    pub fn migrate(&mut self, mig: Migration) -> Result<(), AnyError> {
+        self.migrate_impl(mig)?;
         Ok(())
     }
 
-    fn entity(&self, id: Ident) -> Result<DataMap, AnyError> {
-        self.must_resolve_entity_ident(&id)
+    pub fn migrate_revertable(&mut self, mig: Migration) -> Result<RevertEpoch, AnyError> {
+        let ops = self.migrate_impl(mig)?;
+        let epoch = self.persist_revert_epoch(ops);
+        Ok(epoch)
+    }
+
+    pub fn entity(&self, id: Ident) -> Result<DataMap, AnyError> {
+        self.must_resolve_entity(&id)
             .map_err(AnyError::from)
             .and_then(|tuple| self.tuple_to_data_map(tuple))
     }
 
-    fn select(
+    pub fn select(
         &self,
         query: query::select::Select,
     ) -> Result<query::select::Page<DataMap>, AnyError> {
@@ -546,11 +769,10 @@ impl State {
             .unwrap_or(false)
     }
 
-    fn purge_all_data(&mut self) -> Result<(), AnyError> {
+    pub fn purge_all_data(&mut self) {
         self.entities.clear();
         self.idents.clear();
         self.interner.clear();
-        Ok(())
     }
 }
 
@@ -591,6 +813,38 @@ impl std::ops::DerefMut for MemoryTuple {
         &mut self.0
     }
 }
+
+/// An identifier for the current version of a database.
+/// Some methods return this epoch to provide extern reverts.
+/// The epoch can be passed to [MemoryStore::revert_epoch].
+pub type RevertEpoch = u64;
+
+/// Record of a reversible operation performed on data.
+/// A `RevertOp` can be reverted to restore the old state.
+#[derive(Debug)]
+enum RevertOp {
+    TupleCreated {
+        id: Id,
+    },
+    TupleReplaced {
+        id: Id,
+        data: Option<MemoryTuple>,
+    },
+    TupleMerged {
+        id: Id,
+        replaced_data: Vec<(Id, Option<MemoryValue>)>,
+    },
+    TupleAttrsRemoved {
+        id: Id,
+        attrs: Vec<(Id, MemoryValue)>,
+    },
+    TupleDeleted {
+        id: Id,
+        data: MemoryTuple,
+    },
+}
+
+type RevertList = Vec<RevertOp>;
 
 // fn memory_to_id_map(mem: &MemoryTuple) -> IdMap {
 //     mem.iter()
@@ -716,8 +970,8 @@ impl super::Backend for MemoryDb {
     }
 
     fn purge_all_data(&self) -> BackendFuture<()> {
-        let res = self.state.write().unwrap().purge_all_data();
-        ready(res).boxed()
+        self.state.write().unwrap().purge_all_data();
+        ready(Ok(())).boxed()
     }
 
     fn entity(&self, id: Ident) -> super::BackendFuture<DataMap> {
@@ -736,7 +990,7 @@ impl super::Backend for MemoryDb {
     }
 
     fn migrate(&self, migration: query::migrate::Migration) -> super::BackendFuture<()> {
-        let res = self.state.write().unwrap().migrate(migration);
+        let res = self.state.write().unwrap().migrate(migration).map(|_| ());
         ready(res).boxed()
     }
 }

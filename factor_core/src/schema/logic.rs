@@ -1,6 +1,6 @@
 use crate::{
-    backend::{DbOp, TupleCreate, TupleOp},
-    data::{self, value},
+    backend::{DbOp, SelectOpt, TupleCreate, TupleOp},
+    data::{self, value, Id},
     query::migrate::{Migration, SchemaAction},
     registry::Registry,
     AnyError,
@@ -40,10 +40,13 @@ pub fn validate_migration(
                 // TODO: better handling of removal than with a Unit replace?
                 patch_data.insert(attr.name.to_string(), data::Value::Unit);
 
-                let op = DbOp::Tuple(TupleOp::SelectRemove(crate::backend::TupleSelectRemove {
+                let op = DbOp::Select(SelectOpt {
                     selector: crate::query::expr::Expr::literal(true),
-                    attrs: vec![attr.id],
-                }));
+                    op: TupleOp::RemoveAttrs(crate::backend::TupleRemoveAttrs {
+                        id: Id::nil(),
+                        attrs: vec![attr.id],
+                    }),
+                });
 
                 ops.push(op);
             }

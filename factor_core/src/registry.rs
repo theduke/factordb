@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Context};
 use fnv::FnvHashMap;
 
 use crate::{
-    backend::{DbOp, TupleCreate, TupleDelete, TupleOp, TuplePatch, TupleReplace},
+    backend::{DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace},
     data::{DataMap, Id, IdMap, Ident, Value},
     query,
     schema::{
@@ -357,7 +357,7 @@ impl Registry {
         let data = self.validate_attributes(old)?;
 
         let mut ops = Vec::new();
-        ops.push(DbOp::Tuple(TupleOp::Patch(TuplePatch { id, data })));
+        ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge { id, data })));
 
         // FIXME: index updates etc
 
