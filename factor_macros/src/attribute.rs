@@ -104,9 +104,9 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
         let raw = input.ident.to_string();
         let snake = raw.to_snake_case();
         let name = if snake.starts_with("attr_") {
-            snake.strip_prefix("attr_").unwrap().to_camel_case()
+            snake.strip_prefix("attr_").unwrap().to_string()
         } else {
-            snake.to_camel_case()
+            snake
         };
         name
     });

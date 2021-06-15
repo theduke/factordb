@@ -47,7 +47,7 @@ fn test_attr_derive() {
             index: false,
             strict: false,
             unique: false,
-            name: "test/someTitle".into(),
+            name: "test/some_title".into(),
             value_type: ValueType::String,
         },
         AttrSomeTitle::schema()
