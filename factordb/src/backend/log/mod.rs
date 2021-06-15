@@ -14,11 +14,7 @@ use futures::{
 };
 use query::mutate::BatchUpdate;
 
-use crate::{
-    data,
-    query::{self, migrate::Migration, select::Item},
-    registry, AnyError,
-};
+use crate::{AnyError, data, query::{self, migrate::Migration, select::Item}, registry, schema};
 
 use super::{
     memory::store::{MemoryStore, RevertEpoch},
@@ -99,6 +95,7 @@ impl LogDb {
                         .context("Could not deserialize event")?;
                     event_id = event.id;
 
+
                     match event.op {
                         LogOp::Batch(batch) => {
                             self.state
@@ -170,6 +167,16 @@ impl LogDb {
     }
 
     async fn migrate(self, migration: query::migrate::Migration) -> Result<(), AnyError> {
+        // First, check if the migration would actually change anything.
+        // If not, we do not write it.
+        // This is important to not spam the log with migrations when UPSERTS
+        // happen.
+        let mut reg = self.state.registry.read().unwrap().duplicate();
+        let (_mig, ops) = schema::logic::validate_migration(&mut reg, migration.clone())?;
+        if ops.is_empty() {
+            return Ok(())
+        }
+
         let mut mutable = self.state.mutable.lock().await;
         let revert_epoch = self
             .state
@@ -202,6 +209,7 @@ impl LogDb {
         };
         self.write_event_revertable(&mut mutable, event, revert_epoch)
             .await?;
+
         Ok(())
     }
 }
