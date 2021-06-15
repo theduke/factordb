@@ -130,7 +130,7 @@ async fn test_assert_simple(f: &Db) {
     let data2 = map! {
         "factor/description": "b",
     };
-    f.patch(id, data2.clone()).await.unwrap();
+    f.merge(id, data2.clone()).await.unwrap();
 
     // Load and compare again.
     expected.insert("factor/description".into(), "b".into());

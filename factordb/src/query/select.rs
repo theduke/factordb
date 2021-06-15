@@ -12,7 +12,7 @@ pub enum Order {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Sort {
-    value: Expr,
+    on: Expr,
     order: Order,
 }
 
@@ -20,6 +20,7 @@ pub struct Sort {
 pub struct Join {
     pub name: String,
     pub attr: Ident,
+    pub limit: u64,
     pub flatten_relation: bool,
 }
 
@@ -73,6 +74,25 @@ pub struct JoinItem<T> {
 pub struct Item<T = DataMap> {
     pub data: T,
     pub joins: Vec<JoinItem<T>>,
+}
+
+impl<T> Item<T> {
+    pub fn flatten_into(self, list: &mut Vec<T>) {
+        list.push(self.data);
+        for join in self.joins {
+            for item in join.items {
+                item.flatten_into(list);
+            }
+        }
+    }
+
+    pub fn flatten_list(items: Vec<Self>) -> Vec<T> {
+        let mut list = Vec::new();
+        for item in items {
+            item.flatten_into(&mut list);
+        }
+        list
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

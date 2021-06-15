@@ -1,9 +1,10 @@
+use inflector::Inflector;
 use proc_macro::TokenStream;
 use quote::quote;
 
 struct StructAttrs {
     namespace: syn::LitStr,
-    value_type: syn::Path,
+    // value_type: Option<syn::Path>,
     name: Option<String>,
     unique: bool,
     index: bool,
@@ -18,7 +19,7 @@ impl syn::parse::Parse for StructAttrs {
         let input;
         syn::parenthesized!(input in outer);
 
-        let mut value_type = None;
+        // let mut value_type = None;
         let mut namespace = None;
         let mut name = None;
         let mut unique = false;
@@ -29,11 +30,11 @@ impl syn::parse::Parse for StructAttrs {
             let key: syn::Ident = input.parse()?;
 
             match key.to_string().as_str() {
-                "value" => {
-                    let _eq: syn::token::Eq = input.parse()?;
-                    let v = input.parse::<syn::Path>()?;
-                    value_type = Some(v);
-                }
+                // "value" => {
+                //     let _eq: syn::token::Eq = input.parse()?;
+                //     let v = input.parse::<syn::Path>()?;
+                //     value_type = Some(v);
+                // }
                 "namespace" => {
                     let _eq: syn::token::Eq = input.parse()?;
                     let v = input.parse::<syn::LitStr>()?;
@@ -62,7 +63,7 @@ impl syn::parse::Parse for StructAttrs {
         }
 
         Ok(Self {
-            value_type: value_type.expect(PROPERTY_USAGE),
+            // value_type,
             namespace: namespace.expect(PROPERTY_USAGE),
             name,
             unique,
@@ -82,14 +83,32 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
     // Build output.
 
     let ident = &input.ident;
-    let value_type = attr.value_type;
+    let type_ = match &input.data {
+        syn::Data::Struct(syn::DataStruct { fields, .. }) => match fields {
+            syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed, .. }) if unnamed.len() == 1 => {
+                let ty = unnamed.first().unwrap();
+                quote! {
+                    #ty
+                }
+            }
+            _ => {
+                panic!("#[derive(Attribute)] must be used on tuple structs with a single inner type. eg: struct MyAttr(String);");
+            }
+        },
+        _ => {
+            panic!("#[derive(Attribute)] must be used on tuple structs with a single inner type. eg: struct MyAttr(String);");
+        }
+    };
     let namespace = attr.namespace;
     let name = attr.name.unwrap_or_else(|| {
-        let raw_ident = input.ident.to_string();
-        let mut iter = raw_ident.chars();
-        let mut first = iter.next().unwrap().to_lowercase().to_string();
-        first.extend(iter);
-        first
+        let raw = input.ident.to_string();
+        let snake = raw.to_snake_case();
+        let name = if snake.starts_with("attr_") {
+            snake.strip_prefix("attr_").unwrap().to_camel_case()
+        } else {
+            snake.to_camel_case()
+        };
+        name
     });
     let unique = attr.unique;
     let index = attr.index;
@@ -101,13 +120,14 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
         impl factordb::schema::AttributeDescriptor for #ident {
             const NAME: &'static str = #full_name;
             const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::NAME);
+            type Type = #type_;
 
             fn schema() -> factordb::schema::AttributeSchema {
                 factordb::schema::AttributeSchema {
                     id: factordb::data::Id::nil(),
                     name: #full_name.into(),
                     description: None,
-                    value_type: #value_type,
+                    value_type: <Self::Type as factordb::data::value::ValueTypeDescriptor>::value_type(),
                     index: #index,
                     unique: #unique,
                     strict: #strict,

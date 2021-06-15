@@ -14,6 +14,8 @@ pub use de::{from_value, from_value_map, ValueDeserializeError};
 pub use map::ValueMap;
 pub use ser::{to_value, to_value_map, ValueSerializeError};
 
+use super::Timestamp;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ValueType {
     Any,
@@ -31,9 +33,132 @@ pub enum ValueType {
     /// Reference to an entity id.
     Ref,
     List(Box<Self>),
+    Map,
 
     /// A union of different types.
     Union(Vec<Self>),
+    Object(ObjectType),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ObjectType {
+    pub fields: Vec<ObjectField>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ObjectField {
+    pub name: String,
+    pub value_type: ValueType,
+}
+
+impl ValueType {
+    pub fn is_scalar(&self) -> bool {
+        match self {
+            Self::Bool
+            | Self::Int
+            | Self::UInt
+            | Self::Float
+            | Self::String
+            | Self::Bytes
+            | Self::DateTime
+            | Self::Ref
+            | Self::Map => true,
+            Self::Object(_) => false,
+
+            Self::Union(inner) => inner.iter().all(|t| t.is_scalar()),
+
+            Self::Any | Self::Unit | Self::List(_) => false,
+        }
+    }
+}
+
+/// Trait that allows to statically determine the value type of a Rust type.
+pub trait ValueTypeDescriptor {
+    fn value_type() -> ValueType;
+}
+
+impl ValueTypeDescriptor for bool {
+    fn value_type() -> ValueType {
+        ValueType::Bool
+    }
+}
+
+impl ValueTypeDescriptor for i8 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for i16 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for i32 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for i64 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for u8 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for u16 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for u32 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for u64 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+}
+
+impl ValueTypeDescriptor for f32 {
+    fn value_type() -> ValueType {
+        ValueType::Float
+    }
+}
+
+impl ValueTypeDescriptor for f64 {
+    fn value_type() -> ValueType {
+        ValueType::Float
+    }
+}
+
+impl ValueTypeDescriptor for String {
+    fn value_type() -> ValueType {
+        ValueType::String
+    }
+}
+
+impl ValueTypeDescriptor for Vec<u8> {
+    fn value_type() -> ValueType {
+        ValueType::Bytes
+    }
+}
+
+impl ValueTypeDescriptor for Timestamp {
+    fn value_type() -> ValueType {
+        ValueType::DateTime
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
@@ -183,6 +308,14 @@ impl Value {
     /// Returns `true` if the value is [`String`].
     pub fn is_string(&self) -> bool {
         matches!(self, Self::String(..))
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        if let Self::String(v) = self {
+            Some(&v)
+        } else {
+            None
+        }
     }
 
     /// Returns `true` if the value is [`Bytes`].

@@ -13,6 +13,12 @@ impl std::fmt::Display for Id {
     }
 }
 
+impl super::value::ValueTypeDescriptor for Id {
+    fn value_type() -> super::ValueType {
+        super::ValueType::Ref
+    }
+}
+
 impl Id {
     pub const fn from_uuid(uuid: uuid::Uuid) -> Self {
         Self(uuid)
@@ -20,7 +26,7 @@ impl Id {
 
     /// Either returns the id if it is not nil, or otherwise creates a new
     /// random one.
-    pub fn into_non_nil(self) -> Self {
+    pub fn non_nil_or_randomize(self) -> Self {
         if self.is_nil() {
             Self::random()
         } else {
@@ -48,6 +54,14 @@ impl Id {
         Self(uuid::Uuid::new_v4())
     }
 
+    pub fn as_non_nil(self) -> Option<Self> {
+        if self.is_nil() {
+            None
+        } else {
+            Some(self)
+        }
+    }
+
     pub fn verify_non_nil(self) -> Result<(), AnyError> {
         if self.is_nil() {
             Err(anyhow::anyhow!("Id is nil"))
@@ -59,7 +73,7 @@ impl Id {
 
 pub type CowStr = Cow<'static, str>;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum Ident {
     Id(Id),

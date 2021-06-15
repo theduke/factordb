@@ -384,7 +384,7 @@ impl MemoryStore {
 
     fn apply_create(
         &mut self,
-        create: query::update::Create,
+        create: query::mutate::Create,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let ops = self.registry.read().unwrap().validate_create(create)?;
@@ -394,7 +394,7 @@ impl MemoryStore {
 
     fn apply_replace(
         &mut self,
-        repl: query::update::Replace,
+        repl: query::mutate::Replace,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let old = match self.entities.get(&repl.id) {
@@ -407,25 +407,25 @@ impl MemoryStore {
         Ok(())
     }
 
-    fn apply_patch(
+    fn apply_merge(
         &mut self,
-        patch: query::update::Patch,
+        merge: query::mutate::Merge,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let old = self
             .entities
-            .get(&patch.id)
-            .ok_or_else(|| anyhow!("Entity not found: {:?}", patch.id))
+            .get(&merge.id)
+            .ok_or_else(|| anyhow!("Entity not found: {:?}", merge.id))
             .and_then(|t| self.tuple_to_data_map(t))?;
 
-        let ops = self.registry.read().unwrap().validate_patch(patch, old)?;
+        let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
         self.apply_db_ops(ops, revert)?;
         Ok(())
     }
 
     fn apply_delete(
         &mut self,
-        delete: query::update::Delete,
+        delete: query::mutate::Delete,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         let old = self
@@ -442,7 +442,7 @@ impl MemoryStore {
     /// Apply a batch of operations.
     fn apply_batch_impl(
         &mut self,
-        batch: query::update::BatchUpdate,
+        batch: query::mutate::BatchUpdate,
     ) -> Result<RevertList, AnyError> {
         // FIXME: rollback when errors happen.
 
@@ -450,10 +450,10 @@ impl MemoryStore {
 
         for action in batch.actions {
             let res = match action {
-                query::update::Update::Create(create) => self.apply_create(create, &mut revert),
-                query::update::Update::Replace(repl) => self.apply_replace(repl, &mut revert),
-                query::update::Update::Patch(patch) => self.apply_patch(patch, &mut revert),
-                query::update::Update::Delete(del) => self.apply_delete(del, &mut revert),
+                query::mutate::Mutate::Create(create) => self.apply_create(create, &mut revert),
+                query::mutate::Mutate::Replace(repl) => self.apply_replace(repl, &mut revert),
+                query::mutate::Mutate::Merge(merge) => self.apply_merge(merge, &mut revert),
+                query::mutate::Mutate::Delete(del) => self.apply_delete(del, &mut revert),
             };
 
             if let Err(err) = res {
@@ -468,7 +468,7 @@ impl MemoryStore {
 
     pub fn apply_batch(
         &mut self,
-        batch: crate::query::update::BatchUpdate,
+        batch: crate::query::mutate::BatchUpdate,
     ) -> Result<(), AnyError> {
         self.apply_batch_impl(batch)?;
         Ok(())
@@ -487,7 +487,7 @@ impl MemoryStore {
     /// apply the revert.
     pub fn apply_batch_revertable(
         &mut self,
-        batch: crate::query::update::BatchUpdate,
+        batch: crate::query::mutate::BatchUpdate,
     ) -> Result<RevertEpoch, AnyError> {
         let ops = self.apply_batch_impl(batch)?;
         let epoch = self.persist_revert_epoch(ops);

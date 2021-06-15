@@ -176,7 +176,7 @@ impl factordb::backend::Backend for SqliteDb {
 
     fn apply_batch(
         &self,
-        _batch: factordb::query::update::BatchUpdate,
+        _batch: factordb::query::mutate::BatchUpdate,
     ) -> factordb::backend::BackendFuture<()> {
         todo!()
     }

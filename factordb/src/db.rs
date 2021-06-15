@@ -8,6 +8,7 @@ use crate::{
     query, AnyError,
 };
 
+#[derive(Clone)]
 pub struct Db {
     backend: Arc<dyn Backend + Send + Sync + 'static>,
 }
@@ -34,8 +35,8 @@ impl Db {
     }
 
     pub async fn create(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::update::BatchUpdate {
-            actions: vec![query::update::Update::Create(query::update::Create {
+        self.batch(query::mutate::BatchUpdate {
+            actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
                 id,
                 data,
             })],
@@ -44,8 +45,8 @@ impl Db {
     }
 
     pub async fn replace(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::update::BatchUpdate {
-            actions: vec![query::update::Update::Replace(query::update::Replace {
+        self.batch(query::mutate::BatchUpdate {
+            actions: vec![query::mutate::Mutate::Replace(query::mutate::Replace {
                 id,
                 data,
             })],
@@ -53,9 +54,9 @@ impl Db {
         .await
     }
 
-    pub async fn patch(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::update::BatchUpdate {
-            actions: vec![query::update::Update::Patch(query::update::Patch {
+    pub async fn merge(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
+        self.batch(query::mutate::BatchUpdate {
+            actions: vec![query::mutate::Mutate::Merge(query::mutate::Merge {
                 id,
                 data,
             })],
@@ -64,13 +65,13 @@ impl Db {
     }
 
     pub async fn delete(&self, id: Id) -> Result<(), AnyError> {
-        self.batch(query::update::BatchUpdate {
-            actions: vec![query::update::Update::Delete(query::update::Delete { id })],
+        self.batch(query::mutate::BatchUpdate {
+            actions: vec![query::mutate::Mutate::Delete(query::mutate::Delete { id })],
         })
         .await
     }
 
-    pub async fn batch(&self, batch: query::update::BatchUpdate) -> Result<(), AnyError> {
+    pub async fn batch(&self, batch: query::mutate::BatchUpdate) -> Result<(), AnyError> {
         self.backend.apply_batch(batch).await
     }
 

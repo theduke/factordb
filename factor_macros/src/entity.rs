@@ -155,6 +155,18 @@ fn option_inner(ty: &syn::Type) -> Option<&syn::Type> {
     }
 }
 
+fn is_vec(ty: &syn::Type) -> bool {
+    match ty {
+        syn::Type::Path(path) => path
+            .path
+            .segments
+            .first()
+            .map(|x| x.ident == "Vec")
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
 fn vec_inner(ty: &syn::Type) -> Option<&syn::Type> {
     let path = match ty {
         syn::Type::Path(path) => path,
@@ -243,14 +255,21 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
         } else {
             let prop = &field_attrs.attribute.unwrap();
 
-            let _is_option = is_option(&field.ty);
+            let cardinality = match &field.ty {
+                x if is_option(x) => quote!(Optional),
+                x if is_vec(x) => quote!(Many),
+                _ => quote!(Required),
+            };
 
-            if field_name.to_string() != "id" {
-                schema_attributes.push(quote! {
-                    <#prop as factordb::schema::AttributeDescriptor>::IDENT,
-                });
-            } else {
+            if field_name.to_string() == "id" {
                 have_id = true;
+            } else {
+                schema_attributes.push(quote! {
+                    factordb::schema::EntityAttribute {
+                        attribute: <#prop as factordb::schema::AttributeDescriptor>::IDENT,
+                        cardinality: factordb::schema::Cardinality::#cardinality,
+                    },
+                });
             }
         }
     }
@@ -280,9 +299,6 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                     ],
                     extend: None,
                     strict: false,
-                    is_relation: false,
-                    from: None,
-                    to: None,
                 }
             }
         }

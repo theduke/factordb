@@ -12,7 +12,7 @@ use futures::{
     stream::BoxStream,
     FutureExt, StreamExt,
 };
-use query::update::BatchUpdate;
+use query::mutate::BatchUpdate;
 
 use crate::{
     data,

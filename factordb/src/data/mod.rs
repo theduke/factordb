@@ -19,9 +19,31 @@ macro_rules! map {
         $( $key:literal : $value:expr  ),* $(,)?
     } => {
         {
-
             let mut map = $crate::data::DataMap::new();
+            $(
+                {
+                    let id = $key.to_string();
+                    map.insert(id, $value.into());
+                }
 
+            )*
+
+            map
+        }
+
+    };
+}
+
+#[macro_export]
+macro_rules! tymap {
+    (
+      $ty:ty,
+      {
+        $( $key:literal : $value:expr  ),* $(,)?
+      }
+    ) => {
+        {
+            let mut map = $ty::new();
             $(
                 {
                     let id = $key.to_string();

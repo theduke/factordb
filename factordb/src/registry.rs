@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context};
 use fnv::FnvHashMap;
+use schema::Cardinality;
 
 use crate::{
     backend::{DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace},
@@ -17,6 +18,8 @@ use crate::{
     },
     AnyError,
 };
+
+const MAX_NAME_LEN: usize = 50;
 
 #[derive(Clone, Debug)]
 pub struct Registry {
@@ -165,7 +168,7 @@ impl Registry {
             .ok_or_else(|| anyhow!("Attribute not found: {}", id))?;
 
         self.entities.values_mut().for_each(|entity| {
-            entity.attributes.retain(|ident| match ident {
+            entity.attributes.retain(|field| match &field.attribute {
                 Ident::Id(ent_id) => *ent_id != id,
                 Ident::Name(name) => name.as_ref() != attr.name,
             });
@@ -221,6 +224,27 @@ impl Registry {
         if self.attr_idents.get(&attr.name).is_some() {
             bail!("Attribute with name '{}' already exists", attr.name);
         }
+
+        match &attr.value_type {
+            x if x.is_scalar() => {}
+            crate::data::ValueType::Object(obj) => {
+                for field in &obj.fields {
+                    if field.name.len() > MAX_NAME_LEN {
+                        return Err(anyhow!(
+                            "object field '{}' exceeds maximum field name length of {}",
+                            field.name,
+                            MAX_NAME_LEN
+                        ));
+                    }
+                }
+            }
+            other => {
+                return Err(anyhow!(
+                    "Invalid attribute type {:?} - attributes must be scalar values",
+                    other,
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -246,8 +270,8 @@ impl Registry {
         // Set for ensuring uniqueness.
         let mut attr_set = HashSet::new();
 
-        for attr_ident in &entity.attributes {
-            let attr = self.require_attr_by_ident(attr_ident)?;
+        for field in &entity.attributes {
+            let attr = self.require_attr_by_ident(&field.attribute)?;
 
             if attr_set.contains(&attr.id) {
                 bail!("Duplicate attribute: '{}'", attr.name);
@@ -256,9 +280,6 @@ impl Registry {
         }
 
         // FIXME: validate other stuff, like Relation.
-        if entity.is_relation {
-            bail!("Relations are not implemented yet");
-        }
 
         Ok(())
     }
@@ -266,8 +287,8 @@ impl Registry {
     fn validate_attr_value(
         &self,
         attr: &schema::AttributeSchema,
-        value: Value,
-    ) -> Result<Value, AnyError> {
+        value: &mut Value,
+    ) -> Result<(), AnyError> {
         let ty = value.value_type();
         if ty != attr.value_type {
             return Err(anyhow!(
@@ -277,7 +298,7 @@ impl Registry {
                 ty
             ));
         }
-        Ok(value)
+        Ok(())
     }
 
     // fn make_id_map(
@@ -296,33 +317,65 @@ impl Registry {
     //         .collect()
     // }
 
-    fn validate_entity_type_data(
+    fn validate_entity_data(
         &self,
-        _data: &DataMap,
-        _entity: &schema::EntitySchema,
+        data: &mut DataMap,
+        entity: &schema::EntitySchema,
     ) -> Result<(), AnyError> {
-        // FIXME: implement!
-        todo!()
+        for field in &entity.attributes {
+            // TODO: create a static list of fields for each entity so that
+            // we don't have to do this lookup each time.
+            let attr = self.require_attr_by_ident(&field.attribute)?;
+
+            match (data.get_mut(&attr.name), field.cardinality) {
+                (None, Cardinality::Optional) => {}
+                (None, Cardinality::Required) => {
+                    return Err(anyhow!("Missing required attribute '{}'", attr.name));
+                }
+                (None, Cardinality::Many) => {
+                    // We could insert a list here, but that decision is
+                    // probably better left to the backend.
+                }
+                (Some(value), Cardinality::Optional) => {
+                    self.validate_attr_value(attr, value)?;
+                }
+                (Some(value), Cardinality::Required) => {
+                    self.validate_attr_value(attr, value)?;
+                }
+                (Some(value), Cardinality::Many) => match value {
+                    Value::List(items) => {
+                        for item in items {
+                            self.validate_attr_value(attr, item)?;
+                        }
+                    }
+                    single => {
+                        self.validate_attr_value(attr, single)?;
+                        let value = std::mem::replace(single, Value::Unit);
+                        *single = Value::List(vec![value]);
+                    }
+                },
+            }
+        }
+
+        Ok(())
     }
 
     fn validate_attributes(&self, mut data: DataMap) -> Result<DataMap, AnyError> {
-        for (key, value_ref) in &mut data.0 {
-            let attr = self.require_attr_by_name(&key)?;
-
-            let value = std::mem::replace(value_ref, Value::Unit);
-            *value_ref = self.validate_attr_value(attr, value)?;
-        }
-
         if let Some(ty) = data_map_get_type(&data)? {
             let entity = self.require_entity_by_ident(&ty)?;
-            self.validate_entity_type_data(&data, entity)?;
+            self.validate_entity_data(&mut data, entity)?;
+        } else {
+            for (key, value) in &mut data.0 {
+                let attr = self.require_attr_by_name(&key)?;
+                self.validate_attr_value(attr, value)?;
+            }
         }
 
         Ok(data)
     }
 
-    pub fn validate_create(&self, create: query::update::Create) -> Result<Vec<DbOp>, AnyError> {
-        let id = create.id.into_non_nil();
+    pub fn validate_create(&self, create: query::mutate::Create) -> Result<Vec<DbOp>, AnyError> {
+        let id = create.id.non_nil_or_randomize();
 
         let mut data = self.validate_attributes(create.data)?;
         data.insert(AttrId::NAME.into(), id.into());
@@ -338,10 +391,10 @@ impl Registry {
 
     pub fn validate_replace(
         &self,
-        create: query::update::Replace,
+        create: query::mutate::Replace,
         _old: Option<DataMap>,
     ) -> Result<Vec<DbOp>, AnyError> {
-        let id = create.id.into_non_nil();
+        let id = create.id.non_nil_or_randomize();
 
         let mut data = self.validate_attributes(create.data)?;
         data.insert(AttrId::NAME.into(), id.into());
@@ -357,16 +410,17 @@ impl Registry {
         Ok(ops)
     }
 
-    pub fn validate_patch(
+    pub fn validate_merge(
         &self,
-        patch: query::update::Patch,
+        merge: query::mutate::Merge,
         mut old: DataMap,
     ) -> Result<Vec<DbOp>, AnyError> {
-        let id = patch.id;
+        let id = merge.id.non_nil_or_randomize();
 
         // FIXME: can't use extend here, have to respect list patching etc.
-        old.0.extend(patch.data.0.into_iter());
-        let data = self.validate_attributes(old)?;
+        old.0.extend(merge.data.0.into_iter());
+        let mut data = self.validate_attributes(old)?;
+        data.insert(AttrId::NAME.into(), id.into());
 
         let mut ops = Vec::new();
         ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge { id, data })));
@@ -378,7 +432,7 @@ impl Registry {
 
     pub fn validate_delete(
         &self,
-        del: query::update::Delete,
+        del: query::mutate::Delete,
         _old: DataMap,
     ) -> Result<Vec<DbOp>, AnyError> {
         let id = del.id;

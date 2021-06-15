@@ -6,12 +6,22 @@ pub struct AttributeCreate {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AttributeUpsert {
+    pub schema: schema::AttributeSchema,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeDelete {
     pub name: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct EntityCreate {
+    pub schema: schema::EntitySchema,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct EntityUpsert {
     pub schema: schema::EntitySchema,
 }
 
@@ -23,8 +33,10 @@ pub struct EntityDelete {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SchemaAction {
     AttributeCreate(AttributeCreate),
+    AttributeUpsert(AttributeUpsert),
     AttributeDelete(AttributeDelete),
     EntityCreate(EntityCreate),
+    EntityUpsert(EntityUpsert),
     EntityDelete(EntityDelete),
 }
 

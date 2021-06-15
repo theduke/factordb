@@ -2,7 +2,7 @@ pub mod builtin;
 
 pub mod logic;
 
-use crate::data::{Id, Ident, ValueType};
+use crate::data::{value::ValueMap, Id, Ident, Value, ValueType};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeSchema {
@@ -41,7 +41,53 @@ impl AttributeSchema {
 pub trait AttributeDescriptor {
     const NAME: &'static str;
     const IDENT: Ident = Ident::new_static(Self::NAME);
+    type Type;
     fn schema() -> AttributeSchema;
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cardinality {
+    Optional,
+    Required,
+    Many,
+}
+
+impl Cardinality {
+    #[inline]
+    pub fn is_optional(&self) -> bool {
+        matches!(self, Self::Optional)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct EntityAttribute {
+    pub attribute: Ident,
+    pub cardinality: Cardinality,
+}
+
+impl EntityAttribute {
+    pub fn into_optional(self) -> Self {
+        Self {
+            attribute: self.attribute,
+            cardinality: Cardinality::Optional,
+        }
+    }
+
+    pub fn into_many(self) -> Self {
+        Self {
+            attribute: self.attribute,
+            cardinality: Cardinality::Many,
+        }
+    }
+}
+
+impl From<Id> for EntityAttribute {
+    fn from(id: Id) -> Self {
+        Self {
+            attribute: id.into(),
+            cardinality: Cardinality::Required,
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -53,21 +99,20 @@ pub struct EntitySchema {
     #[serde(rename = "factor/description")]
     pub description: Option<String>,
     #[serde(rename = "factor/attributes")]
-    pub attributes: Vec<Ident>,
+    pub attributes: Vec<EntityAttribute>,
     #[serde(rename = "factor/extend")]
     pub extend: Option<Ident>,
     /// If a schema is set to strict, additional attributes not specified
     /// by the schema will be rejected.
     #[serde(rename = "factor/isStrict")]
     pub strict: bool,
-
     // TODO: refactor to embedded/compound entity
-    #[serde(rename = "factor/isRelation")]
-    pub is_relation: bool,
-    #[serde(rename = "factor/realtionFrom")]
-    pub from: Option<Ident>,
-    #[serde(rename = "factor/realtionTo")]
-    pub to: Option<Ident>,
+    // #[serde(rename = "factor/isRelation")]
+    // pub is_relation: bool,
+    // #[serde(rename = "factor/relationFrom")]
+    // pub from: Option<Ident>,
+    // #[serde(rename = "factor/relationTo")]
+    // pub to: Option<Ident>,
 }
 
 /// Trait that provides a static metadata for an entity.
@@ -92,4 +137,25 @@ pub enum SchemaItem {
 pub struct DbSchema {
     pub attributes: Vec<AttributeSchema>,
     pub entities: Vec<EntitySchema>,
+}
+
+pub trait AttrMapExt {
+    fn get_id(&self) -> Option<Id>;
+    fn get_type(&self) -> Option<Ident>;
+}
+
+impl AttrMapExt for ValueMap<String> {
+    fn get_id(&self) -> Option<Id> {
+        self.get(self::builtin::AttrId::NAME)
+            .and_then(|v| v.as_id())
+    }
+
+    fn get_type(&self) -> Option<Ident> {
+        self.get(self::builtin::AttrType::NAME)
+            .and_then(|v| match v {
+                Value::String(name) => Some(Ident::Name(name.to_string().into())),
+                Value::Id(id) => Some(Ident::Id(*id)),
+                _ => None,
+            })
+    }
 }
