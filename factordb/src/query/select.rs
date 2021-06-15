@@ -28,9 +28,12 @@ pub type Cursor = String;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Select {
-    pub joins: Vec<Join>,
     pub filter: Option<Expr>,
+    #[serde(default = "Vec::new")]
+    pub joins: Vec<Join>,
+    #[serde(default = "Vec::new")]
     pub sort: Vec<Sort>,
+    #[serde(default = "HashMap::new")]
     pub variables: HashMap<String, Value>,
     pub limit: u64,
     pub cursor: Option<Id>,
@@ -73,6 +76,7 @@ pub struct JoinItem<T> {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Item<T = DataMap> {
     pub data: T,
+    #[serde(default = "Vec::new")]
     pub joins: Vec<JoinItem<T>>,
 }
 
