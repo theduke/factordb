@@ -25,6 +25,13 @@ struct Entity1 {
     pub length: Vec<u64>,
 }
 
+#[derive(Entity)]
+#[factor(namespace = "test")]
+struct Child {
+    #[factor(extend)]
+    parent: Entity1,
+}
+
 #[test]
 fn test_attr_derive() {
     assert_eq!(
@@ -62,9 +69,12 @@ fn test_entity_derive() {
                     cardinality: factordb::schema::Cardinality::Many,
                 },
             ],
-            extend: None,
+            extends: Vec::new(),
             strict: false,
         },
         Entity1::schema(),
     );
+
+    let schema = Child::schema();
+    assert_eq!(schema.extends, vec![Entity1::IDENT]);
 }

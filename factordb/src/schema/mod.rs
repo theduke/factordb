@@ -101,7 +101,7 @@ pub struct EntitySchema {
     #[serde(rename = "factor/attributes")]
     pub attributes: Vec<EntityAttribute>,
     #[serde(rename = "factor/extend")]
-    pub extend: Option<Ident>,
+    pub extends: Vec<Ident>,
     /// If a schema is set to strict, additional attributes not specified
     /// by the schema will be rejected.
     #[serde(rename = "factor/isStrict")]

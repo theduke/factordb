@@ -1,10 +1,9 @@
 use crate::{
-    data::{Id, ValueType},
+    data::{Id, Ident, ValueType},
     schema::{
         AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, EntityDescriptor,
         EntitySchema,
     },
-    Ident,
 };
 
 pub struct AttrId;
@@ -199,7 +198,7 @@ impl EntityDescriptor for AttributeSchemaType {
                 ATTR_INDEX.into(),
                 ATTR_STRICT.into(),
             ],
-            extend: None,
+            extends: Vec::new(),
             strict: true,
         }
     }
@@ -295,15 +294,18 @@ impl EntityDescriptor for EntitySchemaType {
                 ATTR_ID.into(),
                 ATTR_IDENT.into(),
                 ATTR_DESCRIPTION.into(),
-                ATTR_EXTEND.into(),
                 ATTR_STRICT.into(),
                 ATTR_ISRELATION.into(),
+                EntityAttribute {
+                    attribute: ATTR_EXTEND.into(),
+                    cardinality: Cardinality::Many,
+                },
                 EntityAttribute {
                     attribute: ATTR_ATTRIBUTES.into(),
                     cardinality: Cardinality::Many,
                 },
             ],
-            extend: None,
+            extends: Vec::new(),
             strict: true,
         }
     }

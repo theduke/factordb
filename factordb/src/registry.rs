@@ -15,7 +15,7 @@ use crate::{
     schema::{
         self,
         builtin::{self, AttrId},
-        AttributeDescriptor, EntityDescriptor,
+        AttributeDescriptor, EntityAttribute, EntityDescriptor,
     },
     AnyError,
 };
@@ -261,14 +261,37 @@ impl Registry {
             );
         }
 
-        if let Some(extend_ident) = &entity.extend {
-            let parent = self.require_entity_by_ident(extend_ident)?;
+        // Set for ensuring no duplicate extends.
+        let mut extended_ids = HashSet::<Id>::new();
+        // All extended fields.
+        // Used for ensuring that extends do not differ in type.
+        let mut extended_fields = HashMap::<Id, EntityAttribute>::new();
+
+        for parent_ident in &entity.extends {
+            let parent = self
+                .require_entity_by_ident(parent_ident)
+                .context("Invalid parent")?;
             if parent.id == entity.id {
                 return Err(anyhow!("Entity can't extend itself"));
             }
+            if extended_ids.contains(&parent.id) {
+                return Err(anyhow!("Can't specify the same parent type twice"));
+            }
+            extended_ids.insert(parent.id);
+
+            for field in &parent.attributes {
+                let attr = self.require_attr_by_ident(&field.attribute)?;
+                if let Some(existing_field) = extended_fields.get(&attr.id) {
+                    if field.cardinality != existing_field.cardinality {
+                        return Err(anyhow!("Invalid extend of parent entity '{}': the attribute '{}' already exists with a different cardinality", parent.name, attr.name));
+                    }
+                } else {
+                    extended_fields.insert(attr.id, field.clone());
+                }
+            }
         }
 
-        // Set for ensuring uniqueness.
+        // Set for ensuring field attribute uniqueness.
         let mut attr_set = HashSet::new();
 
         for field in &entity.attributes {
@@ -278,6 +301,15 @@ impl Registry {
                 bail!("Duplicate attribute: '{}'", attr.name);
             }
             attr_set.insert(attr.id);
+
+            if let Some(extended_field) = extended_fields.get(&attr.id) {
+                if field.cardinality != extended_field.cardinality {
+                    return Err(anyhow!(
+                            "Invalid field '{}': the attribute already exists with a different cardinality on a parent entity",  
+                            attr.name)
+                        );
+                }
+            }
         }
 
         // FIXME: validate other stuff, like Relation.
@@ -409,12 +441,14 @@ impl Registry {
     //         })
     //         .collect()
     // }
+    //
 
     fn validate_entity_data(
         &self,
         data: &mut DataMap,
         entity: &schema::EntitySchema,
     ) -> Result<(), AnyError> {
+
         for field in &entity.attributes {
             // TODO: create a static list of fields for each entity so that
             // we don't have to do this lookup each time.
@@ -449,6 +483,13 @@ impl Registry {
                 },
             }
         }
+
+        // Validate extended parent fields.
+        for parent_ident in &entity.extends {
+            let parent = self.require_entity_by_ident(parent_ident)?;
+            self.validate_entity_data(data, parent)?;
+        }
+
 
         // FIXME: if entity is strict, validate that no extra fields are present
 

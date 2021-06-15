@@ -219,12 +219,13 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
 
     let field_count = fields.named.len();
     let mut schema_attributes = Vec::with_capacity(field_count);
-    let mut schema_extends = vec![quote!()];
+    let mut schema_extends: Vec<proc_macro2::TokenStream> = Vec::new();
 
     // let mut fields_to_relations = Vec::new();
 
     // State to determine which field to use for id accessor.
     let mut have_id = false;
+    // The field name of the extended parent entity.
     let mut extends_field: Option<syn::Ident> = None;
 
     for field in &fields.named {
@@ -237,9 +238,12 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
         // let field_name_str = field_name.to_string();
 
         if field_attrs.extend {
+            if extends_field.is_some() {
+                panic!("#[derive(Entity)] does not support multiple extended parents");
+            }
             extends_field = Some((*field_name).clone());
             schema_extends.push(quote! {
-                <#field_ty as factordb::schema::EntityDescriptor>::TYPE.into(),
+                <#field_ty as factordb::schema::EntityDescriptor>::IDENT.into(),
             });
         } else if field_attrs.is_relation {
             if let Some(_inner_ty) = option_inner(&field.ty) {
@@ -276,8 +280,10 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
 
     let id_accessor = if have_id {
         quote! { &self.id }
-    } else if let Some(_field) = extends_field {
-        todo!()
+    } else if let Some(field) = extends_field {
+        quote! {
+            &self.#field.id
+        }
     } else {
         panic!("#[derive(Entity)] requires an id field with type factor::Id");
     };
@@ -297,7 +303,9 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                     attributes: vec![
                         #( #schema_attributes )*
                     ],
-                    extend: None,
+                    extends: vec![
+                        #( #schema_extends )*
+                    ],
                     strict: false,
                 }
             }
