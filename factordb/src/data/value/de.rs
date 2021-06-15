@@ -294,11 +294,29 @@ impl<'de> de::Visitor<'de> for ValueVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Value, E> {
+        // FIXME: temp hack to make recognizing Value::Id simpler
+        // only for select queries
+        // MUST be removed, causes extra overhead.
+        // string representation of uuid is 36 chars long
+        if value.len() == 36 {
+            if let Ok(id) = value.parse::<uuid::Uuid>() {
+                return Ok(Value::Id(crate::Id::from_uuid(id)));
+            }
+        }
         Ok(Value::String(value.to_string()))
     }
 
     fn visit_string<E>(self, value: String) -> Result<Value, E> {
-        Ok(Value::String(value))
+        // FIXME: temp hack to make recognizing Value::Id simpler
+        // only for select queries
+        // MUST be removed, causes extra overhead.
+        // string representation of uuid is 36 chars long
+        if value.len() == 36 {
+            if let Ok(id) = value.parse::<uuid::Uuid>() {
+                return Ok(Value::Id(crate::Id::from_uuid(id)));
+            }
+        }
+        Ok(Value::String(value.to_string()))
     }
 
     fn visit_unit<E>(self) -> Result<Value, E> {

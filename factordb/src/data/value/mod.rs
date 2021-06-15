@@ -276,10 +276,10 @@ impl Value {
     }
 
     pub fn as_id(&self) -> Option<Id> {
-        if let Self::Id(id) = self {
-            Some(*id)
-        } else {
-            None
+        match self {
+            Value::String(v) => v.parse::<uuid::Uuid>().ok().map(Id::from_uuid),
+            Value::Id(v) => Some(*v),
+            _ => None,
         }
     }
 
