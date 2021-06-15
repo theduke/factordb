@@ -131,29 +131,29 @@ fn is_option(ty: &syn::Type) -> bool {
     }
 }
 
-fn option_inner(ty: &syn::Type) -> Option<&syn::Type> {
-    let path = match ty {
-        syn::Type::Path(path) => path,
-        _ => return None,
-    };
+// fn option_inner(ty: &syn::Type) -> Option<&syn::Type> {
+//     let path = match ty {
+//         syn::Type::Path(path) => path,
+//         _ => return None,
+//     };
 
-    let segment = path.path.segments.first()?;
-    if segment.ident != "Option" {
-        return None;
-    }
+//     let segment = path.path.segments.first()?;
+//     if segment.ident != "Option" {
+//         return None;
+//     }
 
-    let arg = match &segment.arguments {
-        syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
-            args, ..
-        }) => args.first(),
-        _ => None,
-    }?;
+//     let arg = match &segment.arguments {
+//         syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
+//             args, ..
+//         }) => args.first(),
+//         _ => None,
+//     }?;
 
-    match arg {
-        syn::GenericArgument::Type(t) => Some(t),
-        _ => None,
-    }
-}
+//     match arg {
+//         syn::GenericArgument::Type(t) => Some(t),
+//         _ => None,
+//     }
+// }
 
 fn is_vec(ty: &syn::Type) -> bool {
     match ty {
@@ -167,29 +167,29 @@ fn is_vec(ty: &syn::Type) -> bool {
     }
 }
 
-fn vec_inner(ty: &syn::Type) -> Option<&syn::Type> {
-    let path = match ty {
-        syn::Type::Path(path) => path,
-        _ => return None,
-    };
+// fn vec_inner(ty: &syn::Type) -> Option<&syn::Type> {
+//     let path = match ty {
+//         syn::Type::Path(path) => path,
+//         _ => return None,
+//     };
 
-    let segment = path.path.segments.first()?;
-    if segment.ident != "Vec" {
-        return None;
-    }
+//     let segment = path.path.segments.first()?;
+//     if segment.ident != "Vec" {
+//         return None;
+//     }
 
-    let arg = match &segment.arguments {
-        syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
-            args, ..
-        }) => args.first(),
-        _ => None,
-    }?;
+//     let arg = match &segment.arguments {
+//         syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
+//             args, ..
+//         }) => args.first(),
+//         _ => None,
+//     }?;
 
-    match arg {
-        syn::GenericArgument::Type(t) => Some(t),
-        _ => None,
-    }
-}
+//     match arg {
+//         syn::GenericArgument::Type(t) => Some(t),
+//         _ => None,
+//     }
+// }
 
 pub fn derive_entity(tokens: TokenStream) -> TokenStream {
     let input: syn::DeriveInput = syn::parse(tokens).unwrap();
@@ -212,14 +212,17 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
     let struct_attrs: StructAttrs = syn::parse(attr_raw.tokens.clone().into()).unwrap();
 
     let namespace = struct_attrs.namespace;
-    let name = struct_attrs.name.unwrap_or_else(|| input.ident.to_string());
+    let struct_name = struct_attrs.name.unwrap_or_else(|| input.ident.to_string());
     // let title = struct_attrs.title.unwrap_or_else(|| name.to_title_case());
 
-    let struct_name = &input.ident;
+    let struct_ident = &input.ident;
 
     let field_count = fields.named.len();
     let mut schema_attributes = Vec::with_capacity(field_count);
     let mut schema_extends: Vec<proc_macro2::TokenStream> = Vec::new();
+
+    let mut serialize_fields = Vec::<proc_macro2::TokenStream>::new();
+    // let mut deserialize_fields = Vec::<proc_macro2::TokenStream>::new();
 
     // let mut fields_to_relations = Vec::new();
 
@@ -246,16 +249,17 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 <#field_ty as factordb::schema::EntityDescriptor>::IDENT.into(),
             });
         } else if field_attrs.is_relation {
-            if let Some(_inner_ty) = option_inner(&field.ty) {
-                // Option signifies a to-one relation.
-            } else if let Some(_inner_ty) = vec_inner(&field.ty) {
-                // Vec signifies a to-many relation.
-            } else {
-                panic!(
-                    "Invalid field {}: relation fields must be Option<T> or Vec<T>",
-                    field_name
-                );
-            }
+            todo!()
+            // if let Some(_inner_ty) = option_inner(&field.ty) {
+            //     // Option signifies a to-one relation.
+            // } else if let Some(_inner_ty) = vec_inner(&field.ty) {
+            //     // Vec signifies a to-many relation.
+            // } else {
+            //     panic!(
+            //         "Invalid field {}: relation fields must be Option<T> or Vec<T>",
+            //         field_name
+            //     );
+            // }
         } else {
             let prop = &field_attrs.attribute.unwrap();
 
@@ -274,6 +278,13 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                         cardinality: factordb::schema::Cardinality::#cardinality,
                     },
                 });
+
+                serialize_fields.push(quote!{
+                    map.serialize_entry(
+                        <#prop as factordb::schema::AttributeDescriptor>::NAME,
+                        &self.#field_name,
+                    )?;
+                });
             }
         }
     }
@@ -288,10 +299,10 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
         panic!("#[derive(Entity)] requires an id field with type factor::Id");
     };
 
-    let full_name = format!("{}/{}", namespace.value(), name);
+    let full_name = format!("{}/{}", namespace.value(), struct_name);
 
     TokenStream::from(quote! {
-        impl factordb::schema::EntityDescriptor for #struct_name {
+        impl factordb::schema::EntityDescriptor for #struct_ident {
             const NAME: &'static str = #full_name;
             const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::NAME);
 
@@ -311,7 +322,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             }
         }
 
-        impl factordb::schema::EntityContainer for #struct_name {
+        impl factordb::schema::EntityContainer for #struct_ident {
             fn id(&self) -> factordb::data::Id {
                 *#id_accessor
             }
@@ -320,6 +331,19 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 <Self as factordb::schema::EntityDescriptor>::IDENT
             }
         }
+
+        // impl serde::Serialize for #struct_ident {
+        //     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        //     where
+        //         S: serde::ser::Serializer,
+        //     {
+        //         // TODO: use serialize_struct if no parents extended.
+        //         use serde::ser::SerializeMap;
+        //         let mut map = serializer.serialize_map(Some(#field_count))?;
+        //         #( #serialize_fields )*
+        //         map.end()
+        //     }
+        // }
 
     })
 }

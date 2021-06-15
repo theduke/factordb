@@ -12,15 +12,19 @@ struct AttrSomeTitle(String);
 #[factor(namespace = "test")]
 struct AttrLength(u64);
 
+#[derive(Attribute)]
+#[factor(namespace = "test")]
+struct AttrFlag(bool);
+
 #[derive(Entity)]
 #[factor(namespace = "test")]
 struct Entity1 {
     #[factor(attr = AttrId)]
     pub id: Id,
     #[factor(attr = AttrSomeTitle)]
-    pub attr1: String,
+    pub text: String,
     #[factor(attr = AttrDescription)]
-    pub attr2: Option<String>,
+    pub text_opt: Option<String>,
     #[factor(attr = AttrLength)]
     pub length: Vec<u64>,
 }
@@ -28,6 +32,8 @@ struct Entity1 {
 #[derive(Entity)]
 #[factor(namespace = "test")]
 struct Child {
+    #[factor(attr = AttrFlag)]
+    flag: bool,
     #[factor(extend)]
     parent: Entity1,
 }
@@ -78,3 +84,27 @@ fn test_entity_derive() {
     let schema = Child::schema();
     assert_eq!(schema.extends, vec![Entity1::IDENT]);
 }
+
+// #[test]
+// fn test_derive_entity_serialize() {
+//     let e = Child {
+//         parent: Entity1 {
+//             id: Id::nil(),
+//             text: "a".into(),
+//             text_opt: Some("b".into()),
+//             length: vec![42],
+//         },
+//         flag: true,
+//     };
+
+//     let val = serde_json::to_value(e).unwrap();
+//     assert_eq!(
+//         serde_json::json!({
+//             "factor/id": "0",
+//             "test/text": "a",
+//             "test/text_opt": "b",
+//             "test/flag": true,
+//         }),
+//         val
+//     );
+// }
