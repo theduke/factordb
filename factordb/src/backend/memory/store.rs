@@ -412,15 +412,17 @@ impl MemoryStore {
         merge: query::mutate::Merge,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
-        let old = self
-            .entities
-            .get(&merge.id)
-            .ok_or_else(|| anyhow!("Entity not found: {:?}", merge.id))
-            .and_then(|t| self.tuple_to_data_map(t))?;
-
-        let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
-        self.apply_db_ops(ops, revert)?;
-        Ok(())
+        if let Some(old_tuple) = self.entities.get(&merge.id) {
+            let old = self.tuple_to_data_map(old_tuple)?;
+            let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
+            self.apply_db_ops(ops, revert)
+        } else {
+            let create = query::mutate::Create{
+                id: merge.id,
+                data: merge.data,
+            };
+            self.apply_create(create, revert)
+        }
     }
 
     fn apply_delete(
