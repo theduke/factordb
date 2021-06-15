@@ -152,7 +152,6 @@ async fn test_select(db: &Db) {
         "t/int": 42,
     };
     db.create(id, data.clone()).await.unwrap();
-
     data.insert("factor/id".into(), id.into());
 
     let page_match = vec![data];
@@ -160,6 +159,16 @@ async fn test_select(db: &Db) {
     let items = db.select(Select::new()).await.unwrap().take_data();
     assert_eq!(items, page_match);
 
+
+    // Select by id.
+    let items = db
+        .select(Select::new().with_filter(Expr::eq(Expr::literal(id), Expr::ident("factor/id"))))
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, page_match);
+
+    // Simple field comparison select
     let items = db
         .select(Select::new().with_filter(Expr::eq(Expr::ident("t/text"), Expr::literal("hello"))))
         .await
