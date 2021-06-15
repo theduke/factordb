@@ -98,7 +98,7 @@ pub struct EntitySchema {
     pub name: String,
     #[serde(rename = "factor/description")]
     pub description: Option<String>,
-    #[serde(rename = "factor/attributes")]
+    #[serde(rename = "factor/entityAttributes")]
     pub attributes: Vec<EntityAttribute>,
     #[serde(rename = "factor/extend")]
     pub extends: Vec<Ident>,
