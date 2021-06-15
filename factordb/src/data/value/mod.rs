@@ -29,15 +29,22 @@ pub enum ValueType {
     String,
     Bytes,
 
-    DateTime,
-    /// Reference to an entity id.
-    Ref,
+    // Containers.
     List(Box<Self>),
     Map,
 
     /// A union of different types.
     Union(Vec<Self>),
     Object(ObjectType),
+
+    // Custom types.
+    // NOTE: these types may not be directly represented by [`Value`], but
+    // rather take the canonical underlying representation.
+    DateTime,
+    /// Represented as Value::String
+    Url,
+    /// Reference to an entity id.
+    Ref,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -62,6 +69,7 @@ impl ValueType {
             | Self::Bytes
             | Self::DateTime
             | Self::Ref
+            | Self::Url
             | Self::Map => true,
             Self::Object(_) => false,
 
@@ -158,6 +166,12 @@ impl ValueTypeDescriptor for Vec<u8> {
 impl ValueTypeDescriptor for Timestamp {
     fn value_type() -> ValueType {
         ValueType::DateTime
+    }
+}
+
+impl ValueTypeDescriptor for url::Url {
+    fn value_type() -> ValueType {
+        ValueType::Url
     }
 }
 
@@ -291,7 +305,7 @@ impl Value {
     }
 
     /// Returns `true` if the value is [`UInt`].
-    pub fn is_u_int(&self) -> bool {
+    pub fn is_uint(&self) -> bool {
         matches!(self, Self::UInt(..))
     }
 

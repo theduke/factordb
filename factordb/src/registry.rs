@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    str::FromStr,
     sync::{Arc, RwLock},
 };
 
@@ -9,7 +10,7 @@ use schema::Cardinality;
 
 use crate::{
     backend::{DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace},
-    data::{DataMap, Id, IdMap, Ident, Value},
+    data::{DataMap, Id, IdMap, Ident, Value, ValueType},
     query,
     schema::{
         self,
@@ -227,7 +228,7 @@ impl Registry {
 
         match &attr.value_type {
             x if x.is_scalar() => {}
-            crate::data::ValueType::Object(obj) => {
+            ValueType::Object(obj) => {
                 for field in &obj.fields {
                     if field.name.len() > MAX_NAME_LEN {
                         return Err(anyhow!(
@@ -284,21 +285,113 @@ impl Registry {
         Ok(())
     }
 
+    /// Valdiate that a value conforms to a value type.
+    /// Coerces values into the desired type where appropriate.
+    fn validate_coerce_value_named(
+        name: &str,
+        ty: &ValueType,
+        value: &mut Value,
+    ) -> Result<(), AnyError> {
+        match ty {
+            ValueType::Unit
+            | ValueType::Bool
+            | ValueType::Int
+            | ValueType::UInt
+            | ValueType::Float
+            | ValueType::String
+            | ValueType::Map
+            | ValueType::Bytes => {
+                let actual_ty = value.value_type();
+                if &actual_ty != ty {
+                    return Err(anyhow!(
+                        "Invalid attribute '{}' - expected a {:?} but got '{:?}'",
+                        name,
+                        ty,
+                        actual_ty
+                    ));
+                }
+            }
+            ValueType::List(_item_type) => {
+                panic!("Internal error: List is not a valid ValueType for attributes");
+            }
+            ValueType::Any => {
+                // Everything is allowed.
+            }
+            ValueType::Union(variants) => {
+                for variant_ty in variants {
+                    if Self::validate_coerce_value_named(name, variant_ty, value).is_ok() {
+                        return Ok(());
+                    }
+                }
+                return Err(anyhow!(
+                    "Invalid attribute '{}' - does not conform to any variant of '{:?}'",
+                    name,
+                    variants,
+                ));
+            }
+            ValueType::Object(_obj) => {
+                // FIXME: validate objects properly.
+
+                let actual_ty = value.value_type();
+                if &actual_ty != ty {
+                    return Err(anyhow!(
+                        "Invalid attribute '{}' - expected a {:?} but got '{:?}'",
+                        name,
+                        ty,
+                        actual_ty
+                    ));
+                }
+            }
+            ValueType::DateTime => {
+                if !value.is_uint() {
+                    // TODO: coerce?
+                    return Err(anyhow!("Invalid timestamp - must be an unsigned integer"));
+                }
+            }
+            ValueType::Url => {
+                if let Some(v) = value.as_str() {
+                    if let Err(_err) = url::Url::parse(v) {
+                        return Err(anyhow!(
+                            "Invalid attribute '{}' - expected a valid URL",
+                            name
+                        ));
+                    }
+                } else {
+                    return Err(anyhow!("Invalid url - expected an integer"));
+                }
+            }
+            ValueType::Ref => {
+                match value {
+                    Value::String(strval) => {
+                        // TODO: resolve idents?
+                        if let Err(_err) = uuid::Uuid::from_str(strval) {
+                            return Err(anyhow!(
+                                "Invalid attribute '{}' - expected a valid id (UUID)",
+                                name
+                            ));
+                        }
+                    }
+                    Value::Id(_) => {
+                        // Ok
+                    }
+                    _other => {
+                        return Err(anyhow!(
+                            "Invalid attribute '{}' - expected a valid ID (UUID)",
+                            name
+                        ))
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn validate_attr_value(
         &self,
         attr: &schema::AttributeSchema,
         value: &mut Value,
     ) -> Result<(), AnyError> {
-        let ty = value.value_type();
-        if ty != attr.value_type {
-            return Err(anyhow!(
-                "Invalid attribute '{}' - expected a {:?} but got '{:?}'",
-                attr.name,
-                attr.value_type,
-                ty
-            ));
-        }
-        Ok(())
+        Self::validate_coerce_value_named(&attr.name, &attr.value_type, value)
     }
 
     // fn make_id_map(
@@ -356,6 +449,8 @@ impl Registry {
                 },
             }
         }
+
+        // FIXME: if entity is strict, validate that no extra fields are present
 
         Ok(())
     }

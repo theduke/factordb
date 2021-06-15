@@ -18,3 +18,4 @@ tracing = "0.1.26"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 
 factor_macros = { version = "0.1", path = "../factor_macros" }
+url = { version = "2.2.2", features = ["serde"] }
