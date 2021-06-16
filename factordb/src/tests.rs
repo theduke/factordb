@@ -159,7 +159,6 @@ async fn test_select(db: &Db) {
     let items = db.select(Select::new()).await.unwrap().take_data();
     assert_eq!(items, page_match);
 
-
     // Select by id.
     let items = db
         .select(Select::new().with_filter(Expr::eq(Expr::literal(id), Expr::ident("factor/id"))))

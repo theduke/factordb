@@ -279,7 +279,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                     },
                 });
 
-                serialize_fields.push(quote!{
+                serialize_fields.push(quote! {
                     map.serialize_entry(
                         <#prop as factordb::schema::AttributeDescriptor>::NAME,
                         &self.#field_name,

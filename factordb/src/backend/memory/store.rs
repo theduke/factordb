@@ -417,7 +417,7 @@ impl MemoryStore {
             let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
             self.apply_db_ops(ops, revert)
         } else {
-            let create = query::mutate::Create{
+            let create = query::mutate::Create {
                 id: merge.id,
                 data: merge.data,
             };

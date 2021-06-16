@@ -448,7 +448,6 @@ impl Registry {
         data: &mut DataMap,
         entity: &schema::EntitySchema,
     ) -> Result<(), AnyError> {
-
         for field in &entity.attributes {
             // TODO: create a static list of fields for each entity so that
             // we don't have to do this lookup each time.
@@ -489,7 +488,6 @@ impl Registry {
             let parent = self.require_entity_by_ident(parent_ident)?;
             self.validate_entity_data(data, parent)?;
         }
-
 
         // FIXME: if entity is strict, validate that no extra fields are present
 

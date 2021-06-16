@@ -2,6 +2,8 @@ pub mod builtin;
 
 pub mod logic;
 
+use std::convert::TryFrom;
+
 use crate::data::{value::ValueMap, Id, Ident, Value, ValueType};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -142,6 +144,12 @@ pub struct DbSchema {
 pub trait AttrMapExt {
     fn get_id(&self) -> Option<Id>;
     fn get_type(&self) -> Option<Ident>;
+    fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
+    where
+        A::Type: TryFrom<Value>;
+    fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
+    where
+        A::Type: Into<Value>;
 }
 
 impl AttrMapExt for ValueMap<String> {
@@ -157,5 +165,20 @@ impl AttrMapExt for ValueMap<String> {
                 Value::Id(id) => Some(Ident::Id(*id)),
                 _ => None,
             })
+    }
+
+    fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
+    where
+        A::Type: TryFrom<Value>,
+    {
+        let value = self.get(A::NAME)?.clone();
+        TryFrom::try_from(value).ok()
+    }
+
+    fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
+    where
+        A::Type: Into<Value>,
+    {
+        self.insert(A::NAME.to_string(), value.into());
     }
 }

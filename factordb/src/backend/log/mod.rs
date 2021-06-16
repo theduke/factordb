@@ -14,7 +14,11 @@ use futures::{
 };
 use query::mutate::BatchUpdate;
 
-use crate::{AnyError, data, query::{self, migrate::Migration, select::Item}, registry, schema};
+use crate::{
+    data,
+    query::{self, migrate::Migration, select::Item},
+    registry, schema, AnyError,
+};
 
 use super::{
     memory::store::{MemoryStore, RevertEpoch},
@@ -95,7 +99,6 @@ impl LogDb {
                         .context("Could not deserialize event")?;
                     event_id = event.id;
 
-
                     match event.op {
                         LogOp::Batch(batch) => {
                             self.state
@@ -174,7 +177,7 @@ impl LogDb {
         let mut reg = self.state.registry.read().unwrap().duplicate();
         let (_mig, ops) = schema::logic::validate_migration(&mut reg, migration.clone())?;
         if ops.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         let mut mutable = self.state.mutable.lock().await;

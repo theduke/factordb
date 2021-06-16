@@ -4,7 +4,10 @@ mod ser;
 
 use anyhow::anyhow;
 use ordered_float::OrderedFloat;
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    convert::TryFrom,
+};
 
 use crate::AnyError;
 
@@ -475,6 +478,30 @@ where
 impl From<Id> for Value {
     fn from(v: Id) -> Self {
         Self::Id(v)
+    }
+}
+
+impl TryFrom<Value> for String {
+    type Error = AnyError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        if let Value::String(v) = value {
+            Ok(v)
+        } else {
+            Err(anyhow::anyhow!("Invalid type: expected a Value::String"))
+        }
+    }
+}
+
+impl TryFrom<Value> for url::Url {
+    type Error = AnyError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        if let Value::String(v) = value {
+            v.parse().map_err(Into::into)
+        } else {
+            Err(anyhow::anyhow!("Invalid type: expected a Value::String"))
+        }
     }
 }
 
