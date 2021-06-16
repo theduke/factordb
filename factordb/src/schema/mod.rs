@@ -12,6 +12,8 @@ pub struct AttributeSchema {
     pub id: Id,
     #[serde(rename = "factor/ident")]
     pub name: String,
+    #[serde(rename = "factor/title")]
+    pub title: Option<String>,
     #[serde(rename = "factor/description")]
     pub description: Option<String>,
     #[serde(rename = "factor/valueType")]
@@ -31,6 +33,7 @@ impl AttributeSchema {
         Self {
             id: Id::nil(),
             name: name.into(),
+            title: None,
             description: None,
             value_type,
             unique: false,
@@ -98,6 +101,8 @@ pub struct EntitySchema {
     pub id: Id,
     #[serde(rename = "factor/ident")]
     pub name: String,
+    #[serde(rename = "factor/title")]
+    pub title: Option<String>,
     #[serde(rename = "factor/description")]
     pub description: Option<String>,
     #[serde(rename = "factor/entityAttributes")]

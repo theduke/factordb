@@ -6,6 +6,7 @@ struct StructAttrs {
     namespace: syn::LitStr,
     // value_type: Option<syn::Path>,
     name: Option<String>,
+    title: Option<String>,
     unique: bool,
     index: bool,
     strict: bool,
@@ -21,7 +22,8 @@ impl syn::parse::Parse for StructAttrs {
 
         // let mut value_type = None;
         let mut namespace = None;
-        let mut name = None;
+        let mut name: Option<String> = None;
+        let mut title: Option<String> = None;
         let mut unique = false;
         let mut index = false;
         let mut strict = false;
@@ -45,6 +47,11 @@ impl syn::parse::Parse for StructAttrs {
                     let s = input.parse::<syn::LitStr>()?;
                     name = Some(s.value());
                 }
+                "title" => {
+                    let _eq: syn::token::Eq = input.parse()?;
+                    let s = input.parse::<syn::LitStr>()?;
+                    title = Some(s.value());
+                }
                 "unique" => {
                     unique = true;
                 }
@@ -66,6 +73,7 @@ impl syn::parse::Parse for StructAttrs {
             // value_type,
             namespace: namespace.expect(PROPERTY_USAGE),
             name,
+            title,
             unique,
             index,
             strict,
@@ -110,6 +118,10 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
         };
         name
     });
+    let title = match attr.title {
+        Some(x) => quote!( Some(#x.to_string()) ),
+        None => quote!(None),
+    };
     let unique = attr.unique;
     let index = attr.index;
     let strict = attr.strict;
@@ -126,6 +138,7 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
                 factordb::schema::AttributeSchema {
                     id: factordb::data::Id::nil(),
                     name: #full_name.into(),
+                    title: #title,
                     description: None,
                     value_type: <Self::Type as factordb::data::value::ValueTypeDescriptor>::value_type(),
                     index: #index,

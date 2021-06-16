@@ -44,6 +44,7 @@ fn test_attr_derive() {
         factordb::schema::AttributeSchema {
             id: Id::nil(),
             description: None,
+            title: None,
             index: false,
             strict: false,
             unique: false,
@@ -60,6 +61,7 @@ fn test_entity_derive() {
         factordb::schema::EntitySchema {
             id: Id::nil(),
             name: "test/Entity1".into(),
+            title: Some("Entity1".to_string()),
             description: None,
             attributes: vec![
                 EntityAttribute {

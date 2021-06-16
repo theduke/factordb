@@ -1,11 +1,11 @@
-// use inflector::Inflector;
+use inflector::Inflector;
 use proc_macro::TokenStream;
 use quote::quote;
 
 struct StructAttrs {
     namespace: syn::LitStr,
     name: Option<String>,
-    // title: Option<String>,
+    title: Option<String>,
 }
 
 const STRUCT_USAGE: &'static str =
@@ -17,8 +17,8 @@ impl syn::parse::Parse for StructAttrs {
         syn::parenthesized!(input in outer);
 
         let mut namespace = None;
-        let mut name = None;
-        // let mut title = None;
+        let mut name: Option<String> = None;
+        let mut title: Option<String> = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
@@ -33,10 +33,10 @@ impl syn::parse::Parse for StructAttrs {
                     let s = input.parse::<syn::LitStr>()?;
                     name = Some(s.value());
                 }
-                // "title" => {
-                //     let s = input.parse::<syn::LitStr>()?;
-                //     title = Some(s.value());
-                // }
+                "title" => {
+                    let s = input.parse::<syn::LitStr>()?;
+                    title = Some(s.value());
+                }
                 _other => Err(input.error(STRUCT_USAGE))?,
             }
 
@@ -48,7 +48,7 @@ impl syn::parse::Parse for StructAttrs {
         Ok(StructAttrs {
             namespace: namespace.expect(STRUCT_USAGE),
             name,
-            // title,
+            title,
         })
     }
 }
@@ -213,7 +213,9 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
 
     let namespace = struct_attrs.namespace;
     let struct_name = struct_attrs.name.unwrap_or_else(|| input.ident.to_string());
-    // let title = struct_attrs.title.unwrap_or_else(|| name.to_title_case());
+    let title = struct_attrs
+        .title
+        .unwrap_or_else(|| struct_name.to_title_case());
 
     let struct_ident = &input.ident;
 
@@ -310,6 +312,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 factordb::schema::EntitySchema{
                     id: factordb::data::Id::nil(),
                     name: Self::NAME.into(),
+                    title: Some(#title.to_string()),
                     description: None,
                     attributes: vec![
                         #( #schema_attributes )*

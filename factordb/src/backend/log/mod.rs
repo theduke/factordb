@@ -378,15 +378,10 @@ mod tests {
             let mig = query::migrate::Migration {
                 actions: vec![query::migrate::SchemaAction::AttributeCreate(
                     query::migrate::AttributeCreate {
-                        schema: schema::AttributeSchema {
-                            id: Id::nil(),
-                            name: "test/text".into(),
-                            description: None,
-                            value_type: crate::data::ValueType::String,
-                            unique: false,
-                            index: false,
-                            strict: true,
-                        },
+                        schema: schema::AttributeSchema::new(
+                            "test/text",
+                            crate::data::ValueType::String,
+                        ),
                     },
                 )],
             };

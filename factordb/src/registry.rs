@@ -73,6 +73,7 @@ impl Registry {
         self.register_attr(builtin::AttrIndex::schema()).unwrap();
         self.register_attr(builtin::AttrDescription::schema())
             .unwrap();
+        self.register_attr(builtin::AttrTitle::schema()).unwrap();
         self.register_attr(builtin::AttrStrict::schema()).unwrap();
         self.register_entity(builtin::AttributeSchemaType::schema(), true)
             .unwrap();

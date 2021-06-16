@@ -194,8 +194,11 @@ impl factordb::backend::Backend for SqliteDb {
     }
 }
 
-#[tokio::test]
-async fn test() {
-    let path = "/tmp/db.sqlite3";
-    SqliteDb::open(path).await.unwrap();
-}
+// #[tokio::test]
+// async fn test() {
+//     let path = PathBuf::from("/tmp/db.sqlite3");
+//     if path.exists() {
+//         std::fs::remove_file(&path).unwrap();
+//     }
+//     SqliteDb::open(path).await.unwrap();
+// }
