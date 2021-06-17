@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 struct StructAttrs {
-    namespace: syn::LitStr,
+    namespace: String,
     name: Option<String>,
     title: Option<String>,
 }
@@ -26,8 +26,8 @@ impl syn::parse::Parse for StructAttrs {
 
             match key.to_string().as_str() {
                 "namespace" => {
-                    let v = input.parse()?;
-                    namespace = Some(v);
+                    let v = input.parse::<syn::LitStr>()?;
+                    namespace = Some(v.value());
                 }
                 "name" => {
                     let s = input.parse::<syn::LitStr>()?;
@@ -212,10 +212,10 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
     let struct_attrs: StructAttrs = syn::parse(attr_raw.tokens.clone().into()).unwrap();
 
     let namespace = struct_attrs.namespace;
-    let struct_name = struct_attrs.name.unwrap_or_else(|| input.ident.to_string());
+    let entity_name = struct_attrs.name.unwrap_or_else(|| input.ident.to_string());
     let title = struct_attrs
         .title
-        .unwrap_or_else(|| struct_name.to_title_case());
+        .unwrap_or_else(|| entity_name.to_title_case());
 
     let struct_ident = &input.ident;
 
@@ -283,7 +283,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
 
                 serialize_fields.push(quote! {
                     map.serialize_entry(
-                        <#prop as factordb::schema::AttributeDescriptor>::NAME,
+                        <#prop as factordb::schema::AttributeDescriptor>::QUALIFIED_NAME,
                         &self.#field_name,
                     )?;
                 });
@@ -301,17 +301,19 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
         panic!("#[derive(Entity)] requires an id field with type factor::Id");
     };
 
-    let full_name = format!("{}/{}", namespace.value(), struct_name);
+    let full_name = format!("{}/{}", namespace, entity_name);
 
     TokenStream::from(quote! {
         impl factordb::schema::EntityDescriptor for #struct_ident {
-            const NAME: &'static str = #full_name;
-            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::NAME);
+            const NAMESPACE: &'static str = #namespace;
+            const PLAIN_NAME: &'static str = #entity_name;
+            const QUALIFIED_NAME: &'static str = #full_name;
+            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::QUALIFIED_NAME);
 
             fn schema() -> factordb::schema::EntitySchema {
                 factordb::schema::EntitySchema{
                     id: factordb::data::Id::nil(),
-                    name: Self::NAME.into(),
+                    ident: #full_name.to_string(),
                     title: Some(#title.to_string()),
                     description: None,
                     attributes: vec![

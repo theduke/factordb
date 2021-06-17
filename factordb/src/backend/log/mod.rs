@@ -174,7 +174,7 @@ impl LogDb {
         // If not, we do not write it.
         // This is important to not spam the log with migrations when UPSERTS
         // happen.
-        let mut reg = self.state.registry.read().unwrap().duplicate();
+        let mut reg = self.state.registry.read().unwrap().clone();
         let (_mig, ops) = schema::logic::validate_migration(&mut reg, migration.clone())?;
         if ops.is_empty() {
             return Ok(());
@@ -379,7 +379,8 @@ mod tests {
                 actions: vec![query::migrate::SchemaAction::AttributeCreate(
                     query::migrate::AttributeCreate {
                         schema: schema::AttributeSchema::new(
-                            "test/text",
+                            "test",
+                            "text",
                             crate::data::ValueType::String,
                         ),
                     },

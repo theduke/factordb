@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 struct StructAttrs {
-    namespace: syn::LitStr,
+    namespace: String,
     // value_type: Option<syn::Path>,
     name: Option<String>,
     title: Option<String>,
@@ -21,7 +21,7 @@ impl syn::parse::Parse for StructAttrs {
         syn::parenthesized!(input in outer);
 
         // let mut value_type = None;
-        let mut namespace = None;
+        let mut namespace: Option<String> = None;
         let mut name: Option<String> = None;
         let mut title: Option<String> = None;
         let mut unique = false;
@@ -40,7 +40,7 @@ impl syn::parse::Parse for StructAttrs {
                 "namespace" => {
                     let _eq: syn::token::Eq = input.parse()?;
                     let v = input.parse::<syn::LitStr>()?;
-                    namespace = Some(v);
+                    namespace = Some(v.value());
                 }
                 "name" => {
                     let _eq: syn::token::Eq = input.parse()?;
@@ -126,18 +126,20 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
     let index = attr.index;
     let strict = attr.strict;
 
-    let full_name = format!("{}/{}", namespace.value(), name);
+    let full_name = format!("{}/{}", namespace, name);
 
     let out = quote! {
         impl factordb::schema::AttributeDescriptor for #ident {
-            const NAME: &'static str = #full_name;
-            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::NAME);
+            const NAMESPACE: &'static str = #namespace;
+            const PLAIN_NAME: &'static str = #name;
+            const QUALIFIED_NAME: &'static str = #full_name;
+            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::QUALIFIED_NAME);
             type Type = #type_;
 
             fn schema() -> factordb::schema::AttributeSchema {
                 factordb::schema::AttributeSchema {
                     id: factordb::data::Id::nil(),
-                    name: #full_name.into(),
+                    ident: #full_name.to_string(),
                     title: #title,
                     description: None,
                     value_type: <Self::Type as factordb::data::value::ValueTypeDescriptor>::value_type(),

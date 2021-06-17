@@ -18,13 +18,15 @@ where
     spawner(test_db(db).boxed());
 }
 
-const ATTR_TEXT: &'static str = "t/text";
-const ATTR_INT: &'static str = "t/int";
+const NS_TEST: &'static str = "test";
+
+const ATTR_TEXT: &'static str = "text";
+const ATTR_INT: &'static str = "int";
 
 async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
-        .attr_create(AttributeSchema::new(ATTR_TEXT, ValueType::String))
-        .attr_create(AttributeSchema::new(ATTR_INT, ValueType::Int));
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int));
     db.migrate(mig).await.unwrap();
 }
 
@@ -67,7 +69,7 @@ async fn test_create_attribute(f: &Db) {
     let mig = query::migrate::Migration {
         actions: vec![query::migrate::SchemaAction::AttributeCreate(
             query::migrate::AttributeCreate {
-                schema: schema::AttributeSchema::new("test/text", ValueType::String),
+                schema: schema::AttributeSchema::new(NS_TEST, "text", ValueType::String),
             },
         )],
     };
@@ -140,8 +142,8 @@ async fn test_assert_simple(f: &Db) {
 async fn test_select(db: &Db) {
     let id = Id::random();
     let mut data = map! {
-        "t/text": "hello",
-        "t/int": 42,
+        "test/text": "hello",
+        "test/int": 42,
     };
     db.create(id, data.clone()).await.unwrap();
     data.insert("factor/id".into(), id.into());
@@ -161,7 +163,9 @@ async fn test_select(db: &Db) {
 
     // Simple field comparison select
     let items = db
-        .select(Select::new().with_filter(Expr::eq(Expr::ident("t/text"), Expr::literal("hello"))))
+        .select(
+            Select::new().with_filter(Expr::eq(Expr::ident("test/text"), Expr::literal("hello"))),
+        )
         .await
         .unwrap()
         .take_data();
@@ -170,28 +174,32 @@ async fn test_select(db: &Db) {
 
 async fn test_remove_attr(db: &Db) {
     // Create new attribute.
-    let mig = Migration::new().attr_create(AttributeSchema::new("t/removeAttr", ValueType::String));
+    let mig = Migration::new().attr_create(AttributeSchema::new(
+        NS_TEST,
+        "removeAttr",
+        ValueType::String,
+    ));
     db.migrate(mig).await.unwrap();
 
     // Insert an entity.
     let id = Id::random();
     let mut data = map! {
         "factor/description": "lala",
-        "t/removeAttr": "toRemove",
+        "test/removeAttr": "toRemove",
     };
     db.create(id, data.clone()).await.unwrap();
-    data.insert(AttrId::NAME.into(), id.into());
+    data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
     // Check data is as expected.
     let data2 = db.entity(id).await.unwrap();
     assert_eq!(data, data2);
 
     // Delete the attribute.
-    let mig2 = Migration::new().attr_delete("t/removeAttr");
+    let mig2 = Migration::new().attr_delete("test/removeAttr");
     db.migrate(mig2).await.unwrap();
 
     // Assert that attribute has been removed from entity.
-    data.remove("t/removeAttr");
+    data.remove("test/removeAttr");
     let data3 = db.entity(id).await.unwrap();
     assert_eq!(data, data3);
 }

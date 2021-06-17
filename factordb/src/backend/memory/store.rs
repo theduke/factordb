@@ -80,7 +80,7 @@ impl MemoryStore {
             .map(|(key, value)| -> Result<_, AnyError> {
                 let attr = reg.require_attr_by_name(&key)?;
                 let value = self.interner.intern_value(value);
-                Ok((attr.id, value))
+                Ok((attr.schema.id, value))
             })
             .collect::<Result<_, _>>()?;
         Ok(MemoryTuple(map))
@@ -95,7 +95,7 @@ impl MemoryStore {
             .map(|(id, value)| -> Result<_, AnyError> {
                 let attr = reg.require_attr(*id)?;
                 let value = value.into();
-                Ok((attr.name.clone(), value))
+                Ok((attr.schema.ident.clone(), value))
             })
             .collect::<Result<_, _>>()?;
 
@@ -252,9 +252,9 @@ impl MemoryStore {
             // FIXME: properly patch!
             let attr = reg.require_attr_by_name(&key)?;
             let value = self.interner.intern_value(value);
-            let old_value = old.0.remove(&attr.id);
-            replaced_values.push((attr.id, old_value));
-            old.0.insert(attr.id, value);
+            let old_value = old.0.remove(&attr.schema.id);
+            replaced_values.push((attr.schema.id, old_value));
+            old.0.insert(attr.schema.id, value);
         }
 
         if !replaced_values.is_empty() {
@@ -281,7 +281,7 @@ impl MemoryStore {
         let mut removed = Vec::new();
         for attr_id in rem.attrs {
             let attr = reg.require_attr(attr_id)?;
-            if let Some(value) = old.0.remove(&attr.id) {
+            if let Some(value) = old.0.remove(&attr.schema.id) {
                 removed.push((attr_id, value));
             }
         }
@@ -562,7 +562,7 @@ impl MemoryStore {
     }
 
     fn migrate_impl(&mut self, mig: Migration) -> Result<RevertList, AnyError> {
-        let mut reg = self.registry.read().unwrap().duplicate();
+        let mut reg = self.registry.read().unwrap().clone();
         let (_mig, ops) = schema::logic::validate_migration(&mut reg, mig)?;
 
         let mut revert = Vec::new();
@@ -687,7 +687,11 @@ impl MemoryStore {
                     .unwrap_or(cowal_unit()),
                 Ident::Name(name) => reg
                     .attr_by_name(name)
-                    .and_then(|attr| entity.get(&attr.id).map(|x| Cow::Owned(x.to_value())))
+                    .and_then(|attr| {
+                        entity
+                            .get(&attr.schema.id)
+                            .map(|x| Cow::Owned(x.to_value()))
+                    })
                     .unwrap_or(cowal_unit()),
             },
             query::expr::Expr::Variable(_) => todo!(),

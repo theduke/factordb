@@ -35,7 +35,7 @@ impl SqliteDb {
         for item in schema_items {
             match item {
                 factordb::schema::SchemaItem::Attribute(attr) => {
-                    registry.register_attr(attr)?;
+                    registry.register_attribute(attr)?;
                 }
                 factordb::schema::SchemaItem::Entity(entity) => {
                     registry.register_entity(entity, false)?;

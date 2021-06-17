@@ -21,12 +21,12 @@ pub fn validate_migration(
             SchemaAction::AttributeCreate(create) => {
                 create.schema.id = create.schema.id.non_nil_or_randomize();
 
-                reg.register_attr(create.schema.clone())?;
+                reg.register_attribute(create.schema.clone())?;
 
                 let mut data = value::to_value_map(create.schema.clone())?;
                 // Add tye factor/type attr.
                 data.insert(
-                    AttrType::NAME.to_string(),
+                    AttrType::QUALIFIED_NAME.to_string(),
                     super::builtin::ATTRIBUTE_ID.into(),
                 );
 
@@ -38,17 +38,17 @@ pub fn validate_migration(
             SchemaAction::AttributeUpsert(upsert) => {
                 let attr = &mut upsert.schema;
 
-                match reg.attr_by_ident(&attr.name.clone().into()) {
+                match reg.attr_by_ident(&attr.ident.clone().into()) {
                     Some(old) => {
-                        if !attr.id.is_nil() && attr.id != old.id {
+                        if !attr.id.is_nil() && attr.id != old.schema.id {
                             return Err(anyhow!(
                                 "Id mismatch: attribute name already exists with id {}",
-                                old.id
+                                old.schema.id
                             ));
                         } else {
-                            attr.id = old.id;
+                            attr.id = old.schema.id;
                         }
-                        if attr != old {
+                        if attr != &old.schema {
                             return Err(anyhow!("Attribute upsert with a changed attribute config is not supported (yet)"));
                         } else {
                             continue;
@@ -61,12 +61,12 @@ pub fn validate_migration(
                 // extra function.
                 attr.id = attr.id.non_nil_or_randomize();
 
-                reg.register_attr(upsert.schema.clone())?;
+                reg.register_attribute(upsert.schema.clone())?;
 
                 let mut data = value::to_value_map(upsert.schema.clone())?;
                 // Add tye factor/type attr.
                 data.insert(
-                    AttrType::NAME.to_string(),
+                    AttrType::QUALIFIED_NAME.to_string(),
                     super::builtin::ATTRIBUTE_ID.into(),
                 );
 
@@ -83,7 +83,7 @@ pub fn validate_migration(
                     selector: crate::query::expr::Expr::literal(true),
                     op: TupleOp::RemoveAttrs(crate::backend::TupleRemoveAttrs {
                         id: Id::nil(),
-                        attrs: vec![attr.id],
+                        attrs: vec![attr.schema.id],
                     }),
                 });
 
@@ -96,7 +96,10 @@ pub fn validate_migration(
 
                 let mut data = value::to_value_map(create.schema.clone())?;
                 // Add tye factor/type attr.
-                data.insert(AttrType::NAME.to_string(), super::builtin::ENTITY_ID.into());
+                data.insert(
+                    AttrType::QUALIFIED_NAME.to_string(),
+                    super::builtin::ENTITY_ID.into(),
+                );
 
                 ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
                     id: create.schema.id,
@@ -105,17 +108,17 @@ pub fn validate_migration(
             }
             SchemaAction::EntityUpsert(upsert) => {
                 let entity = &mut upsert.schema;
-                match reg.entity_by_ident(&entity.name.clone().into()) {
+                match reg.entity_by_ident(&entity.ident.clone().into()) {
                     Some(old) => {
-                        if !entity.id.is_nil() && entity.id != old.id {
+                        if !entity.id.is_nil() && entity.id != old.schema.id {
                             return Err(anyhow!(
                                 "Id mismatch: entity name already exists with id {}",
-                                old.id
+                                old.schema.id
                             ));
                         } else {
-                            entity.id = old.id;
+                            entity.id = old.schema.id;
                         }
-                        if entity != old {
+                        if entity != &old.schema {
                             return Err(anyhow!(
                                 "Entity upsert with a changed schema is not supported (yet)"
                             ));
@@ -132,7 +135,10 @@ pub fn validate_migration(
 
                 let mut data = value::to_value_map(upsert.schema.clone())?;
                 // Add tye factor/type attr.
-                data.insert(AttrType::NAME.to_string(), super::builtin::ENTITY_ID.into());
+                data.insert(
+                    AttrType::QUALIFIED_NAME.to_string(),
+                    super::builtin::ENTITY_ID.into(),
+                );
 
                 ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
                     id: upsert.schema.id,

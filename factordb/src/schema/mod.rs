@@ -11,7 +11,7 @@ pub struct AttributeSchema {
     #[serde(rename = "factor/id")]
     pub id: Id,
     #[serde(rename = "factor/ident")]
-    pub name: String,
+    pub ident: String,
     #[serde(rename = "factor/title")]
     pub title: Option<String>,
     #[serde(rename = "factor/description")]
@@ -24,15 +24,19 @@ pub struct AttributeSchema {
     pub index: bool,
     /// If an attribute is set to strict, this attribute can only be used
     /// in entities with a schema that specifies the attribute.
-    #[serde(rename = "factor/isStrict")]
+    #[serde(rename = "factor/strict")]
     pub strict: bool,
 }
 
 impl AttributeSchema {
-    pub fn new(name: impl Into<String>, value_type: ValueType) -> Self {
+    pub fn new(
+        namespace: impl Into<String>,
+        name: impl Into<String>,
+        value_type: ValueType,
+    ) -> Self {
         Self {
             id: Id::nil(),
-            name: name.into(),
+            ident: format!("{}/{}", namespace.into(), name.into()),
             title: None,
             description: None,
             value_type,
@@ -43,10 +47,35 @@ impl AttributeSchema {
     }
 }
 
+/// A marker trait for attributes.
+///
+/// Makes working with statically typed attributes in Rust code easier.
+///
+/// Useful for defining attributes in migrations, or getting attribute values
+/// from a value map with [AttrMapExt].
+///
+/// NOTE: Types implementing this trait won't usually be used to represent
+/// attributes, but act merely as a descriptor.
+///
+/// This trait should generally not be implemented manually.
+/// A custom derive proc macro is available.
+/// See [`crate::Attribute`] for how to use the derive.
 pub trait AttributeDescriptor {
-    const NAME: &'static str;
-    const IDENT: Ident = Ident::new_static(Self::NAME);
+    /// The namespace fo the attribute.
+    const NAMESPACE: &'static str;
+    /// The name of the attribute.
+    const PLAIN_NAME: &'static str;
+    /// The qualified name of the attribute.
+    /// This MUST be equal to `format!("{}/{}", Self::NAMESPACE, Self::NAME)`.
+    /// Only exists to not require string allocation and concatenation at
+    /// runtime.
+    const QUALIFIED_NAME: &'static str;
+    const IDENT: Ident = Ident::new_static(Self::QUALIFIED_NAME);
+
+    /// The Rust type used to represent this attribute.
     type Type;
+
+    /// Build the schema for this attribute.
     fn schema() -> AttributeSchema;
 }
 
@@ -100,7 +129,7 @@ pub struct EntitySchema {
     #[serde(rename = "factor/id")]
     pub id: Id,
     #[serde(rename = "factor/ident")]
-    pub name: String,
+    pub ident: String,
     #[serde(rename = "factor/title")]
     pub title: Option<String>,
     #[serde(rename = "factor/description")]
@@ -124,8 +153,16 @@ pub struct EntitySchema {
 
 /// Trait that provides a static metadata for an entity.
 pub trait EntityDescriptor {
-    const NAME: &'static str;
-    const IDENT: Ident = Ident::new_static(Self::NAME);
+    /// The namespace.
+    const NAMESPACE: &'static str;
+    /// The plain attribute name without the namespace.
+    const PLAIN_NAME: &'static str;
+    /// The qualified name of the entity.
+    /// This MUST be equal to `format!("{}/{}", Self::NAMESPACE, Self::NAME)`.
+    /// Only exists to not require string allocation and concatenation at
+    /// runtime.
+    const QUALIFIED_NAME: &'static str;
+    const IDENT: Ident = Ident::new_static(Self::QUALIFIED_NAME);
     fn schema() -> EntitySchema;
 }
 
@@ -146,6 +183,22 @@ pub struct DbSchema {
     pub entities: Vec<EntitySchema>,
 }
 
+impl DbSchema {
+    pub fn resolve_attr(&self, ident: &Ident) -> Option<&AttributeSchema> {
+        self.attributes.iter().find(|attr| match &ident {
+            Ident::Id(id) => attr.id == *id,
+            Ident::Name(name) => attr.ident.as_str() == name,
+        })
+    }
+
+    pub fn resolve_entity(&self, ident: &Ident) -> Option<&EntitySchema> {
+        self.entities.iter().find(|entity| match &ident {
+            Ident::Id(id) => entity.id == *id,
+            Ident::Name(name) => entity.ident.as_str() == name,
+        })
+    }
+}
+
 pub trait AttrMapExt {
     fn get_id(&self) -> Option<Id>;
     fn get_type(&self) -> Option<Ident>;
@@ -159,12 +212,12 @@ pub trait AttrMapExt {
 
 impl AttrMapExt for ValueMap<String> {
     fn get_id(&self) -> Option<Id> {
-        self.get(self::builtin::AttrId::NAME)
+        self.get(self::builtin::AttrId::QUALIFIED_NAME)
             .and_then(|v| v.as_id())
     }
 
     fn get_type(&self) -> Option<Ident> {
-        self.get(self::builtin::AttrType::NAME)
+        self.get(self::builtin::AttrType::QUALIFIED_NAME)
             .and_then(|v| match v {
                 Value::String(name) => Some(Ident::Name(name.to_string().into())),
                 Value::Id(id) => Some(Ident::Id(*id)),
@@ -176,7 +229,7 @@ impl AttrMapExt for ValueMap<String> {
     where
         A::Type: TryFrom<Value>,
     {
-        let value = self.get(A::NAME)?.clone();
+        let value = self.get(A::QUALIFIED_NAME)?.clone();
         TryFrom::try_from(value).ok()
     }
 
@@ -184,6 +237,6 @@ impl AttrMapExt for ValueMap<String> {
     where
         A::Type: Into<Value>,
     {
-        self.insert(A::NAME.to_string(), value.into());
+        self.insert(A::QUALIFIED_NAME.to_string(), value.into());
     }
 }

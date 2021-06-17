@@ -16,7 +16,7 @@ struct AttrLength(u64);
 #[factor(namespace = "test")]
 struct AttrFlag(bool);
 
-#[derive(Entity)]
+#[derive(Entity, serde::Serialize, serde::Deserialize)]
 #[factor(namespace = "test")]
 struct Entity1 {
     #[factor(attr = AttrId)]
@@ -29,7 +29,7 @@ struct Entity1 {
     pub length: Vec<u64>,
 }
 
-#[derive(Entity)]
+#[derive(Entity, serde::Serialize, serde::Deserialize)]
 #[factor(namespace = "test")]
 struct Child {
     #[factor(attr = AttrFlag)]
@@ -43,12 +43,12 @@ fn test_attr_derive() {
     assert_eq!(
         factordb::schema::AttributeSchema {
             id: Id::nil(),
+            ident: "test/some_title".into(),
             description: None,
             title: None,
             index: false,
             strict: false,
             unique: false,
-            name: "test/some_title".into(),
             value_type: ValueType::String,
         },
         AttrSomeTitle::schema()
@@ -60,7 +60,7 @@ fn test_entity_derive() {
     assert_eq!(
         factordb::schema::EntitySchema {
             id: Id::nil(),
-            name: "test/Entity1".into(),
+            ident: "test/Entity1".into(),
             title: Some("Entity1".to_string()),
             description: None,
             attributes: vec![

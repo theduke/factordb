@@ -52,6 +52,7 @@ pub enum ValueType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ObjectType {
+    pub name: Option<String>,
     pub fields: Vec<ObjectField>,
 }
 
