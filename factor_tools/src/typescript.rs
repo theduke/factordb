@@ -18,7 +18,18 @@ pub fn schema_to_typescript(
             source
         ));
     } else {
-        out.push_str("type EntityId = string;\ntype Url = string;\ntype Timestamp = number;\ninterface BaseEntityData {\n  \"factor/id\": EntityId,\n}\n\n")
+        out.push_str(
+            r#"
+type EntityId = string;
+type Url = string;
+type Timestamp = number;
+
+interface BaseEntityData {
+  "factor/id": EntityId,
+  "factor/type"?: string | null,
+}
+        "#,
+        );
     };
 
     out.push_str("// Attributes\n\n");
@@ -54,6 +65,8 @@ pub fn schema_to_typescript(
         };
 
         out.push_str(&format!("export interface {} {}{{\n", name, extends));
+
+        out.push_str(&format!("  \"factor/type\": \"{}\",\n", entity.ident));
 
         for field in &entity.attributes {
             // TODO: extract object types into separate definitions.
