@@ -561,9 +561,9 @@ impl MemoryStore {
         }
     }
 
-    fn migrate_impl(&mut self, mig: Migration) -> Result<RevertList, AnyError> {
+    fn migrate_impl(&mut self, mig: Migration, is_internal: bool) -> Result<RevertList, AnyError> {
         let mut reg = self.registry.read().unwrap().clone();
-        let (_mig, ops) = schema::logic::validate_migration(&mut reg, mig)?;
+        let (_mig, ops) = schema::logic::validate_migration(&mut reg, mig, is_internal)?;
 
         let mut revert = Vec::new();
         if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert) {
@@ -576,12 +576,12 @@ impl MemoryStore {
     }
 
     pub fn migrate(&mut self, mig: Migration) -> Result<(), AnyError> {
-        self.migrate_impl(mig)?;
+        self.migrate_impl(mig, false)?;
         Ok(())
     }
 
     pub fn migrate_revertable(&mut self, mig: Migration) -> Result<RevertEpoch, AnyError> {
-        let ops = self.migrate_impl(mig)?;
+        let ops = self.migrate_impl(mig, false)?;
         let epoch = self.persist_revert_epoch(ops);
         Ok(epoch)
     }

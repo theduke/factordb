@@ -169,13 +169,18 @@ impl LogDb {
         }
     }
 
-    async fn migrate(self, migration: query::migrate::Migration) -> Result<(), AnyError> {
+    async fn migrate(
+        self,
+        migration: query::migrate::Migration,
+        is_internal: bool,
+    ) -> Result<(), AnyError> {
         // First, check if the migration would actually change anything.
         // If not, we do not write it.
         // This is important to not spam the log with migrations when UPSERTS
         // happen.
         let mut reg = self.state.registry.read().unwrap().clone();
-        let (_mig, ops) = schema::logic::validate_migration(&mut reg, migration.clone())?;
+        let (_mig, ops) =
+            schema::logic::validate_migration(&mut reg, migration.clone(), is_internal)?;
         if ops.is_empty() {
             return Ok(());
         }
@@ -240,7 +245,7 @@ impl Backend for LogDb {
     }
 
     fn migrate(&self, migration: query::migrate::Migration) -> super::BackendFuture<()> {
-        self.clone().migrate(migration).boxed()
+        self.clone().migrate(migration, false).boxed()
     }
 
     fn purge_all_data(&self) -> super::BackendFuture<()> {

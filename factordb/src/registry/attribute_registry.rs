@@ -68,12 +68,12 @@ impl AttributeRegistry {
         Ok(local_id)
     }
 
-    // #[inline]
-    // pub fn get_maybe_deleted(&self, id: LocalAttributeId) -> &RegisteredAttribute {
-    //     // NOTE: this panics, but this is acceptable because a LocalAttributeId
-    //     // is always valid.
-    //     &self.items[id.0 as usize]
-    // }
+    #[inline]
+    pub fn get_maybe_deleted(&self, id: LocalAttributeId) -> &RegisteredAttribute {
+        // NOTE: this panics, but this is acceptable because a LocalAttributeId
+        // is always valid.
+        &self.items[id.0 as usize]
+    }
 
     #[inline]
     pub fn get(&self, id: LocalAttributeId) -> Option<&RegisteredAttribute> {

@@ -83,6 +83,15 @@ impl AttributeSchema {
             strict: false,
         }
     }
+
+    /// Split the ident into (namespace, name)
+    pub fn parse_split_ident(&self) -> Result<(&str, &str), crate::AnyError> {
+        validate_namespaced_ident(&self.ident)
+    }
+
+    pub fn parse_namespace(&self) -> Result<&str, crate::AnyError> {
+        self.parse_split_ident().map(|x| x.0)
+    }
 }
 
 /// A marker trait for attributes.
@@ -187,6 +196,17 @@ pub struct EntitySchema {
     // pub from: Option<Ident>,
     // #[serde(rename = "factor/relationTo")]
     // pub to: Option<Ident>,
+}
+
+impl EntitySchema {
+    /// Split the ident into (namespace, name)
+    pub fn parse_split_ident(&self) -> Result<(&str, &str), crate::AnyError> {
+        validate_namespaced_ident(&self.ident)
+    }
+
+    pub fn parse_namespace(&self) -> Result<&str, crate::AnyError> {
+        self.parse_split_ident().map(|x| x.0)
+    }
 }
 
 /// Trait that provides a static metadata for an entity.

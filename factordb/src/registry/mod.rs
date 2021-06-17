@@ -52,6 +52,10 @@ impl Registry {
         Arc::new(RwLock::new(self))
     }
 
+    pub fn attr(&self, id: LocalAttributeId) -> &RegisteredAttribute {
+        self.attrs.get_maybe_deleted(id)
+    }
+
     #[inline]
     pub fn attr_by_name(&self, name: &str) -> Option<&RegisteredAttribute> {
         self.attrs.get_by_name(name)
