@@ -86,12 +86,11 @@ impl EntityRegistry {
     }
 
     #[inline]
-    pub fn get_maybe_deleted(&self, id: LocalEntityId) -> &RegisteredEntity {
-        // NOTE: this panics, but this is acceptable because a LocalEntityId
-        // is always valid.
-        &self.items[id.0 as usize]
-    }
-
+    // pub fn get_maybe_deleted(&self, id: LocalEntityId) -> &RegisteredEntity {
+    //     // NOTE: this panics, but this is acceptable because a LocalEntityId
+    //     // is always valid.
+    //     &self.items[id.0 as usize]
+    // }
     #[inline]
     pub fn get(&self, id: LocalEntityId) -> Option<&RegisteredEntity> {
         // NOTE: this panics, but this is acceptable because a LocalEntityId
@@ -104,14 +103,14 @@ impl EntityRegistry {
         }
     }
 
-    pub fn must_get(&self, id: LocalEntityId) -> Result<&RegisteredEntity, error::EntityNotFound> {
-        let item = self.get_maybe_deleted(id);
-        if item.is_deleted {
-            Err(error::EntityNotFound::new(item.schema.ident.clone().into()))
-        } else {
-            Ok(item)
-        }
-    }
+    // pub fn must_get(&self, id: LocalEntityId) -> Result<&RegisteredEntity, error::EntityNotFound> {
+    //     let item = self.get_maybe_deleted(id);
+    //     if item.is_deleted {
+    //         Err(error::EntityNotFound::new(item.schema.ident.clone().into()))
+    //     } else {
+    //         Ok(item)
+    //     }
+    // }
 
     pub fn get_by_uid(&self, uid: Id) -> Option<&RegisteredEntity> {
         self.uids.get(&uid).and_then(|id| self.get(*id))

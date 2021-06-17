@@ -68,12 +68,12 @@ impl AttributeRegistry {
         Ok(local_id)
     }
 
-    #[inline]
-    pub fn get_maybe_deleted(&self, id: LocalAttributeId) -> &RegisteredAttribute {
-        // NOTE: this panics, but this is acceptable because a LocalAttributeId
-        // is always valid.
-        &self.items[id.0 as usize]
-    }
+    // #[inline]
+    // pub fn get_maybe_deleted(&self, id: LocalAttributeId) -> &RegisteredAttribute {
+    //     // NOTE: this panics, but this is acceptable because a LocalAttributeId
+    //     // is always valid.
+    //     &self.items[id.0 as usize]
+    // }
 
     #[inline]
     pub fn get(&self, id: LocalAttributeId) -> Option<&RegisteredAttribute> {
@@ -87,19 +87,19 @@ impl AttributeRegistry {
         }
     }
 
-    pub fn must_get(
-        &self,
-        id: LocalAttributeId,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
-        let item = self.get_maybe_deleted(id);
-        if item.is_deleted {
-            Err(error::AttributeNotFound::new(
-                item.schema.ident.clone().into(),
-            ))
-        } else {
-            Ok(item)
-        }
-    }
+    // pub fn must_get(
+    //     &self,
+    //     id: LocalAttributeId,
+    // ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    //     let item = self.get_maybe_deleted(id);
+    //     if item.is_deleted {
+    //         Err(error::AttributeNotFound::new(
+    //             item.schema.ident.clone().into(),
+    //         ))
+    //     } else {
+    //         Ok(item)
+    //     }
+    // }
 
     pub fn get_by_uid(&self, uid: Id) -> Option<&RegisteredAttribute> {
         self.uids.get(&uid).and_then(|id| self.get(*id))
