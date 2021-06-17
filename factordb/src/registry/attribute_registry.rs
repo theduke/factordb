@@ -14,6 +14,8 @@ pub struct RegisteredAttribute {
     pub local_id: LocalAttributeId,
     pub schema: schema::AttributeSchema,
     pub is_deleted: bool,
+    pub namespace: String,
+    pub plain_name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -31,6 +33,8 @@ impl AttributeRegistry {
             local_id: LocalAttributeId(0),
             schema: schema::AttributeSchema::new("", "", ValueType::Any),
             is_deleted: true,
+            namespace: String::new(),
+            plain_name: String::new(),
         };
         Self {
             items: vec![sentinel],
@@ -45,19 +49,23 @@ impl AttributeRegistry {
         self.names.clear();
     }
 
-    fn add(&mut self, schema: schema::AttributeSchema) -> LocalAttributeId {
+    fn add(&mut self, schema: schema::AttributeSchema) -> Result<LocalAttributeId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
+
+        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)?;
 
         let local_id = LocalAttributeId(self.items.len() as u32);
         let item = RegisteredAttribute {
             local_id,
+            namespace: namespace.to_string(),
+            plain_name: plain_name.to_string(),
             schema,
             is_deleted: false,
         };
         self.uids.insert(item.schema.id, local_id);
         self.names.insert(item.schema.ident.clone(), local_id);
         self.items.push(item);
-        local_id
+        Ok(local_id)
     }
 
     #[inline]
@@ -140,8 +148,7 @@ impl AttributeRegistry {
         attr: schema::AttributeSchema,
     ) -> Result<LocalAttributeId, AnyError> {
         self.validate_schema(&attr)?;
-        let local_id = self.add(attr);
-        Ok(local_id)
+        self.add(attr)
     }
 
     fn validate_schema(&self, attr: &schema::AttributeSchema) -> Result<(), AnyError> {
@@ -152,6 +159,8 @@ impl AttributeRegistry {
         if let Some(_old) = self.get_by_uid(attr.id) {
             return Err(anyhow!("Attribute id already exists: '{}'", attr.id));
         }
+
+        crate::schema::validate_namespaced_ident(&attr.ident)?;
         if let Some(_old) = self.get_by_name(&attr.ident) {
             return Err(anyhow!("Attribute ident already exists: '{}'", attr.ident));
         }

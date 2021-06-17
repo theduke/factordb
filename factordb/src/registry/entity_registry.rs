@@ -18,6 +18,8 @@ pub struct RegisteredEntity {
     pub local_id: LocalEntityId,
     pub schema: crate::schema::EntitySchema,
     pub is_deleted: bool,
+    pub namespace: String,
+    pub plain_name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -43,6 +45,8 @@ impl EntityRegistry {
                 strict: true,
             },
             is_deleted: true,
+            namespace: String::new(),
+            plain_name: String::new(),
         };
         Self {
             items: vec![sentinel],
@@ -57,12 +61,16 @@ impl EntityRegistry {
         self.names.clear();
     }
 
-    fn add(&mut self, schema: crate::schema::EntitySchema) -> LocalEntityId {
+    fn add(&mut self, schema: crate::schema::EntitySchema) -> Result<LocalEntityId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
+
+        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)?;
 
         let local_id = LocalEntityId(self.items.len() as u32);
         let item = RegisteredEntity {
             local_id,
+            namespace: namespace.to_string(),
+            plain_name: plain_name.to_string(),
             schema,
             is_deleted: false,
         };
@@ -74,7 +82,7 @@ impl EntityRegistry {
             self.names.insert(item.schema.ident.clone(), local_id);
         }
         self.items.push(item);
-        local_id
+        Ok(local_id)
     }
 
     #[inline]
@@ -164,8 +172,7 @@ impl EntityRegistry {
             self.validate_schema(&entity, attrs)?;
         }
 
-        let local_id = self.add(entity);
-        Ok(local_id)
+        self.add(entity)
     }
 
     fn validate_schema(
@@ -173,6 +180,8 @@ impl EntityRegistry {
         entity: &schema::EntitySchema,
         attrs: &AttributeRegistry,
     ) -> Result<(), AnyError> {
+        crate::schema::validate_namespaced_ident(&entity.ident)?;
+
         if self.get_by_name(&entity.ident).is_some() {
             return Err(anyhow!(
                 "Entity with name '{}' already exists",
