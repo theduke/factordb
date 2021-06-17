@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "factordb",
     "factor_macros",
+    "factor_tools",
 
     # Backends
     "factor_sqlite",

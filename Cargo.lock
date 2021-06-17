@@ -193,6 +193,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "factor_tools"
+version = "0.1.0"
+dependencies = [
+ "Inflector",
+ "anyhow",
+ "factordb",
+]
+
+[[package]]
 name = "factordb"
 version = "0.1.0"
 dependencies = [
