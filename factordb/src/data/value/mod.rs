@@ -483,6 +483,15 @@ impl From<Id> for Value {
     }
 }
 
+impl From<Ident> for Value {
+    fn from(ident: Ident) -> Self {
+        match ident {
+            Ident::Id(id) => id.into(),
+            Ident::Name(name) => name.to_string().into(),
+        }
+    }
+}
+
 impl TryFrom<Value> for String {
     type Error = AnyError;
 
