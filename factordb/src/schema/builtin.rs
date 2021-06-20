@@ -208,8 +208,8 @@ pub struct AttrStrict;
 
 impl AttributeDescriptor for AttrStrict {
     const NAMESPACE: &'static str = "factor";
-    const PLAIN_NAME: &'static str = "strict";
-    const QUALIFIED_NAME: &'static str = "factor/strict";
+    const PLAIN_NAME: &'static str = "isStrict";
+    const QUALIFIED_NAME: &'static str = "factor/isStrict";
     type Type = bool;
 
     fn schema() -> AttributeSchema {

@@ -62,7 +62,7 @@ pub struct AttributeSchema {
     pub index: bool,
     /// If an attribute is set to strict, this attribute can only be used
     /// in entities with a schema that specifies the attribute.
-    #[serde(rename = "factor/strict")]
+    #[serde(rename = "factor/isStrict")]
     pub strict: bool,
 }
 
