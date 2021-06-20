@@ -424,18 +424,6 @@ impl serde::ser::SerializeStructVariant for SerializeStructVariant {
     }
 }
 
-struct MapSerializer<K> {
-    _key: std::marker::PhantomData<K>,
-}
-
-impl<K> MapSerializer<K> {
-    fn new() -> Self {
-        Self {
-            _key: std::marker::PhantomData,
-        }
-    }
-}
-
 struct MapSerializeStruct<K> {
     map: ValueMap<K>,
 }
@@ -462,6 +450,55 @@ impl<K: Ord + From<String>> serde::ser::SerializeStruct for MapSerializeStruct<K
     }
 }
 
+struct MapSerializeMap<K> {
+    map: ValueMap<K>,
+    key: Option<K>,
+}
+
+impl<K: Ord + From<String>> serde::ser::SerializeMap for MapSerializeMap<K> {
+    type Ok = ValueMap<K>;
+    type Error = ValueSerializeError;
+
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(self.map)
+    }
+
+    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
+    where
+        T: serde::Serialize,
+    {
+        let value = tri!(key.serialize(ValueSerializer));
+        if let Value::String(key) = value {
+            self.key = Some(K::from(key));
+            Ok(())
+        } else {
+            Err(ValueSerializeError::custom("Invalid map key"))
+        }
+    }
+
+    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    where
+        T: serde::Serialize,
+    {
+        let value = tri!(value.serialize(ValueSerializer));
+        let key = self.key.take().unwrap();
+        self.map.insert(key, value);
+        Ok(())
+    }
+}
+
+struct MapSerializer<K> {
+    _key: std::marker::PhantomData<K>,
+}
+
+impl<K> MapSerializer<K> {
+    fn new() -> Self {
+        Self {
+            _key: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<K: Ord + From<String>> serde::Serializer for MapSerializer<K> {
     type Ok = ValueMap<K>;
     type Error = ValueSerializeError;
@@ -469,7 +506,7 @@ impl<K: Ord + From<String>> serde::Serializer for MapSerializer<K> {
     type SerializeTuple = Impossible<Self::Ok, Self::Error>;
     type SerializeTupleStruct = Impossible<Self::Ok, Self::Error>;
     type SerializeTupleVariant = Impossible<Self::Ok, Self::Error>;
-    type SerializeMap = Impossible<Self::Ok, Self::Error>;
+    type SerializeMap = MapSerializeMap<K>;
     type SerializeStruct = MapSerializeStruct<K>;
     type SerializeStructVariant = Impossible<Self::Ok, Self::Error>;
 
@@ -658,9 +695,10 @@ impl<K: Ord + From<String>> serde::Serializer for MapSerializer<K> {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        Err(ValueSerializeError::custom(
-            "expected a key => value structure",
-        ))
+        Ok(MapSerializeMap {
+            map: ValueMap::new(),
+            key: None,
+        })
     }
 
     fn serialize_struct(
