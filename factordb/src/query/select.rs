@@ -24,7 +24,7 @@ pub struct Join {
     pub flatten_relation: bool,
 }
 
-pub type Cursor = String;
+pub type Cursor = Id;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Select {
@@ -81,6 +81,25 @@ pub struct Item<T = DataMap> {
 }
 
 impl<T> Item<T> {
+    pub fn new(data: T) -> Self {
+        Self {
+            data,
+            joins: Vec::new(),
+        }
+    }
+
+    pub fn with_join(
+        mut self,
+        name: impl Into<String>,
+        items: impl IntoIterator<Item = Item<T>>,
+    ) -> Self {
+        self.joins.push(JoinItem {
+            name: name.into(),
+            items: items.into_iter().collect(),
+        });
+        self
+    }
+
     pub fn flatten_into(self, list: &mut Vec<T>) {
         list.push(self.data);
         for join in self.joins {
@@ -105,9 +124,20 @@ pub struct Page<T> {
     pub next_cursor: Option<Cursor>,
 }
 
+impl<T> Page<T> {
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            next_cursor: None,
+        }
+    }
+}
+
 impl<T> Page<Item<T>> {
     /// Extract each the item.data, dropping joins.
     pub fn take_data(self) -> Vec<T> {
         self.items.into_iter().map(|item| item.data).collect()
     }
 }
+
+pub type ItemPage<T = DataMap> = Page<Item<T>>;
