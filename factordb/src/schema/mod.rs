@@ -259,6 +259,7 @@ impl DbSchema {
 
 pub trait AttrMapExt {
     fn get_id(&self) -> Option<Id>;
+    fn get_ident(&self) -> Option<Ident>;
     fn get_type(&self) -> Option<Ident>;
     fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
     where
@@ -272,6 +273,13 @@ impl AttrMapExt for ValueMap<String> {
     fn get_id(&self) -> Option<Id> {
         self.get(self::builtin::AttrId::QUALIFIED_NAME)
             .and_then(|v| v.as_id())
+    }
+
+    fn get_ident(&self) -> Option<Ident> {
+        self.get_id().map(Ident::from).or_else(|| {
+            self.get_attr::<self::builtin::AttrIdent>()
+                .map(|s| s.into())
+        })
     }
 
     fn get_type(&self) -> Option<Ident> {
