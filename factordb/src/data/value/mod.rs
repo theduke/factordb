@@ -48,6 +48,8 @@ pub enum ValueType {
     Url,
     /// Reference to an entity id.
     Ref,
+
+    Const(Value),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -76,10 +78,9 @@ impl ValueType {
             | Self::Url
             | Self::Map => true,
             Self::Object(_) => false,
-
             Self::Union(inner) => inner.iter().all(|t| t.is_scalar()),
-
             Self::Any | Self::Unit | Self::List(_) => false,
+            Self::Const(_value) => todo!(),
         }
     }
 }

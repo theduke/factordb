@@ -249,6 +249,7 @@ impl Registry {
                     }
                 }
             }
+            ValueType::Const(_) => todo!(),
         }
         Ok(())
     }
