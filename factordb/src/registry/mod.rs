@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 
 use crate::{
     backend::{DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace},
@@ -224,7 +224,10 @@ impl Registry {
                         ));
                     }
                 } else {
-                    return Err(anyhow!("Invalid url - expected an integer"));
+                    return Err(anyhow!(
+                        "Invalid url - expected a string, got a {:?}",
+                        value.value_type()
+                    ));
                 }
             }
             ValueType::Ref => {
@@ -260,6 +263,7 @@ impl Registry {
         value: &mut Value,
     ) -> Result<(), AnyError> {
         Self::validate_coerce_value_named(&attr.schema.ident, &attr.schema.value_type, value)
+            .context(format!("Invalid value for attribute {}", attr.schema.ident))
     }
 
     // fn make_id_map(
