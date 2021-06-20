@@ -98,7 +98,6 @@ async fn test_assert_simple(f: &Db) {
 
     // Check that a query returns nothing.
     let page = f.select(Select::new()).await.unwrap();
-    dbg!(&page.items);
     assert!(page.items.is_empty());
 
     // Create entity.

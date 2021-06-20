@@ -35,7 +35,6 @@ impl Db {
     }
 
     pub async fn create(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        dbg!(self.backend.registry());
         self.batch(query::mutate::BatchUpdate {
             actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
                 id,
