@@ -1,5 +1,8 @@
-pub mod log;
+#[cfg(feature = "memory")]
 pub mod memory;
+
+#[cfg(feature = "log")]
+pub mod log;
 
 use crate::{
     data::{DataMap, Id, Ident, Value},
