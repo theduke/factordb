@@ -294,6 +294,11 @@ impl Registry {
             let attr = self.attrs.must_get_by_ident(&field.attribute)?;
 
             match (data.get_mut(&attr.schema.ident), field.cardinality) {
+                // Handle optional fields that have a Unit value.
+                (Some(Value::Unit), Cardinality::Optional) => {
+                    // Remove the unit value.
+                    data.remove(&attr.schema.ident);
+                }
                 (None, Cardinality::Optional) => {}
                 (None, Cardinality::Required) => {
                     return Err(anyhow!(
