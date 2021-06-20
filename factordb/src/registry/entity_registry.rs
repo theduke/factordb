@@ -75,7 +75,6 @@ impl EntityRegistry {
             is_deleted: false,
         };
         self.uids.insert(item.schema.id, local_id);
-        self.names.insert(item.schema.ident.clone(), local_id);
         if self.names.contains_key(&item.schema.ident) {
             self.names.remove(&item.schema.ident);
         } else {
@@ -164,7 +163,7 @@ impl EntityRegistry {
             return Err(anyhow!("Entity id already exists: '{}'", entity.id));
         }
         if let Some(_old) = self.get_by_name(&entity.ident) {
-            return Err(anyhow!("Entity id already exists: '{}'", entity.id));
+            return Err(anyhow!("Entity ident already exists: '{}'", entity.id));
         }
 
         if validate {
