@@ -277,8 +277,12 @@ impl AttributeDescriptor for AttrAttributes {
                         value_type: ValueType::Ref,
                     },
                     crate::data::value::ObjectField {
-                        name: "value_type".to_string(),
-                        value_type: ValueType::Any,
+                        name: "cardinality".to_string(),
+                        value_type: ValueType::Union(vec![
+                            ValueType::Const("Optional".into()),
+                            ValueType::Const("Many".into()),
+                            ValueType::Const("Required".into()),
+                        ]),
                     },
                 ],
             }),
