@@ -66,7 +66,7 @@ pub fn validate_migration(
                             attr.id = old.schema.id;
                         }
                         if attr != &old.schema {
-                            return Err(anyhow!("Attribute upsert with a changed attribute config is not supported (yet)"));
+                            return Err(anyhow!("Attribute '{}' has changed - upsert with a changed attribute schema is not supported (yet)", attr.ident));
                         } else {
                             continue;
                         }
