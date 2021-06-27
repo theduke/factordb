@@ -289,11 +289,9 @@ impl Value {
     }
 
     pub fn to_ident(&self) -> Option<Ident> {
-        match self {
-            Value::String(v) => Some(v.clone().into()),
-            Value::Id(v) => Some(Ident::Id(*v)),
-            _ => None,
-        }
+        self.as_id()
+            .map(Ident::from)
+            .or_else(|| self.as_str().map(|s| Ident::Name(s.to_string().into())))
     }
 
     /// Returns `true` if the value is [`Bool`].

@@ -4,7 +4,7 @@ use crate::{
     backend::{self, DbOp},
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
-    query::{self, migrate::Migration, select::Item},
+    query::{self, expr, migrate::Migration, select::Item},
     schema, AnyError,
 };
 
@@ -601,24 +601,44 @@ impl MemoryStore {
         let reg = self.registry.read().unwrap();
 
         let items: Vec<(&Id, &MemoryTuple)> = if let Some(filter) = query.filter {
-            self.entities
-                .iter()
-                .filter(|(_id, item)| {
-                    // Skip builtin types.
+            // Fast path for single ident select.
 
-                    if let Some(id) = item
-                        .get(&crate::schema::builtin::ATTR_TYPE)
-                        .and_then(|x| x.as_id())
-                    {
-                        if crate::schema::builtin::id_is_builtin_entity_type(id) {
-                            return false;
+            if let Some(Ident::Id(id)) = expr::expr_is_entity_ident(&filter) {
+                // Fast path for single ID select.
+                // This is messy and should be handled by an external query
+                // planner, but it helps for now.
+
+                if let Some(tuple) = self.entities.get(&id) {
+                    let id = tuple
+                        .0
+                        .get(&schema::builtin::ATTR_ID)
+                        .unwrap()
+                        .as_id_ref()
+                        .unwrap();
+                    vec![(id, tuple)]
+                } else {
+                    vec![]
+                }
+            } else {
+                self.entities
+                    .iter()
+                    .filter(|(_id, item)| {
+                        // Skip builtin types.
+
+                        if let Some(id) = item
+                            .get(&crate::schema::builtin::ATTR_TYPE)
+                            .and_then(|x| x.as_id())
+                        {
+                            if crate::schema::builtin::id_is_builtin_entity_type(id) {
+                                return false;
+                            }
                         }
-                    }
 
-                    let flag = Self::entity_filter(item, &filter, &*reg);
-                    flag
-                })
-                .collect()
+                        let flag = Self::entity_filter(item, &filter, &*reg);
+                        flag
+                    })
+                    .collect()
+            }
         } else {
             self.entities
                 .iter()

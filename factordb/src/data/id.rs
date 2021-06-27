@@ -98,6 +98,14 @@ impl Ident {
             Ident::Name(n) => n.to_string(),
         }
     }
+
+    pub fn as_name(&self) -> Option<&str> {
+        if let Self::Name(v) = self {
+            Some(v.as_ref())
+        } else {
+            None
+        }
+    }
 }
 
 impl From<Id> for Ident {

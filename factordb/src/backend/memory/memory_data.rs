@@ -77,6 +77,14 @@ impl MemoryValue {
             None
         }
     }
+
+    pub fn as_id_ref(&self) -> Option<&Id> {
+        if let Self::Id(id) = self {
+            Some(id)
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> From<&'a MemoryValue> for Value {
