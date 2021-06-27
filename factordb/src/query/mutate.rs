@@ -44,6 +44,28 @@ pub enum Mutate {
     Delete(Delete),
 }
 
+impl Mutate {
+    pub fn create(id: Id, data: DataMap) -> Self {
+        Self::Create(Create { id, data })
+    }
+
+    pub fn create_from_map(data: DataMap) -> Self {
+        let id = data.get_id().unwrap_or_else(Id::random);
+        Self::Create(Create { id, data })
+    }
+
+    pub fn merge_from_map(data: DataMap) -> Result<Self, crate::AnyError> {
+        let id = data
+            .get_id()
+            .ok_or_else(|| anyhow::anyhow!("Update requires an id"))?;
+        Ok(Self::Merge(Merge { id, data }))
+    }
+
+    pub fn delete(id: Id) -> Self {
+        Self::Delete(Delete { id })
+    }
+}
+
 impl From<Create> for Mutate {
     fn from(v: Create) -> Self {
         Self::Create(v)

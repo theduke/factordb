@@ -207,6 +207,14 @@ impl EntitySchema {
     pub fn parse_namespace(&self) -> Result<&str, crate::AnyError> {
         self.parse_split_ident().map(|x| x.0)
     }
+
+    /// The title, if present, otherwise the unique name.
+    pub fn pretty_name(&self) -> &str {
+        self.title
+            .as_ref()
+            .map(|t| t.as_str())
+            .unwrap_or(self.ident.as_str())
+    }
 }
 
 /// Trait that provides a static metadata for an entity.
@@ -260,7 +268,10 @@ impl DbSchema {
 pub trait AttrMapExt {
     fn get_id(&self) -> Option<Id>;
     fn get_ident(&self) -> Option<Ident>;
+
     fn get_type(&self) -> Option<Ident>;
+    fn get_type_name(&self) -> Option<&str>;
+
     fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
     where
         A::Type: TryFrom<Value>;
@@ -287,6 +298,14 @@ impl AttrMapExt for ValueMap<String> {
             .and_then(|v| match v {
                 Value::String(name) => Some(Ident::Name(name.to_string().into())),
                 Value::Id(id) => Some(Ident::Id(*id)),
+                _ => None,
+            })
+    }
+
+    fn get_type_name(&self) -> Option<&str> {
+        self.get(self::builtin::AttrType::QUALIFIED_NAME)
+            .and_then(|v| match v {
+                Value::String(name) => Some(name.as_str()),
                 _ => None,
             })
     }

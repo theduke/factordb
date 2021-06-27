@@ -80,6 +80,15 @@ pub struct Item<T = DataMap> {
     pub joins: Vec<JoinItem<T>>,
 }
 
+impl<T: Default> Default for Item<T> {
+    fn default() -> Self {
+        Self {
+            data: T::default(),
+            joins: Vec::new(),
+        }
+    }
+}
+
 impl<T> Item<T> {
     pub fn new(data: T) -> Self {
         Self {

@@ -5,6 +5,12 @@ use super::Value;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ValueMap<K>(pub BTreeMap<K, Value>);
 
+impl<K: Ord> Default for ValueMap<K> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
 impl<K> ValueMap<K>
 where
     K: Ord,
