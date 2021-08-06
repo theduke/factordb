@@ -1,14 +1,57 @@
 use anyhow::anyhow;
 
 use crate::{
-    backend::{DbOp, SelectOpt, TupleCreate, TupleOp},
-    data::{value, Id},
+    backend::{DbOp, SelectOpt, TupleCreate, TupleMerge, TupleOp},
+    data::{
+        value::{self, to_value, to_value_map},
+        Id,
+    },
     query::migrate::{Migration, SchemaAction},
     registry::Registry,
-    AnyError,
+    schema::{builtin, AttrMapExt},
+    AnyError, Ident,
 };
 
-use super::{builtin::AttrType, AttributeDescriptor};
+use super::{builtin::AttrType, AttributeDescriptor, Cardinality, EntityAttribute};
+
+enum EntityAttributePatch {
+    Added(EntityAttribute),
+    Removed(EntityAttribute),
+    CardinalityChanged {
+        old: Cardinality,
+        new: Cardinality,
+        attribute: Ident,
+    },
+}
+
+fn diff_attributes(old: &[EntityAttribute], new: &[EntityAttribute]) -> Vec<EntityAttributePatch> {
+    let mut patches = Vec::new();
+
+    for old_attr in old {
+        if let Some(new_attr) = new.iter().find(|attr| attr.attribute == old_attr.attribute) {
+            if old_attr.cardinality != new_attr.cardinality {
+                patches.push(EntityAttributePatch::CardinalityChanged {
+                    old: old_attr.cardinality,
+                    new: new_attr.cardinality,
+                    attribute: old_attr.attribute.clone(),
+                })
+            }
+        } else {
+            patches.push(EntityAttributePatch::Removed(old_attr.clone()));
+        }
+    }
+
+    for new_attr in new {
+        let already_exists = old
+            .iter()
+            .any(|old_attr| old_attr.attribute == new_attr.attribute);
+        if !already_exists {
+            patches.push(EntityAttributePatch::Added(new_attr.clone()));
+        }
+    }
+
+    patches
+}
 
 /// Validate a migration against the registry.
 ///
@@ -66,7 +109,7 @@ pub fn validate_migration(
                             attr.id = old.schema.id;
                         }
                         if attr != &old.schema {
-                            return Err(anyhow!("Attribute '{}' has changed - upsert with a changed attribute schema is not supported (yet)", attr.ident));
+                            return Err(anyhow!("Attribute '{}' has changed - upsert with a changed attribute schema is not supported (yet)\n\nold: {:?}\n\n new: {:?}", attr.ident, old, attr));
                         } else {
                             continue;
                         }
@@ -153,10 +196,97 @@ pub fn validate_migration(
                         } else {
                             entity.id = old.schema.id;
                         }
+
                         if entity != &old.schema {
-                            return Err(anyhow!(
-                                "Entity upsert with a changed schema is not supported (yet)"
-                            ));
+                            if old.schema.ident != entity.ident {
+                                return Err(anyhow!(
+                                    "Entity upsert with changed ident is not supported"
+                                ));
+                            }
+                            if old.schema.extends != entity.extends {
+                                return Err(anyhow!(
+                                    "Entity upsert with changed extend parent schemas is not supported"
+                                ));
+                            }
+                            if old.schema.strict != entity.strict {
+                                return Err(anyhow!(
+                                    "Entity upsert with changed strict setting is not supported"
+                                ));
+                            }
+
+                            // Entity has changed.
+                            // Check what has changed and if we can allow an
+                            // upsert.
+
+                            let mut merge = to_value_map(&old.schema)?;
+
+                            if old.schema.title != entity.title {
+                                if let Some(new_title) = &entity.title {
+                                    merge.insert_attr::<builtin::AttrTitle>(new_title.clone());
+                                } else {
+                                    merge.remove(builtin::AttrTitle::QUALIFIED_NAME);
+                                }
+                            }
+
+                            if old.schema.description != entity.description {
+                                if let Some(new_description) = &entity.description {
+                                    merge.insert_attr::<builtin::AttrDescription>(
+                                        new_description.clone(),
+                                    );
+                                } else {
+                                    merge.remove(builtin::AttrDescription::QUALIFIED_NAME);
+                                }
+                            }
+
+                            if old.schema.attributes != entity.attributes {
+                                let diffs =
+                                    diff_attributes(&old.schema.attributes, &entity.attributes);
+
+                                let mut new_attrs = old.schema.attributes.clone();
+
+                                for diff in diffs {
+                                    match diff {
+                                        EntityAttributePatch::Added(new_attr) => {
+                                            if new_attr.cardinality != Cardinality::Required {
+                                                new_attrs.push(new_attr);
+                                            } else {
+                                                return Err(anyhow!(
+                                                    "Entity upsert with new attribute '{:?}' is invalid - new attributes must have a cardinality of Optional or Many",
+                                                    new_attr.attribute,
+                                                ));
+                                            }
+                                        }
+                                        EntityAttributePatch::Removed(removed) => {
+                                            return Err(anyhow!(
+                                                "Entity upsert can not remove attributes (attribute '{:?}')",
+                                                removed.attribute,
+                                            ));
+                                        }
+                                        EntityAttributePatch::CardinalityChanged {
+                                            old: _,
+                                            new: _,
+                                            attribute,
+                                        } => {
+                                            return Err(anyhow!(
+                                                "Entity upsert can not change attribute cardinality (attribute '{:?}')",
+                                                attribute,
+                                            ));
+                                        }
+                                    }
+                                }
+
+                                let new_attrs_value = to_value(new_attrs)?;
+                                merge.insert(
+                                    builtin::AttrAttributes::QUALIFIED_NAME.into(),
+                                    new_attrs_value,
+                                );
+                            }
+
+                            ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge {
+                                id: entity.id,
+                                data: merge,
+                            })));
+                            continue;
                         } else {
                             continue;
                         }
