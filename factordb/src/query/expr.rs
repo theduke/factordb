@@ -106,6 +106,10 @@ impl Expr {
         }
     }
 
+    pub fn and_with(self, other: impl Into<Self>) -> Self {
+        Self::and(self, other.into())
+    }
+
     pub fn or<I1, I2>(left: I1, right: I2) -> Self
     where
         I1: Into<Self>,
