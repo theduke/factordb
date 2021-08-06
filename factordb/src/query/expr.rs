@@ -44,6 +44,10 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub fn boxed(self) -> Box<Self> {
+        Box::new(self)
+    }
+
     pub fn literal<I>(value: I) -> Self
     where
         I: Into<Value>,
