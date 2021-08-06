@@ -208,7 +208,10 @@ pub(crate) fn expr_is_entity_ident(expr: &Expr) -> Option<Ident> {
 
 #[cfg(test)]
 mod tests {
-    use crate::schema::builtin::{AttrId, AttrIdent, ATTR_ID, ATTR_IDENT};
+    use crate::{
+        schema::builtin::{AttrId, AttrIdent, ATTR_ID, ATTR_IDENT},
+        Id,
+    };
 
     use super::*;
 
