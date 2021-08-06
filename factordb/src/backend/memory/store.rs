@@ -762,6 +762,13 @@ impl MemoryStore {
                         query::expr::BinaryOp::Gte => left >= right,
                         query::expr::BinaryOp::Lt => left < right,
                         query::expr::BinaryOp::Lte => left <= right,
+                        query::expr::BinaryOp::Contains => match (left.as_ref(), right.as_ref()) {
+                            (Value::String(value), Value::String(pattern)) => {
+                                value.contains(pattern)
+                            }
+                            _ => false,
+                        },
+
                         query::expr::BinaryOp::In(_) => todo!(),
 
                         // Covered above.

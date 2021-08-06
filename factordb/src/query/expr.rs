@@ -14,6 +14,7 @@ pub enum BinaryOp {
     Lt,
     Lte,
     In(Vec<Value>),
+    Contains,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
