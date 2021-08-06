@@ -4,7 +4,7 @@ pub mod logic;
 
 use std::convert::TryFrom;
 
-use crate::data::{value::ValueMap, Id, Ident, Value, ValueType};
+use crate::data::{value::ValueMap, DataMap, Id, Ident, Value, ValueType};
 
 pub fn validate_namespace_name(value: &str) -> Result<(), crate::AnyError> {
     if value.is_empty() {
@@ -235,6 +235,18 @@ pub trait EntityDescriptor {
 pub trait EntityContainer {
     fn id(&self) -> Id;
     fn entity_type(&self) -> Ident;
+
+    // TODO: remove this once we have a proper custom derive for De/Serialize
+    // in the #[derive(Entity)]
+    fn into_map(self) -> Result<DataMap, crate::data::value::ValueSerializeError>
+    where
+        Self: serde::Serialize + Sized,
+    {
+        let ty = self.entity_type();
+        let mut map = crate::data::value::to_value_map(self)?;
+        map.insert_attr::<builtin::AttrType>(ty);
+        Ok(map)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
