@@ -106,6 +106,27 @@ impl LogDb {
         f(&*state.store)
     }
 
+    /// Export all events in the log.
+    ///
+    /// The provided callback will be invoked for each event.
+    ///
+    /// WARNING: Locks the database until all events are read!
+    pub async fn export_events(
+        &self,
+        mut writer: impl FnMut(LogEvent) -> Result<(), AnyError>,
+    ) -> Result<(), AnyError> {
+        let state = self.state.mutable.lock().await;
+
+        for event_id in 0..=state.current_event_id {
+            if let Some(raw_event) = state.store.read_event(event_id).await? {
+                let event = self.deserialize_event(raw_event)?;
+                writer(event)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn deserialize_event(&self, raw_event: Vec<u8>) -> Result<LogEvent, AnyError> {
         self.state
             .converter
@@ -385,6 +406,60 @@ mod tests {
             // Test that data is still there.
             let data = db.entity(id).await.unwrap();
             assert_eq!(data::Value::from("hello"), data["test/text"]);
+        });
+    }
+
+    #[test]
+    fn test_log_backend_with_memory_store_export() {
+        futures::executor::block_on(async {
+            let log = LogDb::open(
+                log_memory::MemoryLogStore::new(),
+                convert_json::JsonConverter,
+            )
+            .await
+            .unwrap();
+            let db = crate::Db::new(log.clone());
+
+            let id = Id::random();
+            let data = crate::map! {
+                "factor/title": "y",
+            };
+            db.create(id, data.clone()).await.unwrap();
+
+            db.delete(id).await.unwrap();
+
+            let mut events = Vec::new();
+
+            // Restore.
+            log.export_events(|event| {
+                events.push(event);
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+            assert_eq!(
+                events,
+                vec![
+                    LogEvent {
+                        id: 1,
+                        op: LogOp::Batch(BatchUpdate {
+                            actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
+                                id,
+                                data
+                            }),]
+                        })
+                    },
+                    LogEvent {
+                        id: 2,
+                        op: LogOp::Batch(BatchUpdate {
+                            actions: vec![query::mutate::Mutate::Delete(query::mutate::Delete {
+                                id
+                            }),]
+                        })
+                    }
+                ]
+            );
         });
     }
 }
