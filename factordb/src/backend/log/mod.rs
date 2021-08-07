@@ -4,6 +4,9 @@
 pub mod convert_json;
 pub mod log_memory;
 
+mod event;
+pub use event::LogEvent;
+
 use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
@@ -16,9 +19,11 @@ use query::mutate::BatchUpdate;
 
 use crate::{
     data,
-    query::{self, migrate::Migration, select::Item},
+    query::{self, select::Item},
     registry, schema, AnyError,
 };
+
+use self::event::LogOp;
 
 use super::{
     memory::store::{MemoryStore, RevertEpoch},
@@ -26,6 +31,8 @@ use super::{
 };
 
 pub struct LogConfig {}
+
+pub type EventId = u64;
 
 /// LogDb is a simple database backend that is based on an event log.
 /// Mutations are written to the event log.
@@ -44,6 +51,25 @@ pub struct LogConfig {}
 #[derive(Clone)]
 pub struct LogDb {
     state: Arc<State>,
+}
+
+struct State {
+    registry: registry::SharedRegistry,
+    converter: Box<dyn LogConverter + Send + Sync + 'static>,
+    mutable: futures::lock::Mutex<MutableState>,
+    mem: RwLock<MemoryStore>,
+}
+
+struct MutableState {
+    store: Box<dyn LogStore + Send + Sync + 'static>,
+    current_event_id: EventId,
+}
+
+impl MutableState {
+    fn increment_event_id(&mut self) -> EventId {
+        self.current_event_id = self.current_event_id.wrapping_add(1);
+        self.current_event_id
+    }
 }
 
 impl LogDb {
@@ -80,6 +106,13 @@ impl LogDb {
         f(&*state.store)
     }
 
+    fn deserialize_event(&self, raw_event: Vec<u8>) -> Result<LogEvent, AnyError> {
+        self.state
+            .converter
+            .deserialize(raw_event)
+            .context("Could not deserialize event")
+    }
+
     async fn restore(&self) -> Result<(), AnyError> {
         {
             let mut mutable = self.state.mutable.lock().await;
@@ -92,11 +125,7 @@ impl LogDb {
 
                 while let Some(res) = stream.next().await {
                     let raw_event = res?;
-                    let event = self
-                        .state
-                        .converter
-                        .deserialize(raw_event)
-                        .context("Could not deserialize event")?;
+                    let event = self.deserialize_event(raw_event)?;
                     event_id = event.id;
 
                     match event.op {
@@ -265,62 +294,6 @@ impl Backend for LogDb {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(&*self)
     }
-}
-
-struct State {
-    registry: registry::SharedRegistry,
-    converter: Box<dyn LogConverter + Send + Sync + 'static>,
-    mutable: futures::lock::Mutex<MutableState>,
-    mem: RwLock<MemoryStore>,
-}
-
-struct MutableState {
-    store: Box<dyn LogStore + Send + Sync + 'static>,
-    current_event_id: EventId,
-}
-
-impl MutableState {
-    fn increment_event_id(&mut self) -> EventId {
-        self.current_event_id = self.current_event_id.wrapping_add(1);
-        self.current_event_id
-    }
-}
-
-pub type EventId = u64;
-
-/// A event persisted in the log.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct LogEvent {
-    id: EventId,
-    op: LogOp,
-}
-
-impl LogEvent {
-    // /// Get a reference to the log event's id.
-    // fn id(&self) -> EventId {
-    //     self.id
-    // }
-
-    // fn from_op(op: super::DbOp) -> Option<Self> {
-    //     use super::{DbOp, TupleOp};
-    //     match op {
-    //         DbOp::Tuple(t) => match t {
-    //             TupleOp::Create(_) => todo!(),
-    //             TupleOp::Replace(_) => todo!(),
-    //             TupleOp::Merge(_) => todo!(),
-    //             TupleOp::Delete(_) => todo!(),
-    //             TupleOp::RemoveAttrs(_) => todo!(),
-    //         },
-    //         DbOp::Select(_) => todo!(),
-    //     }
-    // }
-}
-
-/// A log operation stored in a log event.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-enum LogOp {
-    Batch(BatchUpdate),
-    Migrate(Migration),
 }
 
 /// Defines a storage backend used by a [LogStore].
