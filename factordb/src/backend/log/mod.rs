@@ -149,6 +149,8 @@ impl LogDb {
                     let event = self.deserialize_event(raw_event)?;
                     event_id = event.id;
 
+                    tracing::trace!(?event, "restoring logdb event");
+
                     match event.op {
                         LogOp::Batch(batch) => {
                             self.state
