@@ -20,6 +20,10 @@ impl Db {
         }
     }
 
+    pub fn backend(&self) -> &Arc<dyn Backend + Send + Sync + 'static> {
+        &self.backend
+    }
+
     pub async fn entity<I>(&self, id: I) -> Result<DataMap, AnyError>
     where
         I: Into<Ident>,
