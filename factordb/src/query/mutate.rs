@@ -95,6 +95,14 @@ pub struct BatchUpdate {
     pub actions: Vec<Mutate>,
 }
 
+impl BatchUpdate {
+    pub fn with_action(action: impl Into<Mutate>) -> Self {
+        Self {
+            actions: vec![action.into()],
+        }
+    }
+}
+
 impl From<Vec<Mutate>> for BatchUpdate {
     fn from(v: Vec<Mutate>) -> Self {
         BatchUpdate { actions: v }
