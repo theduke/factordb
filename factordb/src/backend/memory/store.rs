@@ -809,6 +809,17 @@ impl MemoryStore {
     }
 
     pub fn purge_all_data(&mut self) {
+        /*
+        self.entities.retain(|id, entity| {
+            let flag = entity
+                .0
+                .get(&builtin::ATTR_TYPE)
+                .and_then(|ty| ty.as_id())
+                .map(|id| builtin::entity_type_is_builtin(id))
+                .unwrap_or(false);
+            flag
+        });
+        */
         self.entities.clear();
         self.idents.clear();
         self.interner.clear();
