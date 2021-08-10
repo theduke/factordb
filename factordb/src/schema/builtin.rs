@@ -424,3 +424,10 @@ pub fn id_is_builtin_entity_filter() -> crate::query::expr::Expr {
 
     Expr::or(a, b)
 }
+
+pub fn entity_type_is_builtin(id: Id) -> bool {
+    match id {
+        ENTITY_ID | ATTRIBUTE_ID => true,
+        _ => false,
+    }
+}
