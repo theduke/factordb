@@ -80,7 +80,7 @@ impl ValueType {
             Self::Object(_) => false,
             Self::Union(inner) => inner.iter().all(|t| t.is_scalar()),
             Self::Any | Self::Unit | Self::List(_) => false,
-            Self::Const(_value) => todo!(),
+            Self::Const(val) => val.value_type().is_scalar(),
         }
     }
 }
