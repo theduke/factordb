@@ -8,7 +8,7 @@ pub use value::{Value, ValueType};
 mod time;
 pub use time::Timestamp;
 
-use self::value::ValueMap;
+pub use self::value::ValueMap;
 
 pub type DataMap = ValueMap<String>;
 pub type IdMap = fnv::FnvHashMap<Id, Value>;

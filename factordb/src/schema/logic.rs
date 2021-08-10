@@ -14,6 +14,8 @@ use crate::{
 
 use super::{builtin::AttrType, AttributeDescriptor, Cardinality, EntityAttribute};
 
+// TODO: remove allow
+#[allow(dead_code)]
 enum EntityAttributePatch {
     Added(EntityAttribute),
     Removed(EntityAttribute),

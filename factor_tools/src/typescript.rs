@@ -162,6 +162,8 @@ fn build_entity(
 
     Ok(vec![ty_const, interface, Item::Newlines(1)])
 }
+
+#[allow(dead_code)]
 enum Value {
     Str(String),
     Array(Vec<Self>),
