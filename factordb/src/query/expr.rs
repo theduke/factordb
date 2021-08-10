@@ -13,7 +13,7 @@ pub enum BinaryOp {
     Gte,
     Lt,
     Lte,
-    In(Vec<Value>),
+    In,
     Contains,
 }
 

@@ -768,8 +768,13 @@ impl MemoryStore {
                             }
                             _ => false,
                         },
-
-                        query::expr::BinaryOp::In(_) => todo!(),
+                        query::expr::BinaryOp::In => {
+                            // TODO: probably need to cover more variants here!
+                            match (left.as_ref(), right.as_ref()) {
+                                (value, Value::List(items)) => items.iter().any(|x| x == value),
+                                _other => false,
+                            }
+                        }
 
                         // Covered above.
                         query::expr::BinaryOp::And | query::expr::BinaryOp::Or => {
