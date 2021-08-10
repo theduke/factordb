@@ -48,8 +48,12 @@ async fn test_db(db: Db) {
 
 async fn test_db_with_test_schema(db: &Db) {
     apply_test_schema(db).await;
-
     test_select(db).await;
+    db.purge_all_data().await.unwrap();
+
+    apply_test_schema(db).await;
+    test_query_in(db).await;
+    db.purge_all_data().await.unwrap();
 }
 
 async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
@@ -165,6 +169,25 @@ async fn test_select(db: &Db) {
         .select(
             Select::new().with_filter(Expr::eq(Expr::ident("test/text"), Expr::literal("hello"))),
         )
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, page_match);
+}
+
+async fn test_query_in(db: &Db) {
+    let id = Id::random();
+    let mut data = map! {
+        "test/int": 42,
+    };
+    db.create(id, data.clone()).await.unwrap();
+    data.insert("factor/id".into(), id.into());
+
+    let page_match = vec![data];
+
+    let filter = Expr::in_(Expr::ident("test/int"), Value::List(vec![42.into()]));
+    let items = db
+        .select(Select::new().with_filter(filter))
         .await
         .unwrap()
         .take_data();
