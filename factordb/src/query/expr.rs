@@ -98,16 +98,28 @@ impl Expr {
         }
     }
 
+    pub fn in_<I1, I2>(left: I1, right: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<Self>,
+    {
+        Self::binary(left, BinaryOp::In, right)
+    }
+
+    pub fn contains<I1, I2>(left: I1, right: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<Self>,
+    {
+        Self::binary(left, BinaryOp::Contains, right)
+    }
+
     pub fn and<I1, I2>(left: I1, right: I2) -> Self
     where
         I1: Into<Self>,
         I2: Into<Self>,
     {
-        Self::BinaryOp {
-            left: Box::new(left.into()),
-            op: BinaryOp::And,
-            right: Box::new(right.into()),
-        }
+        Self::binary(left, BinaryOp::And, right)
     }
 
     pub fn and_with(self, other: impl Into<Self>) -> Self {
@@ -119,11 +131,7 @@ impl Expr {
         I1: Into<Self>,
         I2: Into<Self>,
     {
-        Self::BinaryOp {
-            left: Box::new(left.into()),
-            op: BinaryOp::Or,
-            right: Box::new(right.into()),
-        }
+        Self::binary(left, BinaryOp::Or, right)
     }
 
     pub fn eq<I1, I2>(left: I1, right: I2) -> Self
@@ -131,11 +139,7 @@ impl Expr {
         I1: Into<Self>,
         I2: Into<Self>,
     {
-        Self::BinaryOp {
-            left: Box::new(left.into()),
-            op: BinaryOp::Eq,
-            right: Box::new(right.into()),
-        }
+        Self::binary(left, BinaryOp::Eq, right)
     }
 
     pub fn neq<I1, I2>(left: I1, right: I2) -> Self
@@ -143,11 +147,7 @@ impl Expr {
         I1: Into<Self>,
         I2: Into<Self>,
     {
-        Self::BinaryOp {
-            left: Box::new(left.into()),
-            op: BinaryOp::Neq,
-            right: Box::new(right.into()),
-        }
+        Self::binary(left, BinaryOp::Neq, right)
     }
 
     pub fn is_null<I>(expr: I) -> Self
