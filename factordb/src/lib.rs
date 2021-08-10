@@ -11,7 +11,7 @@ pub mod registry;
 mod db;
 
 pub use self::{
-    data::{Id, Ident},
+    data::{value::ValueMap, Id, Ident, Value},
     db::Db,
 };
 
