@@ -51,6 +51,10 @@ impl Expr {
         Box::new(self)
     }
 
+    pub fn attr<A: AttributeDescriptor>() -> Self {
+        Self::Attr(A::IDENT)
+    }
+
     pub fn literal<I>(value: I) -> Self
     where
         I: Into<Value>,
