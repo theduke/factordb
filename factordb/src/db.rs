@@ -28,7 +28,25 @@ impl Db {
     where
         I: Into<Ident>,
     {
-        self.backend.entity(id.into()).await
+        use query::expr::Expr;
+
+        // FIXME: remove this once index persistence logic is implemented.
+        match id.into() {
+            Ident::Id(id) => self.backend.entity(id.into()).await,
+            Ident::Name(name) => {
+                let sel = query::select::Select::new()
+                    .with_limit(1)
+                    .with_filter(Expr::eq(
+                        Expr::attr::<crate::schema::builtin::AttrIdent>(),
+                        Expr::literal(name.as_ref()),
+                    ));
+                let mut page = self.select(sel).await?;
+                page.items
+                    .pop()
+                    .map(|item| item.data)
+                    .ok_or_else(|| crate::error::EntityNotFound::new(name.as_ref().into()).into())
+            }
+        }
     }
 
     pub async fn select(
