@@ -284,6 +284,7 @@ pub trait AttrMapExt {
     fn get_type(&self) -> Option<Ident>;
     fn get_type_name(&self) -> Option<&str>;
 
+    fn has_attr<A: AttributeDescriptor>(&self) -> bool;
     fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
     where
         A::Type: TryFrom<Value>;
@@ -320,6 +321,10 @@ impl AttrMapExt for ValueMap<String> {
                 Value::String(name) => Some(name.as_str()),
                 _ => None,
             })
+    }
+
+    fn has_attr<A: AttributeDescriptor>(&self) -> bool {
+        self.0.contains_key(A::QUALIFIED_NAME)
     }
 
     fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
