@@ -319,22 +319,38 @@ impl MemoryStore {
         let reg = self.registry.clone();
 
         // TODO: use query logic instead of full table scan for speedup.
-        for (id, entity) in self.entities.iter_mut() {
-            if Self::entity_filter(entity, selector, &*reg.read().unwrap()) {
-                let mut removed = Vec::new();
+        // TODO: figure out how to do this in one step. Two step process
+        // right now due to borrow checker errors.
+
+        let mut to_remove = Vec::new();
+
+        for (entity_id, entity) in self.entities.iter() {
+            if self.entity_filter(entity, selector, &*reg.read().unwrap()) {
+                let mut removed_attr_ids = Vec::new();
                 for attr_id in &rem.attrs {
-                    if let Some(value) = entity.remove(&attr_id) {
-                        removed.push((*attr_id, value));
+                    if entity.contains_key(&attr_id) {
+                        removed_attr_ids.push(attr_id);
                     }
                 }
 
-                if !removed.is_empty() {
-                    revert.push(RevertOp::TupleAttrsRemoved {
-                        id: *id,
-                        attrs: removed,
-                    })
+                if !removed_attr_ids.is_empty() {
+                    to_remove.push((*entity_id, removed_attr_ids));
                 }
             }
+        }
+
+        for (entity_id, removed_attr_ids) in to_remove {
+            let entity = self.entities.get_mut(&entity_id).unwrap();
+
+            let attrs = removed_attr_ids
+                .into_iter()
+                .filter_map(|attr_id| Some((*attr_id, entity.remove(&attr_id)?)))
+                .collect();
+
+            revert.push(RevertOp::TupleAttrsRemoved {
+                id: entity_id,
+                attrs,
+            });
         }
 
         Ok(())
@@ -634,7 +650,7 @@ impl MemoryStore {
                             }
                         }
 
-                        let flag = Self::entity_filter(item, &filter, &*reg);
+                        let flag = self.entity_filter(item, &filter, &*reg);
                         flag
                     })
                     .collect()
@@ -692,6 +708,7 @@ impl MemoryStore {
     }
 
     fn eval_expr<'a>(
+        &self,
         entity: &MemoryTuple,
         expr: &'a query::expr::Expr,
         reg: &crate::registry::Registry,
@@ -716,13 +733,17 @@ impl MemoryStore {
             },
             query::expr::Expr::Ident(ident) => match ident {
                 Ident::Id(id) => Cow::Owned(Value::Id(*id)),
-                Ident::Name(_name) => {
-                    unimplemented!()
+                Ident::Name(name) => {
+                    if let Some(id) = self.idents.get(name.as_ref()) {
+                        Cow::Owned(id.clone().into())
+                    } else {
+                        cowal_unit()
+                    }
                 }
             },
             query::expr::Expr::Variable(_) => todo!(),
             query::expr::Expr::UnaryOp { op, expr } => {
-                let value = Self::eval_expr(entity, expr, reg);
+                let value = self.eval_expr(entity, expr, reg);
                 match op {
                     query::expr::UnaryOp::Not => {
                         let flag = value.as_bool().unwrap_or(false);
@@ -732,11 +753,9 @@ impl MemoryStore {
             }
             query::expr::Expr::BinaryOp { left, op, right } => match op {
                 query::expr::BinaryOp::And => {
-                    let left_flag = Self::eval_expr(entity, left, reg)
-                        .as_bool()
-                        .unwrap_or(false);
+                    let left_flag = self.eval_expr(entity, left, reg).as_bool().unwrap_or(false);
                     let flag = if left_flag {
-                        Self::eval_expr(entity, right, reg)
+                        self.eval_expr(entity, right, reg)
                             .as_bool()
                             .unwrap_or(false)
                     } else {
@@ -745,21 +764,19 @@ impl MemoryStore {
                     Cow::Owned(Value::Bool(flag))
                 }
                 query::expr::BinaryOp::Or => {
-                    let left_flag = Self::eval_expr(entity, left, reg)
-                        .as_bool()
-                        .unwrap_or(false);
+                    let left_flag = self.eval_expr(entity, left, reg).as_bool().unwrap_or(false);
                     let flag = if left_flag {
                         true
                     } else {
-                        Self::eval_expr(entity, right, reg)
+                        self.eval_expr(entity, right, reg)
                             .as_bool()
                             .unwrap_or(false)
                     };
                     Cow::Owned(Value::Bool(flag))
                 }
                 other => {
-                    let left = Self::eval_expr(entity, left, reg);
-                    let right = Self::eval_expr(entity, right, reg);
+                    let left = self.eval_expr(entity, left, reg);
+                    let right = self.eval_expr(entity, right, reg);
 
                     let flag = match other {
                         query::expr::BinaryOp::Eq => {
@@ -795,13 +812,14 @@ impl MemoryStore {
                 }
             },
             query::expr::Expr::If { value, then, or } => {
-                let flag = Self::eval_expr(entity, &*value, reg)
+                let flag = self
+                    .eval_expr(entity, &*value, reg)
                     .as_bool()
                     .unwrap_or(false);
                 if flag {
-                    Self::eval_expr(entity, &*then, reg)
+                    self.eval_expr(entity, &*then, reg)
                 } else {
-                    Self::eval_expr(entity, &*or, reg)
+                    self.eval_expr(entity, &*or, reg)
                 }
             }
         };
@@ -809,13 +827,12 @@ impl MemoryStore {
     }
 
     fn entity_filter(
+        &self,
         entity: &MemoryTuple,
         expr: &query::expr::Expr,
         reg: &crate::registry::Registry,
     ) -> bool {
-        Self::eval_expr(entity, expr, reg)
-            .as_bool()
-            .unwrap_or(false)
+        self.eval_expr(entity, expr, reg).as_bool().unwrap_or(false)
     }
 
     pub fn purge_all_data(&mut self) {
