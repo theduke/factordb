@@ -77,6 +77,11 @@ impl Registry {
     }
 
     #[inline]
+    pub fn entity_by_name(&self, name: &str) -> Option<&RegisteredEntity> {
+        self.entities.get_by_name(name)
+    }
+
+    #[inline]
     pub fn require_attr_by_name(
         &self,
         name: &str,

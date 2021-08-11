@@ -25,6 +25,9 @@ pub enum UnaryOp {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
     Literal(Value),
+    /// Select the value of an attribute.
+    Attr(Ident),
+    /// Resolve the value of an [`Indent`] into an [`Id`].
     Ident(Ident),
     Variable(String),
     UnaryOp {
@@ -59,7 +62,7 @@ impl Expr {
     where
         I: Into<Ident>,
     {
-        Self::Ident(value.into())
+        Self::Attr(value.into())
     }
 
     pub fn var<S>(name: S) -> Self
@@ -188,8 +191,8 @@ pub(crate) fn expr_is_entity_ident(expr: &Expr) -> Option<Ident> {
             let right = right.as_ref();
 
             let (ident, literal) = match (left, right) {
-                (Expr::Ident(ident), Expr::Literal(value)) => (ident, value),
-                (Expr::Literal(value), Expr::Ident(ident)) => (ident, value),
+                (Expr::Attr(ident), Expr::Literal(value)) => (ident, value),
+                (Expr::Literal(value), Expr::Attr(ident)) => (ident, value),
                 _ => {
                     return None;
                 }
@@ -231,26 +234,26 @@ mod tests {
         // ID.
 
         let a = Expr::eq(
-            Expr::Ident(ATTR_ID.into()),
+            Expr::Attr(ATTR_ID.into()),
             Expr::Literal(Value::Id(Id::nil())),
         );
         assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
         let a = Expr::eq(
             Expr::Literal(Value::Id(Id::nil())),
-            Expr::Ident(ATTR_ID.into()),
+            Expr::Attr(ATTR_ID.into()),
         );
         assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
         let a = Expr::eq(
-            Expr::Ident(AttrId::IDENT),
+            Expr::Attr(AttrId::IDENT),
             Expr::Literal(Value::Id(Id::nil())),
         );
         assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
         let a = Expr::eq(
             Expr::Literal(Value::Id(Id::nil())),
-            Expr::Ident(AttrId::IDENT),
+            Expr::Attr(AttrId::IDENT),
         );
         assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
@@ -260,26 +263,26 @@ mod tests {
         let hello_ident = Ident::from("hello");
 
         let a = Expr::eq(
-            Expr::Ident(ATTR_IDENT.into()),
+            Expr::Attr(ATTR_IDENT.into()),
             Expr::Literal(hello_value.clone()),
         );
         assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
 
         let a = Expr::eq(
             Expr::Literal(hello_value.clone()),
-            Expr::Ident(ATTR_IDENT.into()),
+            Expr::Attr(ATTR_IDENT.into()),
         );
         assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
 
         let a = Expr::eq(
-            Expr::Ident(AttrIdent::IDENT),
+            Expr::Attr(AttrIdent::IDENT),
             Expr::Literal(hello_value.clone()),
         );
         assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
 
         let a = Expr::eq(
             Expr::Literal(hello_value.clone()),
-            Expr::Ident(AttrIdent::IDENT),
+            Expr::Attr(AttrIdent::IDENT),
         );
         assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
     }

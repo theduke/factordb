@@ -700,7 +700,7 @@ impl MemoryStore {
 
         let out = match expr {
             query::expr::Expr::Literal(v) => Cow::Borrowed(v),
-            query::expr::Expr::Ident(ident) => match ident {
+            query::expr::Expr::Attr(ident) => match ident {
                 Ident::Id(id) => entity
                     .get(id)
                     .map(|x| Cow::Owned(x.to_value()))
@@ -713,6 +713,12 @@ impl MemoryStore {
                             .map(|x| Cow::Owned(x.to_value()))
                     })
                     .unwrap_or(cowal_unit()),
+            },
+            query::expr::Expr::Ident(ident) => match ident {
+                Ident::Id(id) => Cow::Owned(Value::Id(*id)),
+                Ident::Name(_name) => {
+                    unimplemented!()
+                }
             },
             query::expr::Expr::Variable(_) => todo!(),
             query::expr::Expr::UnaryOp { op, expr } => {
@@ -756,7 +762,10 @@ impl MemoryStore {
                     let right = Self::eval_expr(entity, right, reg);
 
                     let flag = match other {
-                        query::expr::BinaryOp::Eq => left == right,
+                        query::expr::BinaryOp::Eq => {
+                            tracing::trace!(?left, ?right, "BinaryOp::Eq");
+                            left == right
+                        }
                         query::expr::BinaryOp::Neq => left != right,
                         query::expr::BinaryOp::Gt => left > right,
                         query::expr::BinaryOp::Gte => left >= right,
@@ -769,6 +778,7 @@ impl MemoryStore {
                             _ => false,
                         },
                         query::expr::BinaryOp::In => {
+                            tracing::trace!(?left, ?right, "comparing BinaryOp::In");
                             // TODO: probably need to cover more variants here!
                             match (left.as_ref(), right.as_ref()) {
                                 (value, Value::List(items)) => items.iter().any(|x| x == value),
