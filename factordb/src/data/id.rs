@@ -106,6 +106,16 @@ impl Ident {
             None
         }
     }
+
+    /// Returns `true` if the ident is [`Id`].
+    pub fn is_id(&self) -> bool {
+        matches!(self, Self::Id(..))
+    }
+
+    /// Returns `true` if the ident is [`Name`].
+    pub fn is_name(&self) -> bool {
+        matches!(self, Self::Name(..))
+    }
 }
 
 impl From<Id> for Ident {
