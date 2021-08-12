@@ -120,11 +120,11 @@ impl ValueTypeDescriptor for i64 {
     }
 }
 
-impl ValueTypeDescriptor for u8 {
-    fn value_type() -> ValueType {
-        ValueType::Int
-    }
-}
+// impl ValueTypeDescriptor for u8 {
+//     fn value_type() -> ValueType {
+//         ValueType::Int
+//     }
+// }
 
 impl ValueTypeDescriptor for u16 {
     fn value_type() -> ValueType {
@@ -162,9 +162,9 @@ impl ValueTypeDescriptor for String {
     }
 }
 
-impl ValueTypeDescriptor for Vec<u8> {
+impl<T: ValueTypeDescriptor> ValueTypeDescriptor for Vec<T> {
     fn value_type() -> ValueType {
-        ValueType::Bytes
+        ValueType::List(Box::new(T::value_type()))
     }
 }
 
@@ -335,6 +335,14 @@ impl Value {
         }
     }
 
+    pub fn as_list(&self) -> Option<&[Value]> {
+        if let Self::List(items) = self {
+            Some(&*items)
+        } else {
+            None
+        }
+    }
+
     /// Returns `true` if the value is [`Bytes`].
     pub fn is_bytes(&self) -> bool {
         matches!(self, Self::Bytes(..))
@@ -429,9 +437,10 @@ impl<'a> From<&'a [u8]> for Value {
     }
 }
 
-impl From<Vec<u8>> for Value {
-    fn from(v: Vec<u8>) -> Self {
-        Self::Bytes(v)
+impl<T: Into<Value>> From<Vec<T>> for Value {
+    fn from(v: Vec<T>) -> Self {
+        let items = v.into_iter().map(Into::into).collect();
+        Self::List(items)
     }
 }
 
