@@ -6,7 +6,7 @@ use crate::{
     data::{Id, Value, ValueType},
     error, map,
     query::{self, expr::Expr, migrate::Migration, select::Select},
-    schema::{self, builtin::AttrId, AttributeDescriptor},
+    schema::{self, builtin::AttrId, AttributeDescriptor, EntityAttribute, EntitySchema},
     Db,
 };
 
@@ -22,11 +22,25 @@ const NS_TEST: &'static str = "test";
 
 const ATTR_TEXT: &'static str = "text";
 const ATTR_INT: &'static str = "int";
+const ENTITY_COMMENT: &'static str = "test/comment";
 
 async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
         .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int));
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int))
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_COMMENT.into(),
+            title: Some("Comment".into()),
+            description: None,
+            attributes: vec![EntityAttribute {
+                attribute: "test/int".into(),
+                cardinality: schema::Cardinality::Many,
+            }],
+            extends: Vec::new(),
+            strict: false,
+        });
+
     db.migrate(mig).await.unwrap();
 }
 
@@ -54,6 +68,10 @@ async fn test_db_with_test_schema(db: &Db) {
     apply_test_schema(db).await;
     test_query_in(db).await;
     db.purge_all_data().await.unwrap();
+
+    apply_test_schema(db).await;
+    test_merge_list_attr(db).await;
+    db.purge_all_data().await.unwrap();
 }
 
 async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
@@ -67,6 +85,33 @@ async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
         .await;
 
     assert!(res.is_err());
+}
+
+async fn test_merge_list_attr(db: &Db) {
+    let id = Id::random();
+    db.create(
+        id,
+        map! {
+            "factor/type": ENTITY_COMMENT,
+            "test/int": vec![22],
+        },
+    )
+    .await
+    .unwrap();
+
+    db.merge(
+        id,
+        map! {
+            "test/int": vec![22, 23],
+        },
+    )
+    .await
+    .unwrap();
+
+    let map = db.entity(id).await.unwrap();
+    let values = map.get("test/int").unwrap();
+    let v: Value = vec![22, 23].into();
+    assert_eq!(values, &v);
 }
 
 async fn test_create_attribute(f: &Db) {
