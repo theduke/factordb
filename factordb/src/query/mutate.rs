@@ -109,6 +109,13 @@ impl BatchUpdate {
     }
 }
 
+impl From<Mutate> for BatchUpdate {
+
+    fn from(v: Mutate) -> Self {
+        Self {actions: vec![v]}
+    }
+}
+
 impl From<Vec<Mutate>> for BatchUpdate {
     fn from(v: Vec<Mutate>) -> Self {
         BatchUpdate { actions: v }
