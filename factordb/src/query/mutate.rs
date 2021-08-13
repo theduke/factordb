@@ -54,6 +54,12 @@ impl Mutate {
         Self::Create(Create { id, data })
     }
 
+    pub fn merge(id: Id, data: DataMap) -> Self {
+        Self::Merge(Merge{
+            id, data
+        })
+    }
+
     pub fn merge_from_map(data: DataMap) -> Result<Self, crate::AnyError> {
         let id = data
             .get_id()
