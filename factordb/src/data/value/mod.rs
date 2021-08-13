@@ -352,6 +352,14 @@ impl Value {
     pub fn is_id(&self) -> bool {
         matches!(self, Self::Id(..))
     }
+
+    pub fn as_map_mut(&mut self) -> Option<&mut ValueMap<Value>> {
+        if let Self::Map(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<bool> for Value {
