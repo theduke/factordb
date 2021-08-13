@@ -57,6 +57,7 @@ struct FieldAttrs {
     attribute: Option<syn::Path>,
     extend: bool,
     is_relation: bool,
+    ignored: bool,
     // relation: Option<syn::Path>,
 }
 
@@ -68,9 +69,12 @@ impl syn::parse::Parse for FieldAttrs {
         let input;
         syn::parenthesized!(input in outer);
 
-        let mut attribute = None;
-        let mut extend = false;
-        let mut relation = false;
+        let mut attrs = FieldAttrs {
+            attribute: None,
+            extend: false,
+            is_relation: false,
+            ignored: false,
+        };
         // let mut relation = None;
 
         while !input.is_empty() {
@@ -81,10 +85,10 @@ impl syn::parse::Parse for FieldAttrs {
                     let _eq: syn::token::Eq = input.parse()?;
 
                     let v = input.parse()?;
-                    attribute = Some(v);
+                    attrs.attribute = Some(v);
                 }
                 "relation" => {
-                    relation = true;
+                    attrs.is_relation = true;
 
                     // if input.peek(syn::token::Eq) {
                     //     let _eq: syn::token::Eq = input.parse()?;
@@ -94,7 +98,10 @@ impl syn::parse::Parse for FieldAttrs {
                     // }
                 }
                 "extend" => {
-                    extend = true;
+                    attrs.extend = true;
+                }
+                "ignore" => {
+                    attrs.ignored = true;
                 }
                 _other => Err(input.error(FIELD_USAGE))?,
             }
@@ -104,18 +111,14 @@ impl syn::parse::Parse for FieldAttrs {
             }
         }
 
-        if attribute.is_none() && !(extend || relation) {
-            return Err(
-                input.error("Must either specify or #[factor(attr = AttrType)] #[factor(extend)]")
-            );
+        if !attrs.ignored {
+            if attrs.attribute.is_none() && !(attrs.extend || attrs.is_relation) {
+                return Err(input
+                    .error("Must either specify or #[factor(attr = AttrType)] #[factor(extend)]"));
+            }
         }
 
-        Ok(FieldAttrs {
-            attribute,
-            extend,
-            is_relation: relation,
-            // relation,
-        })
+        Ok(attrs)
     }
 }
 
@@ -238,6 +241,11 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             .expect("Could not find #[factor(...) attribute on field");
 
         let field_attrs: FieldAttrs = syn::parse(field_attrs_raw.tokens.clone().into()).unwrap();
+
+        if field_attrs.ignored {
+            continue;
+        }
+
         let field_name = &field.ident.as_ref().expect("Only named fields are allowed");
         let field_ty = &field.ty;
         // let field_name_str = field_name.to_string();
