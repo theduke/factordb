@@ -288,6 +288,11 @@ pub trait AttrMapExt {
     fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
     where
         A::Type: TryFrom<Value>;
+
+    fn get_attr_vec<A: AttributeDescriptor>(&self) -> Option<Vec<A::Type>>
+    where
+        A::Type: TryFrom<Value>;
+
     fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
     where
         A::Type: Into<Value>;
@@ -333,6 +338,23 @@ impl AttrMapExt for ValueMap<String> {
     {
         let value = self.get(A::QUALIFIED_NAME)?.clone();
         TryFrom::try_from(value).ok()
+    }
+
+    fn get_attr_vec<A: AttributeDescriptor>(&self) -> Option<Vec<A::Type>>
+    where
+        A::Type: TryFrom<Value>,
+    {
+        match self.get(A::QUALIFIED_NAME)? {
+            Value::List(items) => {
+                let mut typed = Vec::new();
+                for item in items {
+                    let t: A::Type = TryFrom::try_from(item.clone()).ok()?;
+                    typed.push(t);
+                }
+                Some(typed)
+            }
+            _ => None,
+        }
     }
 
     fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
