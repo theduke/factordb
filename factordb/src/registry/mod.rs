@@ -2,11 +2,13 @@ mod attribute_registry;
 mod entity_registry;
 
 use std::{
+    convert::TryInto,
     str::FromStr,
     sync::{Arc, RwLock},
 };
 
 use anyhow::{anyhow, Context};
+use ordered_float::Float;
 
 use crate::{
     backend::{DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace},
@@ -164,25 +166,91 @@ impl Registry {
         ty: &ValueType,
         value: &mut Value,
     ) -> Result<(), AnyError> {
+        fn make_err(
+            attr_name: &str,
+            expected_type: &ValueType,
+            actual_type: &ValueType,
+        ) -> Result<(), AnyError> {
+            Err(anyhow!(
+                "Invalid attribute '{}' - expected a {:?} but got '{:?}'",
+                attr_name,
+                expected_type,
+                actual_type,
+            ))
+        }
+
         match ty {
             ValueType::Unit
             | ValueType::Bool
-            | ValueType::Int
-            | ValueType::UInt
             | ValueType::Float
-            | ValueType::String
             | ValueType::Map
             | ValueType::Bytes => {
                 let actual_ty = value.value_type();
                 if &actual_ty != ty {
-                    return Err(anyhow!(
-                        "Invalid attribute '{}' - expected a {:?} but got '{:?}'",
-                        name,
-                        ty,
-                        actual_ty
-                    ));
+                    return make_err(name, ty, &actual_ty);
                 }
             }
+            ValueType::Int => match value {
+                Value::Int(_) => {}
+                Value::UInt(x) => {
+                    if let Ok(intval) = x.clone().try_into() {
+                        *value = Value::Int(intval);
+                    } else {
+                        return Err(anyhow!(
+                            "Invalid attribute '{}' - expected an Int but got a UInt that exceeds the Int value range",
+                            name,
+                        ));
+                    }
+                }
+                Value::Float(floatval) => {
+                    if floatval.fract() == 0.0 {
+                        *value = Value::Int(*floatval.trunc() as i64)
+                    } else {
+                        return make_err(name, ty, &ValueType::Float);
+                    }
+                }
+                other => {
+                    return make_err(name, ty, &other.value_type());
+                }
+            },
+            ValueType::UInt => match value {
+                Value::UInt(_) => {}
+                Value::Int(x) => {
+                    if let Ok(uintval) = x.clone().try_into() {
+                        *value = Value::UInt(uintval);
+                    } else {
+                        return Err(anyhow!(
+                            "Invalid attribute '{}' - expected a UInt but got an Int that exceeds the UInt value range",
+                            name,
+                        ));
+                    }
+                }
+                Value::Float(floatval) => {
+                    if floatval.fract() == 0.0 {
+                        *value = Value::UInt(*floatval.trunc() as u64)
+                    } else {
+                        return make_err(name, ty, &ValueType::Float);
+                    }
+                }
+                other => {
+                    return make_err(name, ty, &other.value_type());
+                }
+            },
+            ValueType::String => match value {
+                Value::Int(v) => {
+                    *value = Value::String(v.to_string());
+                }
+                Value::UInt(v) => {
+                    *value = Value::String(v.to_string());
+                }
+                Value::Float(v) => {
+                    *value = Value::String(v.to_string());
+                }
+                Value::String(_) => {}
+                other => {
+                    return make_err(name, ty, &other.value_type());
+                }
+            },
             ValueType::List(_item_type) => {
                 panic!("Internal error: List is not a valid ValueType for attributes");
             }
