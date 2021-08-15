@@ -18,6 +18,11 @@ where
     pub fn new() -> Self {
         Self(BTreeMap::new())
     }
+
+    pub fn with_insert(mut self, key: impl Into<K>, value: impl Into<Value>) -> Self {
+        self.insert(key.into(), value.into());
+        self
+    }
 }
 
 impl<K> ValueMap<K> {
