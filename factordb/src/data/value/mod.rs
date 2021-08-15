@@ -1,6 +1,7 @@
 mod de;
 mod map;
 mod ser;
+// pub mod patch;
 
 use anyhow::anyhow;
 use ordered_float::OrderedFloat;
@@ -503,6 +504,18 @@ impl From<Ident> for Value {
         match ident {
             Ident::Id(id) => id.into(),
             Ident::Name(name) => name.to_string().into(),
+        }
+    }
+}
+
+impl TryFrom<Value> for Id {
+    type Error = AnyError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        if let Value::Id(v) = value {
+            Ok(v)
+        } else {
+            Err(anyhow::anyhow!("Invalid type: expected a Value::Id"))
         }
     }
 }
