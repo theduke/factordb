@@ -55,9 +55,7 @@ impl Mutate {
     }
 
     pub fn merge(id: Id, data: DataMap) -> Self {
-        Self::Merge(Merge{
-            id, data
-        })
+        Self::Merge(Merge { id, data })
     }
 
     pub fn merge_from_map(data: DataMap) -> Result<Self, crate::AnyError> {
@@ -110,9 +108,8 @@ impl BatchUpdate {
 }
 
 impl From<Mutate> for BatchUpdate {
-
     fn from(v: Mutate) -> Self {
-        Self {actions: vec![v]}
+        Self { actions: vec![v] }
     }
 }
 

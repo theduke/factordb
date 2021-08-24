@@ -150,8 +150,14 @@ impl<T> Page<Item<T>> {
 }
 
 impl Page<Item<DataMap>> {
-    pub fn convert_data<T: serde::de::DeserializeOwned>(self) -> Result<Page<T>, crate::data::value::ValueDeserializeError> {
-        let items = self.items.into_iter().map(|item| -> Result<T, _> { crate::data::value::from_value_map(item.data) }).collect::<Result<Vec<_>, _>>()?;
+    pub fn convert_data<T: serde::de::DeserializeOwned>(
+        self,
+    ) -> Result<Page<T>, crate::data::value::ValueDeserializeError> {
+        let items = self
+            .items
+            .into_iter()
+            .map(|item| -> Result<T, _> { crate::data::value::from_value_map(item.data) })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Page {
             items,
             next_cursor: self.next_cursor,
