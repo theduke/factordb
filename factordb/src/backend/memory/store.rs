@@ -514,8 +514,6 @@ impl MemoryStore {
 
     /// Revert a list of changes.
     fn apply_revert(&mut self, revert: RevertList) {
-        dbg!("applying revert", &revert);
-
         // NOTE: MUST revert in reverse order to preserve consistency.
         for op in revert.into_iter().rev() {
             match op {
