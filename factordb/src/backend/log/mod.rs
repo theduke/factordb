@@ -55,7 +55,6 @@ pub struct LogDb {
 
 struct State {
     registry: registry::SharedRegistry,
-    converter: Box<dyn LogConverter + Send + Sync + 'static>,
     mutable: futures::lock::Mutex<MutableState>,
     mem: RwLock<MemoryStore>,
 }
@@ -73,14 +72,12 @@ impl MutableState {
 }
 
 impl LogDb {
-    pub async fn open<S, C>(store: S, converter: C) -> Result<Self, AnyError>
+    pub async fn open<S>(store: S) -> Result<Self, AnyError>
     where
-        C: LogConverter + Send + Sync + 'static,
         S: LogStore + Send + Sync + 'static,
     {
         let registry = registry::Registry::new().into_shared();
         let state = State {
-            converter: Box::new(converter),
             mem: RwLock::new(MemoryStore::new(registry.clone())),
             registry,
             mutable: futures::lock::Mutex::new(MutableState {
@@ -118,20 +115,12 @@ impl LogDb {
         let state = self.state.mutable.lock().await;
 
         for event_id in 0..=state.current_event_id {
-            if let Some(raw_event) = state.store.read_event(event_id).await? {
-                let event = self.deserialize_event(raw_event)?;
+            if let Some(event) = state.store.read_event(event_id).await? {
                 writer(event)?;
             }
         }
 
         Ok(())
-    }
-
-    fn deserialize_event(&self, raw_event: Vec<u8>) -> Result<LogEvent, AnyError> {
-        self.state
-            .converter
-            .deserialize(raw_event)
-            .context("Could not deserialize event")
     }
 
     async fn restore(&self) -> Result<(), AnyError> {
@@ -145,8 +134,7 @@ impl LogDb {
                 let mut stream = mutable.store.iter_events(0, EventId::MAX).await?;
 
                 while let Some(res) = stream.next().await {
-                    let raw_event = res?;
-                    let event = self.deserialize_event(raw_event)?;
+                    let event = res?;
                     event_id = event.id;
 
                     tracing::trace!(?event, "restoring logdb event");
@@ -195,9 +183,7 @@ impl LogDb {
         mutable: &mut MutableState,
         event: LogEvent,
     ) -> Result<(), AnyError> {
-        let raw = self.state.converter.serialize(&event)?;
-        let written_id = mutable.store.write_event(event.id, raw).await?;
-        assert_eq!(written_id, event.id);
+        mutable.store.write_event(event).await?;
         Ok(())
     }
 
@@ -327,20 +313,22 @@ pub trait LogStore {
         &self,
         from: EventId,
         until: EventId,
-    ) -> BoxFuture<Result<BoxStream<Result<Vec<u8>, AnyError>>, AnyError>>;
-    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<Vec<u8>>, AnyError>>;
+    ) -> BoxFuture<Result<BoxStream<Result<LogEvent, AnyError>>, AnyError>>;
+
+    /// Read a single event.
+    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>>;
 
     /// Write an event to the log.
     /// Returns the event id.
     /// Note that this required mutable access
-    fn write_event(&mut self, id: EventId, event: Vec<u8>) -> BoxFuture<Result<EventId, AnyError>>;
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<Result<(), AnyError>>;
 
     /// Delete all events.
     fn clear(&mut self) -> BoxFuture<'static, Result<(), AnyError>>;
 }
 
 /// De/serialier for a [LogStore].
-pub trait LogConverter {
+pub trait LogConverter: Clone {
     fn serialize(&self, event: &LogEvent) -> Result<Vec<u8>, AnyError>;
     fn deserialize(&self, data: Vec<u8>) -> Result<LogEvent, AnyError>;
 }
@@ -354,12 +342,9 @@ mod tests {
     #[test]
     fn test_log_backend_with_memory_store() {
         let log = futures::executor::block_on(async {
-            LogDb::open(
-                log_memory::MemoryLogStore::new(),
-                convert_json::JsonConverter,
-            )
-            .await
-            .unwrap()
+            LogDb::open(log_memory::MemoryLogStore::new())
+                .await
+                .unwrap()
         });
         crate::tests::test_backend(log, |f| futures::executor::block_on(f));
     }
@@ -368,12 +353,9 @@ mod tests {
     fn test_log_backend_with_memory_store_restore() {
         // Test that restores work.
         futures::executor::block_on(async {
-            let log = LogDb::open(
-                log_memory::MemoryLogStore::new(),
-                convert_json::JsonConverter,
-            )
-            .await
-            .unwrap();
+            let log = LogDb::open(log_memory::MemoryLogStore::new())
+                .await
+                .unwrap();
             let db = crate::Db::new(log.clone());
 
             let mig = query::migrate::Migration {
@@ -414,12 +396,9 @@ mod tests {
     #[test]
     fn test_log_backend_with_memory_store_export() {
         futures::executor::block_on(async {
-            let log = LogDb::open(
-                log_memory::MemoryLogStore::new(),
-                convert_json::JsonConverter,
-            )
-            .await
-            .unwrap();
+            let log = LogDb::open(log_memory::MemoryLogStore::new())
+                .await
+                .unwrap();
             let db = crate::Db::new(log.clone());
 
             let id = Id::random();

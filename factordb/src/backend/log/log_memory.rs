@@ -6,12 +6,12 @@ use futures::{
 
 use crate::AnyError;
 
-use super::EventId;
+use super::{EventId, LogEvent};
 
 /// Mock memory log store.
 /// Only useful for testing.
 pub struct MemoryLogStore {
-    events: std::collections::BTreeMap<super::EventId, Vec<u8>>,
+    events: std::collections::BTreeMap<super::EventId, LogEvent>,
 }
 
 impl MemoryLogStore {
@@ -28,7 +28,7 @@ impl MemoryLogStore {
     }
 }
 
-type StreamFuture<'a> = BoxFuture<'a, Result<BoxStream<'a, Result<Vec<u8>, AnyError>>, AnyError>>;
+type StreamFuture<'a> = BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, AnyError>>, AnyError>>;
 
 impl super::LogStore for MemoryLogStore {
     fn iter_events(&self, from: super::EventId, until: super::EventId) -> StreamFuture {
@@ -41,23 +41,23 @@ impl super::LogStore for MemoryLogStore {
         ready(res).boxed()
     }
 
-    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<Vec<u8>>, AnyError>> {
+    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>> {
         let res = self.events.get(&id).cloned().map(Ok).transpose();
         ready(res).boxed()
     }
 
-    fn write_event(&mut self, id: EventId, event: Vec<u8>) -> BoxFuture<Result<EventId, AnyError>> {
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<Result<(), AnyError>> {
         let expected_id = self.events.len() as u64 + 1;
 
-        let res = if id != expected_id {
+        let res = if event.id != expected_id {
             Err(anyhow::anyhow!(
                 "Event id mismatch - expected {}, got {}",
                 expected_id,
-                id,
+                event.id,
             ))
         } else {
-            self.events.insert(id, event);
-            Ok(id)
+            self.events.insert(event.id, event);
+            Ok(())
         };
 
         ready(res).boxed()

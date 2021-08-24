@@ -1,5 +1,6 @@
 use crate::AnyError;
 
+#[derive(Clone, Copy, Debug)]
 pub struct JsonConverter;
 
 impl super::LogConverter for JsonConverter {
