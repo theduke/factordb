@@ -44,14 +44,25 @@ async fn apply_test_schema(db: &Db) {
     db.migrate(mig).await.unwrap();
 }
 
+macro_rules! run_tests {
+    ( $db:expr, [ $( $name:ident , )* ] ) => {
+        {
+        let db = $db;
+        $(
+        eprintln!("Running test '{}' ...", stringify!($name));
+        apply_test_schema(db).await;
+        $name(db).await;
+        db.purge_all_data().await.unwrap();
+        )*
+        }
+    };
+}
+
 async fn test_db(db: Db) {
     test_assert_simple(&db).await;
     db.purge_all_data().await.unwrap();
 
     test_create_attribute(&db).await;
-    db.purge_all_data().await.unwrap();
-
-    test_assert_fails_with_incorrect_value_type(&db).await;
     db.purge_all_data().await.unwrap();
 
     test_remove_attr(&db).await;
@@ -61,30 +72,15 @@ async fn test_db(db: Db) {
 }
 
 async fn test_db_with_test_schema(db: &Db) {
-    apply_test_schema(db).await;
-    test_select(db).await;
-    db.purge_all_data().await.unwrap();
-
-    apply_test_schema(db).await;
-    test_query_in(db).await;
-    db.purge_all_data().await.unwrap();
-
-    apply_test_schema(db).await;
-    test_merge_list_attr(db).await;
-    db.purge_all_data().await.unwrap();
-}
-
-async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
-    let res = f
-        .create(
-            Id::random(),
-            map! {
-                "factor/description": 22,
-            },
-        )
-        .await;
-
-    assert!(res.is_err());
+    run_tests!(
+        db,
+        [
+            test_select,
+            test_query_in,
+            test_merge_list_attr,
+            test_assert_fails_with_incorrect_value_type,
+        ]
+    );
 }
 
 async fn test_merge_list_attr(db: &Db) {
@@ -269,4 +265,17 @@ async fn test_remove_attr(db: &Db) {
     data.remove("test/removeAttr");
     let data3 = db.entity(id).await.unwrap();
     assert_eq!(data, data3);
+}
+
+async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
+    let res = f
+        .create(
+            Id::random(),
+            map! {
+                "test/int": "hello",
+            },
+        )
+        .await;
+
+    assert!(res.is_err());
 }
