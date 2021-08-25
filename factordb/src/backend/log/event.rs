@@ -8,10 +8,10 @@ pub struct LogEvent {
 }
 
 impl LogEvent {
-    // /// Get a reference to the log event's id.
-    // fn id(&self) -> EventId {
-    //     self.id
-    // }
+    /// Get a reference to the log event's id.
+    pub fn id(&self) -> super::EventId {
+        self.id
+    }
 
     // fn from_op(op: super::DbOp) -> Option<Self> {
     //     use super::{DbOp, TupleOp};
