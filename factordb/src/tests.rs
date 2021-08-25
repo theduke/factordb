@@ -98,7 +98,7 @@ async fn test_merge_list_attr(db: &Db) {
     db.merge(
         id,
         map! {
-            "test/int": vec![22, 23],
+            "test/int": vec![23],
         },
     )
     .await

@@ -8,7 +8,7 @@ use crate::{
     schema, AnyError,
 };
 
-use super::memory_data::MemoryTuple;
+use super::memory_data::{MemoryTuple, MemoryValue};
 
 /// Memory store for building a backend.
 ///
@@ -248,16 +248,34 @@ impl MemoryStore {
 
         let mut replaced_values = Vec::new();
 
-        for (key, value) in update.data.0 {
-            // FIXME: properly patch!
+        for (key, new_value) in update.data.0 {
             let attr = reg.require_attr_by_name(&key)?;
-            let value = self.interner.intern_value(value);
-            let old_value = old.0.remove(&attr.schema.id);
-            replaced_values.push((attr.schema.id, old_value));
-            old.0.insert(attr.schema.id, value);
+
+            // FIXME: this logic should not be here, but be handled by
+            // Registry::validate_merge
+            if let Some(old_value) = old.remove(&attr.schema.id) {
+                // FIXME: this is hacky and only covers lists...
+                match (old_value, new_value) {
+                    (MemoryValue::List(mut old_items), Value::List(new_items)) => {
+                        for item in new_items {
+                            old_items.push(self.interner.intern_value(item));
+                        }
+                        old.0.insert(attr.schema.id, MemoryValue::List(old_items));
+                    }
+                    (old_value, new_value) => {
+                        old.0
+                            .insert(attr.schema.id, self.interner.intern_value(new_value));
+                        replaced_values.push((attr.schema.id, Some(old_value)));
+                    }
+                }
+            } else {
+                old.0
+                    .insert(attr.schema.id, self.interner.intern_value(new_value));
+            };
         }
 
         if !replaced_values.is_empty() {
+            // FIXME: this doesn't UNDO properly for new values.
             revert.push(RevertOp::TupleMerged {
                 id: update.id,
                 replaced_data: replaced_values,
