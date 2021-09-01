@@ -2,7 +2,7 @@ pub mod builtin;
 
 pub mod logic;
 
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 
 use crate::data::{value::ValueMap, DataMap, Id, Ident, Value, ValueType};
 
@@ -64,6 +64,11 @@ pub struct AttributeSchema {
     /// in entities with a schema that specifies the attribute.
     #[serde(rename = "factor/isStrict")]
     pub strict: bool,
+
+    /// Extra attributes not covered by the schema.
+    /// This allows for user-supplied attributes.
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 }
 
 impl AttributeSchema {
@@ -196,6 +201,11 @@ pub struct EntitySchema {
     // pub from: Option<Ident>,
     // #[serde(rename = "factor/relationTo")]
     // pub to: Option<Ident>,
+
+    /// Extra attributes not covered by the schema.
+    /// This allows for user-supplied attributes.
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 }
 
 impl EntitySchema {
