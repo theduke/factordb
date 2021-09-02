@@ -5,7 +5,9 @@ use data::DataMap;
 use crate::{
     backend::Backend,
     data::{self, Id, Ident},
-    query, AnyError,
+    query,
+    schema::EntityContainer,
+    AnyError,
 };
 
 #[derive(Clone)]
@@ -64,6 +66,15 @@ impl Db {
             })],
         })
         .await
+    }
+
+    pub async fn create_entity<E: EntityContainer + serde::Serialize>(
+        &self,
+        entity: E,
+    ) -> Result<(), AnyError> {
+        let id = entity.id();
+        let data = entity.into_map()?;
+        self.create(id, data).await
     }
 
     pub async fn replace(&self, id: Id, data: DataMap) -> Result<(), AnyError> {

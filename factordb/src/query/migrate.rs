@@ -72,6 +72,14 @@ impl Migration {
         self
     }
 
+    pub fn attr_upsert(mut self, attr: schema::AttributeSchema) -> Self {
+        self.actions
+            .push(SchemaAction::AttributeUpsert(AttributeUpsert {
+                schema: attr,
+            }));
+        self
+    }
+
     pub fn attr_delete(mut self, name: impl Into<String>) -> Self {
         self.actions
             .push(SchemaAction::AttributeDelete(AttributeDelete {
@@ -83,6 +91,12 @@ impl Migration {
     pub fn entity_create(mut self, entity: schema::EntitySchema) -> Self {
         self.actions
             .push(SchemaAction::EntityCreate(EntityCreate { schema: entity }));
+        self
+    }
+
+    pub fn entity_upsert(mut self, entity: schema::EntitySchema) -> Self {
+        self.actions
+            .push(SchemaAction::EntityUpsert(EntityUpsert { schema: entity }));
         self
     }
 

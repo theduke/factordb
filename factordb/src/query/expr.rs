@@ -1,7 +1,4 @@
-use crate::{
-    data::{Ident, Value},
-    schema::AttributeDescriptor,
-};
+use crate::{data::{Ident, Value}, schema::{AttributeDescriptor, EntityDescriptor, builtin::AttrType}};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -169,6 +166,10 @@ impl Expr {
         I: Into<Self>,
     {
         Self::neq(expr, Self::Literal(Value::Unit))
+    }
+
+    pub fn is_entity<T: EntityDescriptor>() -> Self {
+        Self::eq(Expr::attr::<AttrType>(), T::QUALIFIED_NAME)
     }
 }
 
