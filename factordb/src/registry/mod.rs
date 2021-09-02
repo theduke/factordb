@@ -227,6 +227,15 @@ impl Registry {
         self.entities.register(entity, validate, &self.attrs)
     }
 
+    pub fn entity_update(
+        &mut self,
+        entity: schema::EntitySchema,
+        validate: bool,
+    ) -> Result<(), AnyError> {
+        self.entities.update(entity, validate, &self.attrs)?;
+        Ok(())
+    }
+
     pub fn register_index(&mut self, index: schema::IndexSchema) -> Result<LocalIndexId, AnyError> {
         self.indexes.register(index, &self.attrs)
     }

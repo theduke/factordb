@@ -370,7 +370,7 @@ fn build_entity_upsert(
         );
     }
 
-    reg.register_entity(schema.clone(), true)?;
+    reg.entity_update(schema.clone(), true)?;
 
     let action = ResolvedAction::new(SchemaAction::EntityUpsert(migrate::EntityUpsert { schema }));
     Ok(vec![action])

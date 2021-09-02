@@ -159,39 +159,64 @@ impl EntityRegistry {
             .verify_non_nil()
             .context("Entity can not have a nil id")?;
 
-        if let Some(_old) = self.get_by_uid(entity.id) {
-            return Err(anyhow!("Entity id already exists: '{}'", entity.id));
-        }
-        if let Some(_old) = self.get_by_name(&entity.ident) {
-            return Err(anyhow!("Entity ident already exists: '{}'", entity.id));
-        }
+        // if let Some(_old) = self.get_by_uid(entity.id) {
+        //     return Err(anyhow!("Entity id already exists: '{}'", entity.id));
+        // }
+        // if let Some(_old) = self.get_by_name(&entity.ident) {
+        //     return Err(anyhow!("Entity ident already exists: '{}'", entity.id));
+        // }
 
         if validate {
-            self.validate_schema(&entity, attrs)?;
+            self.validate_schema(&entity, attrs, true)?;
         }
 
         self.add(entity)
+    }
+
+    /// Register a new entity.
+    // NOTE: Only pub(super) because [Registry] might do additional validation.
+    pub(super) fn update(
+        &mut self,
+        entity: schema::EntitySchema,
+        validate: bool,
+        attrs: &AttributeRegistry,
+    ) -> Result<LocalEntityId, AnyError> {
+        entity
+            .id
+            .verify_non_nil()
+            .context("Entity can not have a nil id")?;
+
+        if validate {
+            self.validate_schema(&entity, attrs, false)?;
+        }
+
+        let old_id = self.must_get_by_uid(entity.id)?.local_id;
+        self.items[old_id.0 as usize].schema = entity;
+        Ok(old_id)
     }
 
     fn validate_schema(
         &self,
         entity: &schema::EntitySchema,
         attrs: &AttributeRegistry,
+        is_new: bool,
     ) -> Result<(), AnyError> {
         crate::schema::validate_namespaced_ident(&entity.ident)?;
 
-        if self.get_by_name(&entity.ident).is_some() {
-            return Err(anyhow!(
-                "Entity with name '{}' already exists",
-                entity.ident
-            ));
-        }
-        if self.get_by_uid(entity.id).is_some() {
-            return Err(anyhow!(
-                "Duplicate entity id: '{}' for new entity '{}'",
-                entity.id,
-                entity.ident
-            ));
+        if is_new {
+            if self.get_by_name(&entity.ident).is_some() {
+                return Err(anyhow!(
+                    "Entity with name '{}' already exists",
+                    entity.ident
+                ));
+            }
+            if self.get_by_uid(entity.id).is_some() {
+                return Err(anyhow!(
+                    "Duplicate entity id: '{}' for new entity '{}'",
+                    entity.id,
+                    entity.ident
+                ));
+            }
         }
 
         // Set for ensuring no duplicate extends.
