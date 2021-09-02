@@ -1,5 +1,8 @@
 mod attribute_registry;
 mod entity_registry;
+mod index_registry;
+
+pub use index_registry::IndexMap;
 
 use std::{
     convert::TryInto,
@@ -11,7 +14,10 @@ use anyhow::{anyhow, Context};
 use ordered_float::Float;
 
 use crate::{
-    backend::{DbOp, TupleCreate, TupleDelete, TupleMerge, TupleOp, TupleReplace},
+    backend::{
+        DbOp, TupleCreate, TupleDelete, TupleIndexInsert, TupleIndexOp, TupleIndexRemove,
+        TupleIndexReplace, TupleMerge, TupleOp, TupleReplace,
+    },
     data::{DataMap, Id, IdMap, Ident, Value, ValueType},
     error, query,
     schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality},
@@ -21,6 +27,7 @@ use crate::{
 pub use self::{
     attribute_registry::{LocalAttributeId, RegisteredAttribute},
     entity_registry::{LocalEntityId, RegisteredEntity},
+    index_registry::{LocalIndexId, RegisteredIndex},
 };
 
 const MAX_NAME_LEN: usize = 50;
@@ -29,6 +36,7 @@ const MAX_NAME_LEN: usize = 50;
 pub struct Registry {
     entities: entity_registry::EntityRegistry,
     attrs: attribute_registry::AttributeRegistry,
+    indexes: index_registry::IndexRegistry,
 }
 
 impl Registry {
@@ -36,6 +44,7 @@ impl Registry {
         let mut s = Self {
             attrs: attribute_registry::AttributeRegistry::new(),
             entities: entity_registry::EntityRegistry::new(),
+            indexes: index_registry::IndexRegistry::new(),
         };
         s.add_builtins();
         s
@@ -47,6 +56,8 @@ impl Registry {
     pub fn reset(&mut self) {
         self.attrs.reset();
         self.entities.reset();
+        self.indexes.reset();
+
         self.add_builtins();
     }
 
@@ -83,6 +94,10 @@ impl Registry {
         self.entities.get_by_name(name)
     }
 
+    pub fn iter_entities(&self) -> impl Iterator<Item = &RegisteredEntity> {
+        self.entities.items.iter().skip(1)
+    }
+
     #[inline]
     pub fn require_attr_by_name(
         &self,
@@ -91,13 +106,60 @@ impl Registry {
         self.attrs.must_get_by_name(name)
     }
 
+    #[inline]
+    pub fn require_attr_by_ident(
+        &self,
+        ident: &Ident,
+    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+        self.attrs.must_get_by_ident(ident)
+    }
+
+    pub fn index_by_local_id(&self, id: LocalIndexId) -> Option<&RegisteredIndex> {
+        self.indexes.get(id)
+    }
+
+    pub fn index_by_name(&self, name: &str) -> Option<&RegisteredIndex> {
+        self.indexes.get_by_name(name)
+    }
+
+    pub fn require_index_by_id(&self, id: Id) -> Result<&RegisteredIndex, error::IndexNotFound> {
+        self.indexes.must_get_by_uid(id)
+    }
+
+    pub fn require_index_by_name(
+        &self,
+        name: &str,
+    ) -> Result<&RegisteredIndex, error::IndexNotFound> {
+        self.indexes.must_get_by_name(name)
+    }
+
+    pub fn iter_indexes(&self) -> impl Iterator<Item = &RegisteredIndex> {
+        self.indexes.iter()
+    }
+
+    pub fn indexes_for_attribute(
+        &self,
+        attribute_id: Id,
+    ) -> Result<Vec<&RegisteredIndex>, error::AttributeNotFound> {
+        let attr = self.attrs.must_get_by_uid(attribute_id)?;
+        Ok(self.indexes.attribute_indexes(attr.local_id))
+    }
+
     fn add_builtins(&mut self) {
         let schema = schema::builtin::builtin_db_schema();
         for attr in schema.attributes {
-            self.register_attribute(attr).unwrap();
+            self.register_attribute(attr)
+                .expect("Internal error: could not register builtin attribute");
         }
         for entity in schema.entities {
-            self.register_entity(entity, true).unwrap();
+            self.register_entity(entity.clone(), true).expect(&format!(
+                "Internal error: could not register builtin entity {}",
+                entity.ident
+            ));
+        }
+        for index in schema.indexes {
+            self.register_index(index)
+                .expect("Internal error: could not register builtin index");
         }
     }
 
@@ -151,6 +213,12 @@ impl Registry {
         self.attrs.register(attr)
     }
 
+    pub fn remove_attribute(&mut self, id: Id) -> Result<(), AnyError> {
+        // FIXME: validate that attribute is not used by any entity or index.
+        self.attrs.remove(id)?;
+        Ok(())
+    }
+
     pub fn register_entity(
         &mut self,
         entity: schema::EntitySchema,
@@ -159,8 +227,19 @@ impl Registry {
         self.entities.register(entity, validate, &self.attrs)
     }
 
+    pub fn register_index(&mut self, index: schema::IndexSchema) -> Result<LocalIndexId, AnyError> {
+        self.indexes.register(index, &self.attrs)
+    }
+
+    pub fn remove_index(&mut self, id: Id) -> Result<(), AnyError> {
+        self.indexes.remove(id)?;
+        Ok(())
+    }
+
     /// Valdiate that a value conforms to a value type.
     /// Coerces values into the desired type where appropriate.
+    ///
+    /// The name is provided for better errors.
     fn validate_coerce_value_named(
         name: &str,
         ty: &ValueType,
@@ -429,6 +508,108 @@ impl Registry {
         Ok(data)
     }
 
+    /// Build the index operations for a entity persist.
+    fn build_index_ops_create(&self, attrs: &DataMap) -> Result<Vec<TupleIndexInsert>, AnyError> {
+        let mut ops = Vec::new();
+
+        for (attr_name, value) in attrs.iter() {
+            let attr = self.attr_by_name(attr_name).unwrap();
+            for index in self.indexes.attribute_indexes(attr.local_id) {
+                if index.schema.attributes.len() > 1 {
+                    return Err(anyhow!("Multi-attribute indexes are not implemented yet!"));
+                }
+
+                ops.push(TupleIndexInsert {
+                    index: index.local_id,
+                    value: value.clone(),
+                    unique: index.schema.unique,
+                });
+            }
+        }
+
+        Ok(ops)
+    }
+
+    /// Build the index operations for a entity persist.
+    fn build_index_ops_update(
+        &self,
+        attrs: &DataMap,
+        old: &DataMap,
+    ) -> Result<Vec<TupleIndexOp>, AnyError> {
+        let mut ops = Vec::new();
+
+        let mut covered_attrs = fnv::FnvHashSet::<LocalAttributeId>::default();
+
+        for (attr_name, value) in attrs.iter() {
+            let attr = self.attr_by_name(attr_name).unwrap();
+            covered_attrs.insert(attr.local_id);
+
+            for index in self.indexes.attribute_indexes(attr.local_id) {
+                if index.schema.attributes.len() > 1 {
+                    // FIXME: implement multi-attribute indexes.
+                    return Err(anyhow!("Multi-attribute indexes are not implemented yet!"));
+                }
+
+                if let Some(old) = old.get(attr_name) {
+                    if old != value {
+                        ops.push(TupleIndexOp::Replace(TupleIndexReplace {
+                            index: index.local_id,
+                            value: value.clone(),
+                            old_value: old.clone(),
+                            unique: index.schema.unique,
+                        }));
+                    }
+                } else {
+                    ops.push(TupleIndexOp::Insert(TupleIndexInsert {
+                        index: index.local_id,
+                        value: value.clone(),
+                        unique: index.schema.unique,
+                    }));
+                }
+            }
+        }
+
+        for (attr_name, value) in old.iter() {
+            let attr = self.attr_by_name(&attr_name).unwrap();
+            if covered_attrs.contains(&attr.local_id) {
+                continue;
+            }
+
+            for index in self.indexes.attribute_indexes(attr.local_id) {
+                if index.schema.attributes.len() > 1 {
+                    // FIXME: implement multi-attribute indexes.
+                    return Err(anyhow!("Multi-attribute indexes are not implemented yet!"));
+                }
+                ops.push(TupleIndexOp::Remove(TupleIndexRemove {
+                    index: index.local_id,
+                    value: value.clone(),
+                }));
+            }
+        }
+
+        Ok(ops)
+    }
+
+    /// Build the index operations for an entity deletion.
+    fn build_index_ops_delete(&self, attrs: &DataMap) -> Result<Vec<TupleIndexRemove>, AnyError> {
+        let mut ops = Vec::new();
+
+        for (attr_name, value) in attrs.iter() {
+            let attr = self.attr_by_name(attr_name).unwrap();
+            for index in self.indexes.attribute_indexes(attr.local_id) {
+                if index.schema.attributes.len() > 1 {
+                    return Err(anyhow!("Multi-attribute indexes are not implemented yet!"));
+                }
+                ops.push(TupleIndexRemove {
+                    index: index.local_id,
+                    value: value.clone(),
+                });
+            }
+        }
+
+        Ok(ops)
+    }
+
     pub fn validate_create(&self, create: query::mutate::Create) -> Result<Vec<DbOp>, AnyError> {
         let id = create.id.non_nil_or_randomize();
 
@@ -436,9 +617,11 @@ impl Registry {
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
         let mut ops = Vec::new();
+        let index_ops = self.build_index_ops_create(&data)?;
         ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
             id: create.id,
             data,
+            index_ops,
         })));
 
         Ok(ops)
@@ -446,18 +629,30 @@ impl Registry {
 
     pub fn validate_replace(
         &self,
-        create: query::mutate::Replace,
-        _old: Option<DataMap>,
+        replace: query::mutate::Replace,
+        old_opt: Option<DataMap>,
     ) -> Result<Vec<DbOp>, AnyError> {
-        let id = create.id.non_nil_or_randomize();
+        let old = if let Some(old) = old_opt {
+            old
+        } else {
+            return self.validate_create(query::mutate::Create {
+                id: replace.id,
+                data: replace.data,
+            });
+        };
 
-        let mut data = self.validate_attributes(create.data)?;
+        let id = replace.id.non_nil_or_randomize();
+
+        let mut data = self.validate_attributes(replace.data)?;
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
+
+        let index_ops = self.build_index_ops_update(&data, &old)?;
 
         let mut ops = Vec::new();
         ops.push(DbOp::Tuple(TupleOp::Replace(TupleReplace {
-            id: create.id,
+            id: replace.id,
             data,
+            index_ops,
         })));
 
         // FIXME: cleanup for old data (index removal etc)
@@ -468,17 +663,26 @@ impl Registry {
     pub fn validate_merge(
         &self,
         merge: query::mutate::Merge,
-        mut old: DataMap,
+        old: DataMap,
     ) -> Result<Vec<DbOp>, AnyError> {
         let id = merge.id.non_nil_or_randomize();
 
+        // TODO: Avoid clone
+        // The old data is cloned below to allow for build_index_ops below.
+        // There is a more performant way to do this...
+        let mut values = old.clone();
         // FIXME: can't use extend here, have to respect list patching etc.
-        old.0.extend(merge.data.0.into_iter());
-        let mut data = self.validate_attributes(old)?;
+        values.0.extend(merge.data.0.into_iter());
+        let mut data = self.validate_attributes(values)?;
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
         let mut ops = Vec::new();
-        ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge { id, data })));
+        let index_ops = self.build_index_ops_update(&data, &old)?;
+        ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge {
+            id,
+            data,
+            index_ops,
+        })));
 
         // FIXME: index updates etc
 
@@ -488,12 +692,13 @@ impl Registry {
     pub fn validate_delete(
         &self,
         del: query::mutate::Delete,
-        _old: DataMap,
+        old: DataMap,
     ) -> Result<Vec<DbOp>, AnyError> {
         let id = del.id;
 
         let mut ops = Vec::new();
-        ops.push(DbOp::Tuple(TupleOp::Delete(TupleDelete { id })));
+        let index_ops = self.build_index_ops_delete(&old)?;
+        ops.push(DbOp::Tuple(TupleOp::Delete(TupleDelete { id, index_ops })));
 
         // FIXME: index updates etc
 

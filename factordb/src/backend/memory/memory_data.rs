@@ -32,7 +32,7 @@ impl Eq for SharedStr {}
 
 // Value for in-memory storage.
 // Uses shared strings to save memory usage.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 pub(super) enum MemoryValue {
     Unit,
 

@@ -7,7 +7,7 @@ pub mod log;
 use crate::{
     data::{DataMap, Id, Ident, Value},
     query::{self, expr::Expr, select::Item},
-    registry::SharedRegistry,
+    registry::{LocalIndexId, SharedRegistry},
     schema, AnyError,
 };
 
@@ -41,52 +41,66 @@ pub trait Backend {
     }
 }
 
-// pub enum SchemaOp {
-//     AttrCreate(AttributeSchema),
-//     AttrDelete(Id),
-//     EntityCreate(EntitySchema),
-//     EntityDelete(Id),
-// }
+#[derive(Clone, Debug)]
+pub struct TupleIndexInsert {
+    pub index: LocalIndexId,
+    pub value: Value,
+    pub unique: bool,
+}
 
-// pub struct TuplePersist {
-//     pub id: Option<Id>,
-//     pub ident: Option<Ident>,
-//     pub data: FnvHashMap<Id, Value>,
-//     pub create: Option<bool>,
-// }
+#[derive(Clone, Debug)]
+pub struct TupleIndexReplace {
+    pub index: LocalIndexId,
+    pub old_value: Value,
+    pub value: Value,
+    pub unique: bool,
+}
 
-// pub struct Migration {
-//     pub ops: Vec<SchemaOp>,
-//     pub persist: Vec<TuplePersist>,
-// }
+#[derive(Clone, Debug)]
+pub struct TupleIndexRemove {
+    pub index: LocalIndexId,
+    pub value: Value,
+}
+
+#[derive(Clone, Debug)]
+pub enum TupleIndexOp {
+    Insert(TupleIndexInsert),
+    Replace(TupleIndexReplace),
+    Remove(TupleIndexRemove),
+}
 
 #[derive(Clone, Debug)]
 pub struct TupleCreate {
     pub id: Id,
     pub data: DataMap,
+    pub index_ops: Vec<TupleIndexInsert>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleReplace {
     pub id: Id,
     pub data: DataMap,
+    pub index_ops: Vec<TupleIndexOp>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleMerge {
     pub id: Id,
     pub data: DataMap,
+    pub index_ops: Vec<TupleIndexOp>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleDelete {
     pub id: Id,
+    pub index_ops: Vec<TupleIndexRemove>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleRemoveAttrs {
     pub id: Id,
     pub attrs: Vec<Id>,
+    pub index_ops: Vec<TupleIndexRemove>,
 }
 
 #[derive(Clone, Debug)]

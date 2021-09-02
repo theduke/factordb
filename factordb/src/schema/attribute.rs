@@ -45,6 +45,16 @@ impl AttributeSchema {
         }
     }
 
+    pub fn with_unique(mut self, unique: bool) -> Self {
+        self.unique = unique;
+        self
+    }
+
+    pub fn with_indexed(mut self, index: bool) -> Self {
+        self.index = index;
+        self
+    }
+
     /// Split the ident into (namespace, name)
     pub fn parse_split_ident(&self) -> Result<(&str, &str), crate::AnyError> {
         super::validate_namespaced_ident(&self.ident)

@@ -1,3 +1,10 @@
+//! This module defines attributes and entities that are built in to factor.
+//! The builtins describe the database schema (attributes, entities, indexes).
+//!
+//! The code here is collected in a single file rather than split across  the
+//! various sibling modules to prevent mistakes with attribute and entity ids,
+//! which are statically defined.
+
 use crate::{
     data::{Id, Ident, ValueType},
     schema::{
@@ -5,6 +12,8 @@ use crate::{
         EntitySchema,
     },
 };
+
+use super::IndexSchema;
 
 pub const NS_FACTOR: &'static str = "factor";
 
@@ -22,11 +31,17 @@ pub const ATTR_STRICT: Id = Id::from_u128(9);
 const ATTR_ATTRIBUTES: Id = Id::from_u128(10);
 const ATTR_EXTEND: Id = Id::from_u128(11);
 const ATTR_ISRELATION: Id = Id::from_u128(12);
+const ATTR_INDEX_ATTRIBUTES: Id = Id::from_u128(13);
 
 // Built-in entity types.
 // Constants are kept together to see ids at a glance.
 pub const ATTRIBUTE_ID: Id = Id::from_u128(1000);
 pub const ENTITY_ID: Id = Id::from_u128(1001);
+pub const INDEX_ID: Id = Id::from_u128(1002);
+
+// Built-in indexes.
+// Constants are kept together to see ids at a glance.
+pub const INDEX_ENTITY_TYPE: Id = Id::from_u128(2001);
 
 pub struct AttrId;
 
@@ -255,6 +270,8 @@ impl EntityDescriptor for AttributeSchemaType {
     }
 }
 
+// EntitySchema attributes and entity type.
+
 pub struct AttrAttributes;
 
 impl AttributeDescriptor for AttrAttributes {
@@ -372,23 +389,70 @@ impl EntityDescriptor for EntitySchemaType {
     }
 }
 
-// pub const ATTR_ID: Id = Id::from_u128(1);
-// pub const ATTR_IDENT: Id = Id::from_u128(2);
-// pub const ATTR_TITLE: Id = Id::from_u128(3);
-// pub const ATTR_TYPE: Id = Id::from_u128(4);
-// pub const ATTR_VALUETYPE: Id = Id::from_u128(5);
-// pub const ATTR_UNIQUE: Id = Id::from_u128(6);
-// pub const ATTR_INDEX: Id = Id::from_u128(7);
-// pub const ATTR_DESCRIPTION: Id = Id::from_u128(8);
-// pub const ATTR_STRICT: Id = Id::from_u128(9);
-// const ATTR_ATTRIBUTES: Id = Id::from_u128(10);
-// const ATTR_EXTEND: Id = Id::from_u128(11);
-// const ATTR_ISRELATION: Id = Id::from_u128(12);
+// IndexSchema attributes and entity type.
 
-// // Built-in entity types.
-// // Constants are kept together to see ids at a glance.
-// pub const ATTRIBUTE_ID: Id = Id::from_u128(1000);
-// pub const ENTITY_ID: Id = Id::from_u128(1001);
+pub struct AttrIndexAttributes;
+
+impl AttributeDescriptor for AttrIndexAttributes {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "index_attributes";
+    const QUALIFIED_NAME: &'static str = "factor/index_attributes";
+    type Type = Vec<Id>;
+
+    fn schema() -> AttributeSchema {
+        AttributeSchema {
+            id: ATTR_INDEX_ATTRIBUTES,
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Indexed Attributes".into()),
+            description: None,
+            value_type: ValueType::Ref,
+            unique: false,
+            index: false,
+            strict: true,
+        }
+    }
+}
+
+pub struct IndexSchemaType;
+
+impl EntityDescriptor for IndexSchemaType {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "Index";
+    const QUALIFIED_NAME: &'static str = "factor/Index";
+
+    fn schema() -> EntitySchema {
+        EntitySchema {
+            id: INDEX_ID,
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Entity".into()),
+            description: None,
+            attributes: vec![
+                ATTR_ID.into(),
+                ATTR_IDENT.into(),
+                EntityAttribute::from(ATTR_TITLE).into_optional(),
+                EntityAttribute::from(ATTR_DESCRIPTION).into_optional(),
+                EntityAttribute {
+                    attribute: ATTR_INDEX_ATTRIBUTES.into(),
+                    cardinality: Cardinality::Many,
+                },
+            ],
+            extends: Vec::new(),
+            strict: true,
+        }
+    }
+}
+
+fn index_entity_type() -> IndexSchema {
+    IndexSchema {
+        id: INDEX_ENTITY_TYPE,
+        ident: "factor/index_entity_type".into(),
+        title: Some("Global entity type attribute index".into()),
+        attributes: vec![ATTR_TYPE],
+        description: None,
+        unique: false,
+    }
+}
+
 pub fn builtin_db_schema() -> super::DbSchema {
     super::DbSchema {
         attributes: vec![
@@ -404,30 +468,34 @@ pub fn builtin_db_schema() -> super::DbSchema {
             AttrAttributes::schema(),
             AttrExtend::schema(),
             AttrIsRelation::schema(),
+            AttrIndexAttributes::schema(),
         ],
-        entities: vec![AttributeSchemaType::schema(), EntitySchemaType::schema()],
+        entities: vec![
+            AttributeSchemaType::schema(),
+            EntitySchemaType::schema(),
+            IndexSchemaType::schema(),
+        ],
+        indexes: vec![index_entity_type()],
     }
 }
 
+/// Check if an [`Id`] is a builtin entity *type*.
 pub fn id_is_builtin_entity_type(id: Id) -> bool {
     match id {
-        ATTRIBUTE_ID | ENTITY_ID => true,
+        ATTRIBUTE_ID | ENTITY_ID | INDEX_ID => true,
         _ => false,
     }
 }
 
+/// Builds an [`Expr`] filter that excludes builtin entities.
 pub fn id_is_builtin_entity_filter() -> crate::query::expr::Expr {
     use crate::query::expr::Expr;
-    // TODO: use IN query
-    let a = Expr::neq(Expr::ident(ATTR_ID), Expr::literal(ATTRIBUTE_ID));
-    let b = Expr::neq(Expr::ident(ATTR_ID), Expr::literal(ENTITY_ID));
-
-    Expr::or(a, b)
-}
-
-pub fn entity_type_is_builtin(id: Id) -> bool {
-    match id {
-        ENTITY_ID | ATTRIBUTE_ID => true,
-        _ => false,
-    }
+    Expr::not(Expr::in_(
+        Expr::attr::<AttrType>(),
+        vec![
+            AttributeSchemaType::QUALIFIED_NAME,
+            EntitySchemaType::QUALIFIED_NAME,
+            IndexSchemaType::QUALIFIED_NAME,
+        ],
+    ))
 }

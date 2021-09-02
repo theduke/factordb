@@ -1,3 +1,4 @@
+mod index;
 mod interner;
 mod memory_data;
 pub mod store;
@@ -20,10 +21,12 @@ pub struct MemoryDb {
 impl MemoryDb {
     pub fn new() -> Self {
         let registry = crate::registry::Registry::new().into_shared();
-        Self {
+        let s = Self {
             registry: registry.clone(),
             state: std::sync::Arc::new(std::sync::RwLock::new(store::MemoryStore::new(registry))),
-        }
+        };
+
+        s
     }
 }
 

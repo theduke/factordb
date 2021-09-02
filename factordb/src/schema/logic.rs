@@ -1,18 +1,18 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 
 use crate::{
-    backend::{DbOp, SelectOpt, TupleCreate, TupleMerge, TupleOp},
+    backend::{DbOp, SelectOpt, TupleOp},
     data::{
-        value::{self, to_value, to_value_map},
+        value::{to_value, to_value_map},
         Id,
     },
-    query::migrate::{Migration, SchemaAction},
+    query::migrate::{self, Migration, SchemaAction},
     registry::Registry,
     schema::{builtin, AttrMapExt},
     AnyError, Ident,
 };
 
-use super::{builtin::AttrType, AttributeDescriptor, Cardinality, EntityAttribute};
+use super::{AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, IndexSchema};
 
 // TODO: remove allow
 #[allow(dead_code)]
@@ -55,268 +55,401 @@ fn diff_attributes(old: &[EntityAttribute], new: &[EntityAttribute]) -> Vec<Enti
     patches
 }
 
+fn build_attribute_ident(attr: &AttributeSchema) -> String {
+    let unique_marker = if attr.unique { "_unique" } else { "" };
+    // WARNING: DO NOT CHANGE THIS!
+    // Changing this computation would be a backwards-compatability breaking
+    // schema change that would break older databases.
+    format!(
+        "factor_indexes/attr_{}{}",
+        attr.id.to_string().replace("-", "_"),
+        unique_marker
+    )
+}
+
+fn build_attribute_index(attr: &AttributeSchema) -> IndexSchema {
+    IndexSchema {
+        id: Id::random(),
+        ident: build_attribute_ident(attr),
+        title: None,
+        attributes: vec![attr.id],
+        description: None,
+        unique: attr.unique,
+    }
+}
+
+struct ResolvedAction {
+    action: SchemaAction,
+    ops: Vec<DbOp>,
+}
+
+impl ResolvedAction {
+    fn new(action: SchemaAction) -> Self {
+        Self {
+            action,
+            ops: Vec::new(),
+        }
+    }
+}
+
+fn build_attribute_create(
+    reg: &mut Registry,
+    create: migrate::AttributeCreate,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let namespace = create.schema.parse_namespace()?;
+    if namespace == super::builtin::NS_FACTOR && !is_internal {
+        return Err(anyhow!("Invalid namespace: factor/ is reserved"));
+    }
+
+    // Do any necessary modifications to the schema.
+    let schema = {
+        let mut s = create.schema;
+        s.id = s.id.non_nil_or_randomize();
+        s
+    };
+
+    reg.register_attribute(schema.clone())?;
+
+    let index_actions = if schema.index || schema.unique {
+        let index = crate::query::migrate::IndexCreate {
+            schema: build_attribute_index(&schema),
+        };
+        build_index_create(reg, index)?
+    } else {
+        vec![]
+    };
+
+    let action = ResolvedAction::new(SchemaAction::AttributeCreate(migrate::AttributeCreate {
+        schema,
+    }));
+
+    let mut actions = vec![action];
+    actions.extend(index_actions);
+
+    Ok(actions)
+}
+
+fn build_attribute_upsert(
+    reg: &mut Registry,
+    upsert: migrate::AttributeUpsert,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let namespace = upsert.schema.parse_namespace()?;
+    if namespace == super::builtin::NS_FACTOR && !is_internal {
+        return Err(anyhow!("Invalid namespace: factor/ is reserved"));
+    }
+
+    let mut schema = upsert.schema;
+
+    match reg.attr_by_ident(&schema.ident.clone().into()) {
+        None => build_attribute_create(reg, migrate::AttributeCreate { schema }, is_internal),
+        Some(old) => {
+            if !schema.id.is_nil() && schema.id != old.schema.id {
+                bail!(
+                    "Id mismatch: attribute name already exists with id {}",
+                    old.schema.id
+                );
+            } else {
+                schema.id = old.schema.id;
+            }
+
+            if schema != old.schema {
+                bail!(
+                    "Attribute '{}' has changed - upsert with a changed attribute schema is not supported (yet)\n\nold: {:?}\n\n new: {:?}", 
+                    schema.ident,
+                    old,
+                    schema,
+                );
+            }
+
+            // Make sure index exists.
+            // This is here to support databases created before
+            // index creation was supported.
+            if schema.unique || schema.index {
+                let index_schema = build_attribute_index(&schema);
+
+                match reg.index_by_name(&index_schema.ident) {
+                    Some(old) => {
+                        if old.schema != index_schema {
+                            // TODO: figure out how to handle this here,
+                            // and check for allowed changes. any changes here
+                            // would be due to an internal change to attribute
+                            // index creation.
+                            bail!("Invalid attribute upsert with index: new index schema would be incompatible");
+                        }
+                        Ok(vec![])
+                    }
+                    None => {
+                        let index = crate::query::migrate::IndexCreate {
+                            schema: index_schema,
+                        };
+                        let action = build_index_create(reg, index)?;
+                        Ok(action)
+                    }
+                }
+            } else {
+                Ok(vec![])
+            }
+        }
+    }
+}
+
+fn build_attribute_delete(
+    reg: &mut Registry,
+    del: migrate::AttributeDelete,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let attr = reg.require_attr_by_name(&del.name)?.clone();
+
+    if attr.namespace == super::builtin::NS_FACTOR {
+        return Err(anyhow!("Invalid namespace: factor/ is reserved"));
+    }
+
+    // Ensure that attribute is not used by any entity definition.
+    for entity in reg.iter_entities() {
+        for field in &entity.schema.attributes {
+            let field_attr = reg.require_attr_by_ident(&field.attribute)?;
+            if field_attr.schema.id == attr.schema.id {
+                return Err(anyhow!(
+                    "Can't delete attribute '{}': still in use by entity '{}'",
+                    attr.schema.ident,
+                    entity.schema.ident
+                ));
+            }
+        }
+    }
+
+    let op = DbOp::Select(SelectOpt {
+        selector: crate::query::expr::Expr::literal(true),
+        op: TupleOp::RemoveAttrs(crate::backend::TupleRemoveAttrs {
+            id: attr.schema.id,
+            attrs: vec![attr.schema.id],
+            // FIXME: handle index ops!
+            index_ops: Vec::new(),
+        }),
+    });
+
+    let action = ResolvedAction {
+        action: SchemaAction::AttributeDelete(del),
+        ops: vec![op],
+    };
+
+    Ok(vec![action])
+}
+
+fn build_entity_create(
+    reg: &mut Registry,
+    mut create: migrate::EntityCreate,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let namespace = create.schema.parse_namespace()?;
+    if !is_internal && namespace == super::builtin::NS_FACTOR {
+        return Err(anyhow!(
+            "Invalid entity ident: the factor/ namespace is reserved"
+        ));
+    }
+
+    create.schema.id = create.schema.id.non_nil_or_randomize();
+    reg.register_entity(create.schema.clone(), true)?;
+
+    let action = ResolvedAction::new(SchemaAction::EntityCreate(create));
+    Ok(vec![action])
+}
+
+fn build_entity_upsert(
+    reg: &mut Registry,
+    upsert: migrate::EntityUpsert,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let namespace = upsert.schema.parse_namespace()?;
+    if !is_internal && namespace == super::builtin::NS_FACTOR {
+        bail!("Invalid entity ident: the factor/ namespace is reserved");
+    }
+
+    let old = match reg.entity_by_ident(&upsert.schema.ident.clone().into()) {
+        Some(old) => old,
+        None => {
+            // Entity does not exist yet, so just create it.
+            return build_entity_create(
+                reg,
+                migrate::EntityCreate {
+                    schema: upsert.schema,
+                },
+                is_internal,
+            );
+        }
+    };
+
+    // Entity already exists, so check for modifications.
+
+    let mut schema = upsert.schema;
+    if !schema.id.is_nil() && schema.id != old.schema.id {
+        bail!(
+            "Id mismatch: entity name already exists with id {}",
+            old.schema.id
+        );
+    }
+    schema.id = old.schema.id;
+
+    if schema == old.schema {
+        // Entity has not changed, nothing to do.
+        return Ok(vec![]);
+    }
+
+    // Entity has changed.
+    // Check what has changed and if we can allow an upsert.
+
+    if old.schema.ident != schema.ident {
+        bail!("Entity upsert with changed ident is not supported");
+    }
+    if old.schema.extends != schema.extends {
+        bail!("Entity upsert with changed extend parent schemas is not supported");
+    }
+    if old.schema.strict != schema.strict {
+        bail!("Entity upsert with changed strict setting is not supported");
+    }
+
+    let mut merge = to_value_map(&old.schema)?;
+
+    if old.schema.title != schema.title {
+        if let Some(new_title) = &schema.title {
+            merge.insert_attr::<builtin::AttrTitle>(new_title.clone());
+        } else {
+            merge.remove(builtin::AttrTitle::QUALIFIED_NAME);
+        }
+    }
+
+    if old.schema.description != schema.description {
+        if let Some(new_description) = &schema.description {
+            merge.insert_attr::<builtin::AttrDescription>(new_description.clone());
+        } else {
+            merge.remove(builtin::AttrDescription::QUALIFIED_NAME);
+        }
+    }
+
+    if old.schema.attributes != schema.attributes {
+        let diffs = diff_attributes(&old.schema.attributes, &schema.attributes);
+
+        let mut new_attrs = old.schema.attributes.clone();
+
+        for diff in diffs {
+            match diff {
+                EntityAttributePatch::Added(new_attr) => {
+                    if new_attr.cardinality != Cardinality::Required {
+                        new_attrs.push(new_attr);
+                    } else {
+                        bail!(
+                            "Entity upsert with new attribute '{:?}' is invalid - new attributes must have a cardinality of Optional or Many",
+                            new_attr.attribute,
+                        );
+                    }
+                }
+                EntityAttributePatch::Removed(removed) => {
+                    bail!(
+                        "Entity upsert can not remove attributes (attribute '{:?}')",
+                        removed.attribute,
+                    );
+                }
+                EntityAttributePatch::CardinalityChanged {
+                    old: _,
+                    new: _,
+                    attribute,
+                } => {
+                    bail!(
+                        "Entity upsert can not change attribute cardinality (attribute '{:?}')",
+                        attribute,
+                    );
+                }
+            }
+        }
+
+        let new_attrs_value = to_value(new_attrs)?;
+        merge.insert(
+            builtin::AttrAttributes::QUALIFIED_NAME.into(),
+            new_attrs_value,
+        );
+    }
+
+    reg.register_entity(schema.clone(), true)?;
+
+    let action = ResolvedAction::new(SchemaAction::EntityUpsert(migrate::EntityUpsert { schema }));
+    Ok(vec![action])
+}
+
+fn build_entity_delete(
+    _reg: &mut Registry,
+    _del: migrate::EntityDelete,
+    _is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    Err(anyhow!("Entity deletion is not implemented yet"))
+}
+
+fn build_index_create(
+    reg: &mut Registry,
+    mut create: migrate::IndexCreate,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    // FIXME: validate namespace
+    // let namespace = create.schema.parse_namespace()?;
+    // if namespace == super::builtin::NS_FACTOR && !is_internal {
+    //     return Err(anyhow!("Invalid namespace: factor/ is reserved"));
+    // }
+
+    create.schema.id = create.schema.id.non_nil_or_randomize();
+    reg.register_index(create.schema.clone())?;
+    let action = ResolvedAction::new(SchemaAction::IndexCreate(create));
+    Ok(vec![action])
+}
+
+fn build_index_delete(
+    reg: &mut Registry,
+    del: migrate::IndexDelete,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let id = reg.require_index_by_name(&del.name)?.schema.id;
+    reg.remove_index(id)?;
+
+    let action = ResolvedAction::new(SchemaAction::IndexDelete(del));
+    Ok(vec![action])
+}
+
+fn build_action(
+    reg: &mut Registry,
+    action: SchemaAction,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    match action {
+        SchemaAction::AttributeCreate(create) => build_attribute_create(reg, create, is_internal),
+        SchemaAction::AttributeUpsert(upsert) => build_attribute_upsert(reg, upsert, is_internal),
+        SchemaAction::AttributeDelete(del) => build_attribute_delete(reg, del),
+        SchemaAction::EntityCreate(create) => build_entity_create(reg, create, is_internal),
+        SchemaAction::EntityUpsert(upsert) => build_entity_upsert(reg, upsert, is_internal),
+        SchemaAction::EntityDelete(del) => build_entity_delete(reg, del, is_internal),
+        SchemaAction::IndexCreate(create) => build_index_create(reg, create),
+        SchemaAction::IndexDelete(del) => build_index_delete(reg, del),
+    }
+}
+
 /// Validate a migration against the registry.
 ///
 /// NOTE: is_internal must be set to false for regular migrations, and to true
 /// for internal migrations driven by the factor db.
 /// With is_internal = false, any changes to builtin entities/attributes are
 /// rejected.
-pub fn validate_migration(
+pub fn build_migration(
     reg: &mut Registry,
     mut mig: Migration,
     is_internal: bool,
 ) -> Result<(Migration, Vec<DbOp>), AnyError> {
+    let mut actions = Vec::new();
     let mut ops = Vec::new();
 
-    for action in &mut mig.actions {
-        match action {
-            SchemaAction::AttributeCreate(create) => {
-                let namespace = create.schema.parse_namespace()?;
-                if namespace == super::builtin::NS_FACTOR && !is_internal {
-                    return Err(anyhow!("Invalid namespace: factor/ is reserved"));
-                }
-
-                create.schema.id = create.schema.id.non_nil_or_randomize();
-
-                reg.register_attribute(create.schema.clone())?;
-
-                let mut data = value::to_value_map(create.schema.clone())?;
-                // Add tye factor/type attr.
-                data.insert(
-                    AttrType::QUALIFIED_NAME.to_string(),
-                    super::builtin::ATTRIBUTE_ID.into(),
-                );
-
-                ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
-                    id: create.schema.id,
-                    data,
-                })));
-            }
-            SchemaAction::AttributeUpsert(upsert) => {
-                let namespace = upsert.schema.parse_namespace()?;
-                if namespace == super::builtin::NS_FACTOR && !is_internal {
-                    return Err(anyhow!("Invalid namespace: factor/ is reserved"));
-                }
-
-                let attr = &mut upsert.schema;
-
-                match reg.attr_by_ident(&attr.ident.clone().into()) {
-                    Some(old) => {
-                        if !attr.id.is_nil() && attr.id != old.schema.id {
-                            return Err(anyhow!(
-                                "Id mismatch: attribute name already exists with id {}",
-                                old.schema.id
-                            ));
-                        } else {
-                            attr.id = old.schema.id;
-                        }
-                        if attr != &old.schema {
-                            return Err(anyhow!("Attribute '{}' has changed - upsert with a changed attribute schema is not supported (yet)\n\nold: {:?}\n\n new: {:?}", attr.ident, old, attr));
-                        } else {
-                            continue;
-                        }
-                    }
-                    None => {}
-                };
-
-                // TODO: re-use create code from above by factoring out to
-                // extra function.
-                attr.id = attr.id.non_nil_or_randomize();
-
-                reg.register_attribute(upsert.schema.clone())?;
-
-                let mut data = value::to_value_map(upsert.schema.clone())?;
-                // Add tye factor/type attr.
-                data.insert(
-                    AttrType::QUALIFIED_NAME.to_string(),
-                    super::builtin::ATTRIBUTE_ID.into(),
-                );
-
-                ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
-                    id: upsert.schema.id,
-                    data,
-                })));
-            }
-
-            SchemaAction::AttributeDelete(del) => {
-                let attr = reg.require_attr_by_name(&del.name)?.clone();
-
-                if attr.namespace == super::builtin::NS_FACTOR {
-                    return Err(anyhow!("Invalid namespace: factor/ is reserved"));
-                }
-
-                let op = DbOp::Select(SelectOpt {
-                    selector: crate::query::expr::Expr::literal(true),
-                    op: TupleOp::RemoveAttrs(crate::backend::TupleRemoveAttrs {
-                        id: Id::nil(),
-                        attrs: vec![attr.schema.id],
-                    }),
-                });
-
-                ops.push(op);
-            }
-            SchemaAction::EntityCreate(create) => {
-                let namespace = create.schema.parse_namespace()?;
-                if !is_internal && namespace == super::builtin::NS_FACTOR {
-                    return Err(anyhow!(
-                        "Invalid entity ident: the factor/ namespace is reserved"
-                    ));
-                }
-
-                create.schema.id = create.schema.id.non_nil_or_randomize();
-
-                reg.register_entity(create.schema.clone(), true)?;
-
-                let mut data = value::to_value_map(create.schema.clone())?;
-                // Add tye factor/type attr.
-                data.insert(
-                    AttrType::QUALIFIED_NAME.to_string(),
-                    super::builtin::ENTITY_ID.into(),
-                );
-
-                ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
-                    id: create.schema.id,
-                    data,
-                })));
-            }
-            SchemaAction::EntityUpsert(upsert) => {
-                let namespace = upsert.schema.parse_namespace()?;
-                if !is_internal && namespace == super::builtin::NS_FACTOR {
-                    return Err(anyhow!(
-                        "Invalid entity ident: the factor/ namespace is reserved"
-                    ));
-                }
-
-                let entity = &mut upsert.schema;
-                match reg.entity_by_ident(&entity.ident.clone().into()) {
-                    Some(old) => {
-                        if !entity.id.is_nil() && entity.id != old.schema.id {
-                            return Err(anyhow!(
-                                "Id mismatch: entity name already exists with id {}",
-                                old.schema.id
-                            ));
-                        } else {
-                            entity.id = old.schema.id;
-                        }
-
-                        if entity != &old.schema {
-                            if old.schema.ident != entity.ident {
-                                return Err(anyhow!(
-                                    "Entity upsert with changed ident is not supported"
-                                ));
-                            }
-                            if old.schema.extends != entity.extends {
-                                return Err(anyhow!(
-                                    "Entity upsert with changed extend parent schemas is not supported"
-                                ));
-                            }
-                            if old.schema.strict != entity.strict {
-                                return Err(anyhow!(
-                                    "Entity upsert with changed strict setting is not supported"
-                                ));
-                            }
-
-                            // Entity has changed.
-                            // Check what has changed and if we can allow an
-                            // upsert.
-
-                            let mut merge = to_value_map(&old.schema)?;
-
-                            if old.schema.title != entity.title {
-                                if let Some(new_title) = &entity.title {
-                                    merge.insert_attr::<builtin::AttrTitle>(new_title.clone());
-                                } else {
-                                    merge.remove(builtin::AttrTitle::QUALIFIED_NAME);
-                                }
-                            }
-
-                            if old.schema.description != entity.description {
-                                if let Some(new_description) = &entity.description {
-                                    merge.insert_attr::<builtin::AttrDescription>(
-                                        new_description.clone(),
-                                    );
-                                } else {
-                                    merge.remove(builtin::AttrDescription::QUALIFIED_NAME);
-                                }
-                            }
-
-                            if old.schema.attributes != entity.attributes {
-                                let diffs =
-                                    diff_attributes(&old.schema.attributes, &entity.attributes);
-
-                                let mut new_attrs = old.schema.attributes.clone();
-
-                                for diff in diffs {
-                                    match diff {
-                                        EntityAttributePatch::Added(new_attr) => {
-                                            if new_attr.cardinality != Cardinality::Required {
-                                                new_attrs.push(new_attr);
-                                            } else {
-                                                return Err(anyhow!(
-                                                    "Entity upsert with new attribute '{:?}' is invalid - new attributes must have a cardinality of Optional or Many",
-                                                    new_attr.attribute,
-                                                ));
-                                            }
-                                        }
-                                        EntityAttributePatch::Removed(removed) => {
-                                            return Err(anyhow!(
-                                                "Entity upsert can not remove attributes (attribute '{:?}')",
-                                                removed.attribute,
-                                            ));
-                                        }
-                                        EntityAttributePatch::CardinalityChanged {
-                                            old: _,
-                                            new: _,
-                                            attribute,
-                                        } => {
-                                            return Err(anyhow!(
-                                                "Entity upsert can not change attribute cardinality (attribute '{:?}')",
-                                                attribute,
-                                            ));
-                                        }
-                                    }
-                                }
-
-                                let new_attrs_value = to_value(new_attrs)?;
-                                merge.insert(
-                                    builtin::AttrAttributes::QUALIFIED_NAME.into(),
-                                    new_attrs_value,
-                                );
-                            }
-
-                            ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge {
-                                id: entity.id,
-                                data: merge,
-                            })));
-                            continue;
-                        } else {
-                            continue;
-                        }
-                    }
-                    None => {}
-                }
-
-                entity.id = entity.id.non_nil_or_randomize();
-
-                reg.register_entity(entity.clone(), true)?;
-
-                let mut data = value::to_value_map(upsert.schema.clone())?;
-                // Add tye factor/type attr.
-                data.insert(
-                    AttrType::QUALIFIED_NAME.to_string(),
-                    super::builtin::ENTITY_ID.into(),
-                );
-
-                ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
-                    id: upsert.schema.id,
-                    data,
-                })));
-            }
-            SchemaAction::EntityDelete(_del) => {
-                todo!()
-            }
+    for action in mig.actions {
+        let resolved = build_action(reg, action, is_internal)?;
+        for sub_action in resolved {
+            actions.push(sub_action.action);
+            ops.extend(sub_action.ops);
         }
     }
+    mig.actions = actions;
 
     Ok((mig, ops))
 }

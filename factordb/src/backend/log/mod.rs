@@ -217,9 +217,9 @@ impl LogDb {
         // This is important to not spam the log with migrations when UPSERTS
         // happen.
         let mut reg = self.state.registry.read().unwrap().clone();
-        let (_mig, ops) =
-            schema::logic::validate_migration(&mut reg, migration.clone(), is_internal)?;
-        if ops.is_empty() {
+        let (mig, ops) = schema::logic::build_migration(&mut reg, migration.clone(), is_internal)?;
+
+        if ops.is_empty() && mig.actions.is_empty() {
             return Ok(());
         }
 

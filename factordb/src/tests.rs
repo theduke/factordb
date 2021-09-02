@@ -4,7 +4,8 @@ use schema::AttributeSchema;
 use crate::{
     backend::Backend,
     data::{Id, Value, ValueType},
-    error, map,
+    error::{self, UniqueConstraintViolation},
+    map,
     query::{self, expr::Expr, migrate::Migration, select::Select},
     schema::{self, builtin::AttrId, AttributeDescriptor, EntityAttribute, EntitySchema},
     Db,
@@ -79,6 +80,8 @@ async fn test_db_with_test_schema(db: &Db) {
             test_query_in,
             test_merge_list_attr,
             test_assert_fails_with_incorrect_value_type,
+            test_index_unique,
+            test_index_non_unique,
         ]
     );
 }
@@ -278,4 +281,51 @@ async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
         .await;
 
     assert!(res.is_err());
+}
+
+async fn test_index_unique(db: &Db) {
+    db.migrate(query::migrate::Migration::new().attr_create(
+        AttributeSchema::new(NS_TEST, "indexed_unique", ValueType::String).with_unique(true),
+    ))
+    .await
+    .unwrap();
+
+    let id = Id::random();
+    let e1 = map! {
+        "factor/id": id,
+        "test/indexed_unique": "a",
+    };
+    db.create(id, e1.clone()).await.unwrap();
+
+    // Insert second entity with same unique value
+    let id = Id::random();
+    let e1 = map! {
+        "factor/id": id,
+        "test/indexed_unique": "a",
+    };
+    let err = db.create(id, e1.clone()).await.expect_err("Must fail");
+    assert!(err.is::<UniqueConstraintViolation>());
+}
+
+async fn test_index_non_unique(db: &Db) {
+    db.migrate(query::migrate::Migration::new().attr_create(
+        AttributeSchema::new(NS_TEST, "indexed", ValueType::String).with_indexed(true),
+    ))
+    .await
+    .unwrap();
+
+    let id = Id::random();
+    let e1 = map! {
+        "factor/id": id,
+        "test/indexed": "a",
+    };
+    db.create(id, e1.clone()).await.unwrap();
+
+    // Insert second entity with same unique value
+    let id = Id::random();
+    let e1 = map! {
+        "factor/id": id,
+        "test/indexed": "a",
+    };
+    db.create(id, e1.clone()).await.unwrap();
 }

@@ -1,4 +1,4 @@
-use crate::schema;
+use crate::schema::{self, IndexSchema};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeCreate {
@@ -31,6 +31,16 @@ pub struct EntityDelete {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IndexCreate {
+    pub schema: IndexSchema,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IndexDelete {
+    pub name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SchemaAction {
     AttributeCreate(AttributeCreate),
     AttributeUpsert(AttributeUpsert),
@@ -38,6 +48,8 @@ pub enum SchemaAction {
     EntityCreate(EntityCreate),
     EntityUpsert(EntityUpsert),
     EntityDelete(EntityDelete),
+    IndexCreate(IndexCreate),
+    IndexDelete(IndexDelete),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

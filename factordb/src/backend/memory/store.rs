@@ -1,14 +1,18 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context, Result};
 
 use crate::{
-    backend::{self, DbOp},
+    backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error,
     query::{self, expr, migrate::Migration, select::Item},
+    registry::{LocalIndexId, RegisteredIndex},
     schema, AnyError,
 };
 
-use super::memory_data::{MemoryTuple, MemoryValue};
+use super::{
+    index::{self, MemoryIndexMap},
+    memory_data::{MemoryTuple, MemoryValue},
+};
 
 /// Memory store for building a backend.
 ///
@@ -19,6 +23,7 @@ pub struct MemoryStore {
     registry: crate::registry::SharedRegistry,
     entities: fnv::FnvHashMap<Id, MemoryTuple>,
     idents: std::collections::HashMap<String, Id>,
+    indexes: MemoryIndexMap,
 
     revert_epoch: RevertEpoch,
     revert_ops: Option<(RevertEpoch, RevertList)>,
@@ -26,14 +31,32 @@ pub struct MemoryStore {
 
 impl MemoryStore {
     pub fn new(registry: crate::registry::SharedRegistry) -> Self {
-        Self {
+        let mut s = Self {
             interner: super::interner::Interner::new(),
-            registry,
+            registry: registry.clone(),
             entities: fnv::FnvHashMap::default(),
             idents: std::collections::HashMap::new(),
+            indexes: self::index::new_memory_index_map(),
             revert_epoch: 0,
             revert_ops: None,
+        };
+
+        // FIXME: this is a temporary hack to work around the fact that
+        // migrations are not yet used for internal schemas.
+        // Remove once everything is properly done with migrations.
+        let indexes = {
+            registry
+                .read()
+                .unwrap()
+                .iter_indexes()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        for index in indexes {
+            s.index_create(&index).unwrap();
         }
+
+        s
     }
 
     pub fn registry(&self) -> &crate::registry::SharedRegistry {
@@ -204,6 +227,156 @@ impl MemoryStore {
 
     //     self.persist_tuple(persist)
     // }
+    //
+
+    pub(super) fn index_create(&mut self, schema: &RegisteredIndex) -> Result<(), AnyError> {
+        let index = if schema.schema.unique {
+            index::Index::Unique(index::UniqueIndex::new())
+        } else {
+            index::Index::Multi(index::MultiIndex::new())
+        };
+
+        self.indexes.create(schema.local_id, index)?;
+        Ok(())
+    }
+
+    fn index_delete(&mut self, schema: &crate::registry::RegisteredIndex) -> Result<(), AnyError> {
+        // Since the index list is addressed by numeric local index, the index
+        // is not actually removed, but just it's data is cleared to free up
+        // memory.
+        self.indexes.get_mut(schema.local_id).clear();
+        Ok(())
+    }
+
+    fn tuple_index_insert(
+        &mut self,
+        id: Id,
+        op: TupleIndexInsert,
+        reverts: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        let value = self.interner.intern_value(op.value);
+
+        let index_id = op.index;
+
+        match self.indexes.get_mut(op.index) {
+            super::index::Index::Unique(idx) => {
+                idx.insert_unique(value.clone(), id).map_err(|_| {
+                    let reg = self.registry.read().unwrap();
+                    let index = reg
+                        .index_by_local_id(index_id)
+                        .expect("Invalid local index id");
+                    error::UniqueConstraintViolation {
+                        index: index.schema.ident.clone(),
+                        entity_id: id,
+                        // TODO: add attribute name!
+                        attribute: "?".to_string(),
+                    }
+                })?;
+            }
+            super::index::Index::Multi(idx) => {
+                idx.add(value.clone(), id);
+            }
+        }
+
+        reverts.push(RevertOp::IndexValueInserted {
+            index: index_id,
+            entity_id: id,
+            value,
+        });
+
+        Ok(())
+    }
+
+    fn tuple_index_replace(
+        &mut self,
+        id: Id,
+        op: TupleIndexReplace,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        let reg = self.registry.read().unwrap();
+        let value = self.interner.intern_value(op.value);
+        let old_value = self.interner.intern_value(op.old_value);
+
+        let index_id = op.index;
+
+        let removed = match self.indexes.get_mut(op.index) {
+            super::index::Index::Unique(idx) => {
+                let removed = idx.remove(&old_value);
+
+                idx.insert_unique(value.clone(), id).map_err(|_| {
+                    let index = reg
+                        .index_by_local_id(index_id)
+                        .expect("Invalid local index id");
+                    error::UniqueConstraintViolation {
+                        index: index.schema.ident.clone(),
+                        entity_id: id,
+                        // TODO: add attribute name!
+                        attribute: "?".to_string(),
+                    }
+                })?;
+
+                removed.is_some()
+            }
+            super::index::Index::Multi(idx) => {
+                let removed = idx.remove(&old_value, id);
+                idx.add(value.clone(), id);
+                removed.is_some()
+            }
+        };
+
+        revert.push(RevertOp::IndexValueInserted {
+            index: index_id,
+            entity_id: id,
+            value,
+        });
+        if removed {
+            revert.push(RevertOp::IndexValueRemoved {
+                index: index_id,
+                entity_id: id,
+                value: old_value,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn tuple_index_remove(
+        &mut self,
+        id: Id,
+        op: TupleIndexRemove,
+        reverts: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        let value = self.interner.intern_value(op.value);
+        let index_id = op.index;
+
+        let removed = match self.indexes.get_mut(op.index) {
+            super::index::Index::Unique(idx) => idx.remove(&value).is_some(),
+            super::index::Index::Multi(idx) => idx.remove(&value, id).is_some(),
+        };
+
+        if removed {
+            reverts.push(RevertOp::IndexValueRemoved {
+                index: index_id,
+                entity_id: id,
+                value,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn apply_tuple_index_op(
+        &mut self,
+        tuple_id: Id,
+        op: TupleIndexOp,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        match op {
+            TupleIndexOp::Insert(op) => self.tuple_index_insert(tuple_id, op, revert),
+            TupleIndexOp::Replace(op) => self.tuple_index_replace(tuple_id, op, revert),
+            TupleIndexOp::Remove(op) => self.tuple_index_remove(tuple_id, op, revert),
+        }
+    }
 
     fn tuple_create(
         &mut self,
@@ -213,6 +386,11 @@ impl MemoryStore {
         if self.entities.contains_key(&create.id) {
             return Err(anyhow!("Entity id already exists: '{}'", create.id));
         }
+
+        for op in create.index_ops {
+            self.tuple_index_insert(create.id, op, revert)?;
+        }
+
         let map = self.intern_data_map(create.data)?;
         self.entities.insert(create.id, map);
         revert.push(RevertOp::TupleCreated { id: create.id });
@@ -224,6 +402,10 @@ impl MemoryStore {
         replace: backend::TupleReplace,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
+        for op in replace.index_ops {
+            self.apply_tuple_index_op(replace.id, op, revert)?;
+        }
+
         let old = self.entities.remove(&replace.id);
         let map = self.intern_data_map(replace.data)?;
         self.entities.insert(replace.id, map);
@@ -236,9 +418,13 @@ impl MemoryStore {
 
     fn tuple_merge(
         &mut self,
-        update: backend::TupleMerge,
+        mut update: backend::TupleMerge,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
+        for op in std::mem::take(&mut update.index_ops) {
+            self.apply_tuple_index_op(update.id, op, revert)?;
+        }
+
         let old = self
             .entities
             .get_mut(&update.id)
@@ -287,9 +473,13 @@ impl MemoryStore {
 
     fn tuple_remove_attrs(
         &mut self,
-        rem: backend::TupleRemoveAttrs,
+        mut rem: backend::TupleRemoveAttrs,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
+        for op in std::mem::take(&mut rem.index_ops) {
+            self.tuple_index_remove(rem.id, op, revert)?;
+        }
+
         let old = self
             .entities
             .get_mut(&rem.id)
@@ -319,6 +509,10 @@ impl MemoryStore {
         del: backend::TupleDelete,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
+        for op in del.index_ops {
+            self.tuple_index_remove(del.id, op, revert)?;
+        }
+
         match self.entities.remove(&del.id) {
             Some(data) => {
                 revert.push(RevertOp::TupleDeleted { id: del.id, data });
@@ -569,6 +763,27 @@ impl MemoryStore {
                 RevertOp::TupleDeleted { id, data } => {
                     self.entities.insert(id, data);
                 }
+                RevertOp::IndexValueInserted {
+                    index,
+                    entity_id,
+                    value,
+                } => {
+                    match self.indexes.get_mut(index) {
+                        super::index::Index::Unique(idx) => idx.remove(&value),
+                        super::index::Index::Multi(idx) => idx.remove(&value, entity_id),
+                    };
+                }
+                RevertOp::IndexValueRemoved {
+                    index,
+                    entity_id,
+                    value,
+                } => match self.indexes.get_mut(index) {
+                    super::index::Index::Unique(idx) => idx
+                        .insert_unique(value, entity_id)
+                        .map_err(|_| ())
+                        .expect("Consistentcy error"),
+                    super::index::Index::Multi(idx) => idx.add(value, entity_id),
+                },
             }
         }
     }
@@ -595,7 +810,31 @@ impl MemoryStore {
 
     fn migrate_impl(&mut self, mig: Migration, is_internal: bool) -> Result<RevertList, AnyError> {
         let mut reg = self.registry.read().unwrap().clone();
-        let (_mig, ops) = schema::logic::validate_migration(&mut reg, mig, is_internal)?;
+        let (mig, ops) = schema::logic::build_migration(&mut reg, mig, is_internal)?;
+
+        for action in mig.actions {
+            match action {
+                query::migrate::SchemaAction::IndexCreate(create) => {
+                    let index = reg.require_index_by_id(create.schema.id).context(format!(
+                        "Registry does not contain index '{}'",
+                        create.schema.ident
+                    ))?;
+                    self.index_create(index)?;
+                }
+                query::migrate::SchemaAction::IndexDelete(del) => {
+                    let index = reg
+                        .require_index_by_name(&del.name)
+                        .context(format!("Registry does not contain index '{}'", del.name,))?;
+                    self.index_delete(index)?;
+                }
+                query::migrate::SchemaAction::AttributeCreate(_) => {}
+                query::migrate::SchemaAction::AttributeUpsert(_) => {}
+                query::migrate::SchemaAction::AttributeDelete(_) => {}
+                query::migrate::SchemaAction::EntityCreate(_) => {}
+                query::migrate::SchemaAction::EntityUpsert(_) => {}
+                query::migrate::SchemaAction::EntityDelete(_) => {}
+            }
+        }
 
         let mut revert = Vec::new();
         if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert) {
@@ -866,7 +1105,21 @@ impl MemoryStore {
         self.entities.clear();
         self.idents.clear();
         self.interner.clear();
+        self.indexes = index::new_memory_index_map();
         self.registry.write().unwrap().reset();
+
+        let indexes = {
+            self.registry
+                .clone()
+                .read()
+                .unwrap()
+                .iter_indexes()
+                .map(|x| x.clone())
+                .collect::<Vec<_>>()
+        };
+        for index in indexes {
+            self.index_create(&index).unwrap();
+        }
     }
 }
 
@@ -901,6 +1154,16 @@ enum RevertOp {
     TupleDeleted {
         id: Id,
         data: MemoryTuple,
+    },
+    IndexValueInserted {
+        index: LocalIndexId,
+        entity_id: Id,
+        value: MemoryValue,
+    },
+    IndexValueRemoved {
+        index: LocalIndexId,
+        entity_id: Id,
+        value: MemoryValue,
     },
 }
 

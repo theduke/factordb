@@ -8,6 +8,9 @@ pub use self::entity::{
     Cardinality, EntityAttribute, EntityContainer, EntityDescriptor, EntitySchema,
 };
 
+mod index;
+pub use self::index::IndexSchema;
+
 pub mod logic;
 
 use crate::data::Ident;
@@ -60,6 +63,7 @@ pub enum SchemaItem {
 pub struct DbSchema {
     pub attributes: Vec<AttributeSchema>,
     pub entities: Vec<EntitySchema>,
+    pub indexes: Vec<IndexSchema>,
 }
 
 impl DbSchema {
