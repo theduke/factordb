@@ -1123,7 +1123,8 @@ impl MemoryStore {
     }
 }
 
-fn cowal_unit<'a>() -> std::borrow::Cow<'a, Value> {
+#[inline]
+const fn cowal_unit<'a>() -> std::borrow::Cow<'a, Value> {
     std::borrow::Cow::Owned(Value::Unit)
 }
 
