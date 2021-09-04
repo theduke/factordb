@@ -42,6 +42,7 @@ pub const INDEX_ID: Id = Id::from_u128(1002);
 // Built-in indexes.
 // Constants are kept together to see ids at a glance.
 pub const INDEX_ENTITY_TYPE: Id = Id::from_u128(2001);
+pub const INDEX_IDENT: Id = Id::from_u128(2002);
 
 pub struct AttrId;
 
@@ -453,6 +454,17 @@ fn index_entity_type() -> IndexSchema {
     }
 }
 
+fn index_ident() -> IndexSchema {
+    IndexSchema {
+        id: INDEX_IDENT,
+        ident: "factor/index_ident".into(),
+        title: Some("Globabl ident attribute index".into()),
+        attributes: vec![ATTR_IDENT],
+        description: None,
+        unique: true,
+    }
+}
+
 pub fn builtin_db_schema() -> super::DbSchema {
     super::DbSchema {
         attributes: vec![
@@ -475,7 +487,7 @@ pub fn builtin_db_schema() -> super::DbSchema {
             EntitySchemaType::schema(),
             IndexSchemaType::schema(),
         ],
-        indexes: vec![index_entity_type()],
+        indexes: vec![index_entity_type(), index_ident()],
     }
 }
 

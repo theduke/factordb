@@ -23,9 +23,9 @@ impl UniqueIndex {
         }
     }
 
-    // pub(super) fn get(&self, value: &MemoryValue) -> Option<Id> {
-    //     self.data.get(value).cloned()
-    // }
+    pub(super) fn get(&self, value: &MemoryValue) -> Option<Id> {
+        self.data.get(value).cloned()
+    }
 
     pub(super) fn insert_unique(
         &mut self,

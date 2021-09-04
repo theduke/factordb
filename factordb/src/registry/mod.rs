@@ -118,6 +118,10 @@ impl Registry {
         self.indexes.get(id)
     }
 
+    pub fn index_by_id(&self, id: Id) -> Option<&RegisteredIndex> {
+        self.indexes.get_by_uid(id)
+    }
+
     pub fn index_by_name(&self, name: &str) -> Option<&RegisteredIndex> {
         self.indexes.get_by_name(name)
     }
