@@ -253,6 +253,17 @@ async fn test_query_contains_with_two_lists(db: &Db) {
     .await
     .unwrap();
 
+
+    db.create(
+        Id::random(),
+        map! {
+            "factor/type": ENTITY_COMMENT,
+            "test/int": vec![1],
+        },
+    )
+    .await
+    .unwrap();
+
     let filter = Expr::contains(Expr::Attr("test/int".into()), vec![22]);
     let page = db.select(Select::new().with_filter(filter)).await.unwrap();
 
