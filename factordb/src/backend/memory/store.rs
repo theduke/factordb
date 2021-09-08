@@ -25,6 +25,8 @@ pub struct MemoryStore {
     idents: std::collections::HashMap<String, Id>,
     indexes: MemoryIndexMap,
 
+    ignore_index_constraints: bool,
+
     revert_epoch: RevertEpoch,
     revert_ops: Option<(RevertEpoch, RevertList)>,
 }
@@ -39,6 +41,8 @@ impl MemoryStore {
             indexes: self::index::new_memory_index_map(),
             revert_epoch: 0,
             revert_ops: None,
+            // FIXME: set to false, add setter.
+            ignore_index_constraints: false,
         };
 
         // FIXME: this is a temporary hack to work around the fact that
@@ -57,6 +61,10 @@ impl MemoryStore {
         }
 
         s
+    }
+
+    pub fn set_ignore_index_constraints(&mut self, ignore: bool) {
+        self.ignore_index_constraints = ignore;
     }
 
     pub fn registry(&self) -> &crate::registry::SharedRegistry {
@@ -260,18 +268,23 @@ impl MemoryStore {
 
         match self.indexes.get_mut(op.index) {
             super::index::Index::Unique(idx) => {
-                idx.insert_unique(value.clone(), id).map_err(|_| {
-                    let reg = self.registry.read().unwrap();
-                    let index = reg
-                        .index_by_local_id(index_id)
-                        .expect("Invalid local index id");
-                    error::UniqueConstraintViolation {
-                        index: index.schema.ident.clone(),
-                        entity_id: id,
-                        // TODO: add attribute name!
-                        attribute: "?".to_string(),
-                    }
-                })?;
+                if self.ignore_index_constraints {
+                    idx.insert_unchecked(value.clone(), id);
+                } else {
+                    idx.insert_unique(value.clone(), id).map_err(|_| {
+                        let reg = self.registry.read().unwrap();
+                        let index = reg
+                            .index_by_local_id(index_id)
+                            .expect("Invalid local index id");
+                        error::UniqueConstraintViolation {
+                            index: index.schema.ident.clone(),
+                            entity_id: id,
+                            // TODO: add attribute name!
+                            attribute: "?".to_string(),
+                            value: Some(value.to_value()),
+                        }
+                    })?;
+                }
             }
             super::index::Index::Multi(idx) => {
                 idx.add(value.clone(), id);
@@ -303,17 +316,22 @@ impl MemoryStore {
             super::index::Index::Unique(idx) => {
                 let removed = idx.remove(&old_value);
 
-                idx.insert_unique(value.clone(), id).map_err(|_| {
-                    let index = reg
-                        .index_by_local_id(index_id)
-                        .expect("Invalid local index id");
-                    error::UniqueConstraintViolation {
-                        index: index.schema.ident.clone(),
-                        entity_id: id,
-                        // TODO: add attribute name!
-                        attribute: "?".to_string(),
-                    }
-                })?;
+                if self.ignore_index_constraints {
+                    idx.insert_unchecked(value.clone(), id);
+                } else {
+                    idx.insert_unique(value.clone(), id).map_err(|_| {
+                        let index = reg
+                            .index_by_local_id(index_id)
+                            .expect("Invalid local index id");
+                        error::UniqueConstraintViolation {
+                            index: index.schema.ident.clone(),
+                            entity_id: id,
+                            // TODO: add attribute name!
+                            attribute: "?".to_string(),
+                            value: Some(value.to_value()),
+                        }
+                    })?;
+                }
 
                 removed.is_some()
             }

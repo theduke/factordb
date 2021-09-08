@@ -77,8 +77,14 @@ impl LogDb {
         S: LogStore + Send + Sync + 'static,
     {
         let registry = registry::Registry::new().into_shared();
+
+        // Ignore index constraints during the restore phase.
+        // Constraints are re-enabled after the restore.
+        let mut memory = MemoryStore::new(registry.clone());
+        memory.set_ignore_index_constraints(true);
+
         let state = State {
-            mem: RwLock::new(MemoryStore::new(registry.clone())),
+            mem: RwLock::new(memory),
             registry,
             mutable: futures::lock::Mutex::new(MutableState {
                 store: Box::new(store),
@@ -88,7 +94,16 @@ impl LogDb {
         let s = Self {
             state: Arc::new(state),
         };
+
         s.restore().await?;
+
+        // Re-enable index constraints.
+        s.state
+            .mem
+            .write()
+            .unwrap()
+            .set_ignore_index_constraints(false);
+
         Ok(s)
     }
 
