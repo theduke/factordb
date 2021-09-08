@@ -1068,7 +1068,7 @@ impl MemoryStore {
                             (Value::List(left), Value::List(right)) => {
                                 left.iter().any(|item| right.contains(item))
                             }
-                            (left, right) => {
+                            (_left, _right) => {
                                 // TODO: this should be rejected by query
                                 // validation.
                                 false
