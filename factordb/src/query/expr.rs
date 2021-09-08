@@ -1,4 +1,7 @@
-use crate::{data::{Ident, Value}, schema::{AttributeDescriptor, EntityDescriptor, builtin::AttrType}};
+use crate::{
+    data::{Ident, Value},
+    schema::{builtin::AttrType, AttributeDescriptor, EntityDescriptor},
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum BinaryOp {

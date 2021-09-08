@@ -7,7 +7,9 @@ use crate::{
     error::{self, UniqueConstraintViolation},
     map,
     query::{self, expr::Expr, migrate::Migration, select::Select},
-    schema::{self, builtin::AttrId, AttributeDescriptor, EntityAttribute, EntitySchema},
+    schema::{
+        self, builtin::AttrId, AttrMapExt, AttributeDescriptor, EntityAttribute, EntitySchema,
+    },
     Db,
 };
 
