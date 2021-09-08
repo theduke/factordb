@@ -70,14 +70,20 @@ pub struct UniqueConstraintViolation {
     pub index: String,
     pub entity_id: crate::Id,
     pub attribute: String,
+    pub value: Option<crate::Value>,
 }
 
 impl std::fmt::Display for UniqueConstraintViolation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = self
+            .value
+            .as_ref()
+            .map(|v| format!(": {:?}", v))
+            .unwrap_or_default();
         write!(
-            f,
-            "Entity '{}' contains duplicate value for unique index '{}' in attribute '{}'",
-            self.entity_id, self.index, self.attribute
+           f,
+            "Unique constraint violation in index '{}': Entity '{}' has duplicate value in attribute '{}'{}",
+             self.index, self.entity_id, self.attribute, value
         )
     }
 }
