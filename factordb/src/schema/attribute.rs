@@ -95,6 +95,11 @@ pub trait AttributeDescriptor {
 
     /// Build the schema for this attribute.
     fn schema() -> AttributeSchema;
+
+    /// Build an expression that selects this attribute.
+    fn expr() -> crate::query::expr::Expr {
+        crate::query::expr::Expr::Attr(Self::QUALIFIED_NAME.into())
+    }
 }
 
 pub trait AttrMapExt {
