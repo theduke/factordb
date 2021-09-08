@@ -27,6 +27,10 @@ impl UniqueIndex {
         self.data.get(value).cloned()
     }
 
+    pub(super) fn insert_unchecked(&mut self, value: MemoryValue, id: Id) {
+        self.data.insert(value, id);
+    }
+
     pub(super) fn insert_unique(
         &mut self,
         value: MemoryValue,
@@ -37,7 +41,9 @@ impl UniqueIndex {
                 entry.insert(id);
                 Ok(())
             }
-            std::collections::btree_map::Entry::Occupied(_) => Err(InsertUniqueError),
+            std::collections::btree_map::Entry::Occupied(_) => {
+                Err(InsertUniqueError)
+            }
         }
     }
 
