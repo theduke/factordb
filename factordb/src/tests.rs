@@ -79,6 +79,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_select,
             test_query_in,
             test_merge_list_attr,
+            test_query_contains_with_two_lists,
             test_assert_fails_with_incorrect_value_type,
             test_index_unique,
             test_index_non_unique,
@@ -236,6 +237,25 @@ async fn test_query_in(db: &Db) {
         .unwrap()
         .take_data();
     assert_eq!(items, page_match);
+}
+
+async fn test_query_contains_with_two_lists(db: &Db) {
+    let id = Id::random();
+    db.create(
+        id,
+        map! {
+            "factor/type": ENTITY_COMMENT,
+            "test/int": vec![22, 23],
+        },
+    )
+    .await
+    .unwrap();
+
+    let filter = Expr::contains(Expr::Attr("test/int".into()), vec![22]);
+    let page = db.select(Select::new().with_filter(filter)).await.unwrap();
+
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].data.get_id().unwrap(), id);
 }
 
 async fn test_remove_attr(db: &Db) {

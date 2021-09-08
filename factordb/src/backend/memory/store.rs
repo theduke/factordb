@@ -1065,7 +1065,14 @@ impl MemoryStore {
                             (Value::String(value), Value::String(pattern)) => {
                                 value.contains(pattern)
                             }
-                            _ => false,
+                            (Value::List(left), Value::List(right)) => {
+                                left.iter().any(|item| right.contains(item))
+                            }
+                            (left, right) => {
+                                // TODO: this should be rejected by query
+                                // validation.
+                                false
+                            }
                         },
                         query::expr::BinaryOp::In => {
                             tracing::trace!(?left, ?right, "comparing BinaryOp::In");
