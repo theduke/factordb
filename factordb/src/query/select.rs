@@ -12,8 +12,8 @@ pub enum Order {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Sort {
-    on: Expr,
-    order: Order,
+    pub on: Expr,
+    pub order: Order,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -63,6 +63,14 @@ impl Select {
 
     pub fn with_filter(mut self, filter: Expr) -> Self {
         self.filter = Some(filter);
+        self
+    }
+
+    pub fn with_sort(mut self, on: impl Into<Expr>, order: Order) -> Self {
+        self.sort.push(Sort {
+            on: on.into(),
+            order,
+        });
         self
     }
 }

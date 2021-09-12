@@ -5,7 +5,7 @@ use anyhow::{anyhow, Context, Result};
 use crate::{
     backend::{
         self,
-        query_planner::{self, QueryOp, ResolvedExpr},
+        query_planner::{self, QueryOp, ResolvedExpr, Sort},
         DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
     },
     data::{value::ValueMap, DataMap, Id, Ident, Value},
@@ -13,7 +13,7 @@ use crate::{
     query::{
         self,
         migrate::Migration,
-        select::{Item, Page},
+        select::{Item, Order, Page},
     },
     registry::{LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
     schema, AnyError,
@@ -911,6 +911,50 @@ impl MemoryStore {
             .map(|tuple| self.tuple_to_data_map(tuple))
     }
 
+    fn apply_sort<'a>(items: &mut Vec<Cow<'a, MemoryTuple>>, sorts: &[Sort<MemoryExpr>]) {
+        match sorts.len() {
+            0 => {}
+            1 => {
+                let sort = &sorts[0];
+
+                if sort.order == Order::Asc {
+                    items.sort_by(|a, b| {
+                        let aval = Self::eval_expr(&a, &sort.on);
+                        let bval = Self::eval_expr(&b, &sort.on);
+                        aval.cmp(&bval)
+                    })
+                } else {
+                    items.sort_by(|a, b| {
+                        let aval = Self::eval_expr(&a, &sort.on);
+                        let bval = Self::eval_expr(&b, &sort.on);
+                        bval.cmp(&aval)
+                    })
+                }
+            }
+            _ => {
+                items.sort_by(|a, b| {
+                    let mut ord = std::cmp::Ordering::Equal;
+
+                    for sort in sorts {
+                        let aval = Self::eval_expr(&a, &sort.on);
+                        let bval = Self::eval_expr(&b, &sort.on);
+
+                        ord = if sort.order == Order::Asc {
+                            aval.cmp(&bval)
+                        } else {
+                            bval.cmp(&aval)
+                        };
+                        if ord != std::cmp::Ordering::Equal {
+                            break;
+                        }
+                    }
+
+                    ord
+                });
+            }
+        }
+    }
+
     fn run_query_op<'a>(
         &'a self,
         input: impl Iterator<Item = Cow<'a, MemoryTuple>> + 'a,
@@ -939,7 +983,11 @@ impl MemoryStore {
             }
             query_planner::QueryOp::IndexScan { .. } => todo!(),
             query_planner::QueryOp::IndexScanPrefix { .. } => todo!(),
-            query_planner::QueryOp::Sort { .. } => todo!(),
+            query_planner::QueryOp::Sort { sorts } => {
+                let mut items: Vec<_> = input.collect();
+                Self::apply_sort(&mut items, &sorts);
+                Box::new(items.into_iter())
+            }
         }
     }
 
@@ -976,7 +1024,17 @@ impl MemoryStore {
             QueryOp::IndexScanPrefix { prefix } => QueryOp::IndexScanPrefix {
                 prefix: MemoryValue::from_value_standalone(prefix),
             },
-            QueryOp::Sort { attr, order } => QueryOp::Sort { attr, order },
+            QueryOp::Sort { sorts } => QueryOp::Sort {
+                sorts: sorts
+                    .into_iter()
+                    .map(|s| -> Result<Sort<MemoryExpr>, AnyError> {
+                        Ok(Sort {
+                            on: self.build_memory_expr(s.on, reg)?,
+                            order: s.order,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
             QueryOp::Filter { expr } => QueryOp::Filter {
                 expr: self.build_memory_expr(expr, reg)?,
             },

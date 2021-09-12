@@ -85,6 +85,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_assert_fails_with_incorrect_value_type,
             test_index_unique,
             test_index_non_unique,
+            test_sort_simple,
         ]
     );
 }
@@ -216,6 +217,47 @@ async fn test_select(db: &Db) {
         .select(
             Select::new().with_filter(Expr::eq(Expr::ident("test/text"), Expr::literal("hello"))),
         )
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, page_match);
+}
+
+async fn test_sort_simple(db: &Db) {
+    let id1 = Id::random();
+    let mut data1 = map! {
+        "test/int": 100,
+    };
+    db.create(id1, data1.clone()).await.unwrap();
+    data1.insert("factor/id".into(), id1.into());
+
+    let id2 = Id::random();
+    let mut data2 = map! {
+        "test/int": 0,
+    };
+    db.create(id2, data2.clone()).await.unwrap();
+    data2.insert("factor/id".into(), id2.into());
+
+    let id3 = Id::random();
+    let mut data3 = map! {
+        "test/int": 50,
+    };
+    db.create(id3, data3.clone()).await.unwrap();
+    data3.insert("factor/id".into(), id3.into());
+
+    // Ascending.
+    let page_match = vec![data2.clone(), data3.clone(), data1.clone()];
+    let items = db
+        .select(Select::new().with_sort(Expr::Attr("test/int".into()), query::select::Order::Asc))
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, page_match);
+
+    // Descending.
+    let page_match = vec![data1, data3, data2];
+    let items = db
+        .select(Select::new().with_sort(Expr::Attr("test/int".into()), query::select::Order::Desc))
         .await
         .unwrap()
         .take_data();
