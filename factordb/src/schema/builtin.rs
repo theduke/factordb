@@ -492,6 +492,7 @@ pub fn builtin_db_schema() -> super::DbSchema {
 }
 
 /// Check if an [`Id`] is a builtin entity *type*.
+#[inline]
 pub fn id_is_builtin_entity_type(id: Id) -> bool {
     match id {
         ATTRIBUTE_ID | ENTITY_ID | INDEX_ID => true,

@@ -41,9 +41,7 @@ impl UniqueIndex {
                 entry.insert(id);
                 Ok(())
             }
-            std::collections::btree_map::Entry::Occupied(_) => {
-                Err(InsertUniqueError)
-            }
+            std::collections::btree_map::Entry::Occupied(_) => Err(InsertUniqueError),
         }
     }
 

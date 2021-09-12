@@ -1,8 +1,10 @@
+use fnv::FnvHashMap;
 use ordered_float::OrderedFloat;
 
 use crate::{
     data::{Id, Value},
-    schema, AnyError,
+    query::expr,
+    registry::LocalAttributeId,
 };
 
 // SharedStr
@@ -18,11 +20,25 @@ impl SharedStr {
     pub fn to_string(&self) -> String {
         self.0.to_string()
     }
+
+    // #[inline]
+    // pub fn strong_count(&self) -> usize {
+    //     std::sync::Arc::strong_count(&self.0)
+    // }
 }
 
 impl PartialEq for SharedStr {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.0.as_ptr() == other.0.as_ptr()
+        // self.0.as_ptr() == other.0.as_ptr()
+        self.0.as_ref() == other.0.as_ref()
+    }
+}
+
+impl AsRef<str> for SharedStr {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -50,6 +66,31 @@ pub(super) enum MemoryValue {
 }
 
 impl MemoryValue {
+    // #[inline]
+    // pub fn is_bool(&self) -> bool {
+    //     match self {
+    //         Self::Bool(_) => true,
+    //         _ => false,
+    //     }
+    // }
+
+    pub fn is_true(&self) -> bool {
+        match self {
+            Self::Bool(b) => *b,
+            _ => false,
+        }
+    }
+
+    /// Returns the boolean value if this is a [`MemoryValue::Bool`], or false
+    /// otherwise.
+    #[inline]
+    pub fn as_bool_discard_other(&self) -> bool {
+        match self {
+            Self::Bool(flag) => *flag,
+            _ => false,
+        }
+    }
+
     pub fn to_value(&self) -> Value {
         use MemoryValue as V;
         match self {
@@ -70,13 +111,39 @@ impl MemoryValue {
         }
     }
 
-    pub fn as_id(&self) -> Option<Id> {
-        if let Self::Id(id) = self {
-            Some(*id)
-        } else {
-            None
+    /// Convert a [`Value`] into a [`MemoryValue`] without any smart string
+    /// interning.
+    pub fn from_value_standalone(val: Value) -> Self {
+        match val {
+            Value::Unit => Self::Unit,
+            Value::Bool(v) => Self::Bool(v),
+            Value::UInt(v) => Self::UInt(v),
+            Value::Int(v) => Self::Int(v),
+            Value::Float(v) => Self::Float(v),
+            Value::String(v) => Self::String(SharedStr::from_string(v)),
+            Value::Bytes(v) => Self::Bytes(v),
+            Value::List(v) => Self::List(v.into_iter().map(Self::from_value_standalone).collect()),
+            Value::Map(v) => Self::Map(
+                v.0.into_iter()
+                    .map(|(key, value)| {
+                        (
+                            Self::from_value_standalone(key),
+                            Self::from_value_standalone(value),
+                        )
+                    })
+                    .collect(),
+            ),
+            Value::Id(v) => Self::Id(v),
         }
     }
+
+    // pub fn as_id(&self) -> Option<Id> {
+    //     if let Self::Id(id) = self {
+    //         Some(*id)
+    //     } else {
+    //         None
+    //     }
+    // }
 
     pub fn as_id_ref(&self) -> Option<&Id> {
         if let Self::Id(id) = self {
@@ -96,10 +163,17 @@ impl<'a> From<&'a MemoryValue> for Value {
 // MemoryTuple
 
 #[derive(Debug)]
-pub(super) struct MemoryTuple(pub fnv::FnvHashMap<Id, MemoryValue>);
+pub(super) struct MemoryTuple(pub fnv::FnvHashMap<LocalAttributeId, MemoryValue>);
+
+impl MemoryTuple {
+    #[allow(unused)]
+    pub fn new() -> Self {
+        Self(FnvHashMap::default())
+    }
+}
 
 impl std::ops::Deref for MemoryTuple {
-    type Target = fnv::FnvHashMap<Id, MemoryValue>;
+    type Target = fnv::FnvHashMap<LocalAttributeId, MemoryValue>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -112,12 +186,36 @@ impl std::ops::DerefMut for MemoryTuple {
     }
 }
 
-impl crate::backend::Dao for MemoryTuple {
-    fn get(&self, attr: &schema::AttributeSchema) -> Result<Option<Value>, AnyError> {
-        Ok(self.0.get(&attr.id).map(|v| v.into()))
-    }
+// impl crate::backend::Dao for MemoryTuple {
+//     fn get(&self, attr: &schema::AttributeSchema) -> Result<Option<Value>, AnyError> {
+//         Ok(self.0.get(&attr.id).map(|v| v.into()))
+//     }
 
-    fn set(&mut self, _attr: &schema::AttributeSchema, _value: Value) {
-        todo!()
-    }
+//     fn set(&mut self, _attr: &schema::AttributeSchema, _value: Value) {
+//         todo!()
+//     }
+// }
+
+#[derive(Debug)]
+pub(super) enum MemoryExpr {
+    Literal(MemoryValue),
+    /// Select the value of an attribute.
+    Attr(LocalAttributeId),
+    /// Resolve the value of an [`Indent`] into an [`Id`].
+    Ident(Id),
+    Variable(String),
+    UnaryOp {
+        op: expr::UnaryOp,
+        expr: Box<Self>,
+    },
+    BinaryOp {
+        left: Box<Self>,
+        op: expr::BinaryOp,
+        right: Box<Self>,
+    },
+    If {
+        value: Box<Self>,
+        then: Box<Self>,
+        or: Box<Self>,
+    },
 }

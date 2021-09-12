@@ -3,7 +3,7 @@ use crate::data::Value;
 use super::memory_data::{MemoryValue, SharedStr};
 
 pub(super) struct Interner {
-    strings: std::collections::HashMap<SharedStr, SharedStr>,
+    strings: std::collections::HashMap<Box<str>, SharedStr>,
 }
 
 impl Interner {
@@ -18,15 +18,28 @@ impl Interner {
     }
 
     pub fn intern_str(&mut self, value: String) -> SharedStr {
-        let shared: SharedStr = SharedStr::from_string(value);
-        match self.strings.get(&shared) {
+        match self.strings.get(value.as_str()) {
             Some(v) => v.clone(),
             None => {
-                self.strings.insert(shared.clone(), shared.clone());
+                let shared = SharedStr::from_string(value.clone());
+                self.strings.insert(Box::from(value), shared.clone());
                 shared
             }
         }
     }
+
+    // /// Try to remove a value from the interner.
+    // /// Values will only be removed if no other copies exist.
+    // pub fn remove(&mut self, value: SharedStr) {
+    //     if value.strong_count() == 2 {
+    //         // If the strong count is 2, it means that no other copies exist and
+    //         // the value can be removed from the cache.
+    //         // The count is 2 because:
+    //         //  - the `value` argument is 1
+    //         //  - the value stored in the map is 1
+    //         self.strings.remove(value.as_ref());
+    //     }
+    // }
 
     pub fn intern_value(&mut self, value: Value) -> MemoryValue {
         use MemoryValue as M;

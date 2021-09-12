@@ -3,15 +3,15 @@ use anyhow::{anyhow, Context, Result};
 use crate::{
     backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
     data::{value::ValueMap, DataMap, Id, Ident, Value},
-    error,
+    error::{self, EntityNotFound},
     query::{self, expr, migrate::Migration, select::Item},
-    registry::{LocalIndexId, RegisteredIndex},
+    registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
     schema, AnyError,
 };
 
 use super::{
     index::{self, MemoryIndexMap},
-    memory_data::{MemoryTuple, MemoryValue},
+    memory_data::{self, MemoryExpr, MemoryTuple, MemoryValue},
 };
 
 /// Memory store for building a backend.
@@ -111,7 +111,7 @@ impl MemoryStore {
             .map(|(key, value)| -> Result<_, AnyError> {
                 let attr = reg.require_attr_by_name(&key)?;
                 let value = self.interner.intern_value(value);
-                Ok((attr.schema.id, value))
+                Ok((attr.local_id, value))
             })
             .collect::<Result<_, _>>()?;
         Ok(MemoryTuple(map))
@@ -124,7 +124,7 @@ impl MemoryStore {
             .0
             .iter()
             .map(|(id, value)| -> Result<_, AnyError> {
-                let attr = reg.require_attr(*id)?;
+                let attr = reg.attr(*id);
                 let value = value.into();
                 Ok((attr.schema.ident.clone(), value))
             })
@@ -450,31 +450,31 @@ impl MemoryStore {
 
         let reg = self.registry.read().unwrap();
 
-        let mut replaced_values = Vec::new();
+        let mut replaced_values = Vec::<(LocalAttributeId, Option<MemoryValue>)>::new();
 
         for (key, new_value) in update.data.0 {
             let attr = reg.require_attr_by_name(&key)?;
 
             // FIXME: this logic should not be here, but be handled by
             // Registry::validate_merge
-            if let Some(old_value) = old.remove(&attr.schema.id) {
+            if let Some(old_value) = old.remove(&attr.local_id) {
                 // FIXME: this is hacky and only covers lists...
                 match (old_value, new_value) {
                     (MemoryValue::List(mut old_items), Value::List(new_items)) => {
                         for item in new_items {
                             old_items.push(self.interner.intern_value(item));
                         }
-                        old.0.insert(attr.schema.id, MemoryValue::List(old_items));
+                        old.0.insert(attr.local_id, MemoryValue::List(old_items));
                     }
                     (old_value, new_value) => {
                         old.0
-                            .insert(attr.schema.id, self.interner.intern_value(new_value));
-                        replaced_values.push((attr.schema.id, Some(old_value)));
+                            .insert(attr.local_id, self.interner.intern_value(new_value));
+                        replaced_values.push((attr.local_id, Some(old_value)));
                     }
                 }
             } else {
                 old.0
-                    .insert(attr.schema.id, self.interner.intern_value(new_value));
+                    .insert(attr.local_id, self.interner.intern_value(new_value));
             };
         }
 
@@ -507,8 +507,8 @@ impl MemoryStore {
         let mut removed = Vec::new();
         for attr_id in rem.attrs {
             let attr = reg.require_attr(attr_id)?;
-            if let Some(value) = old.0.remove(&attr.schema.id) {
-                removed.push((attr_id, value));
+            if let Some(value) = old.0.remove(&attr.local_id) {
+                removed.push((attr.local_id, value));
             }
         }
 
@@ -542,24 +542,24 @@ impl MemoryStore {
 
     fn tuple_select_remove(
         &mut self,
-        selector: &query::expr::Expr,
+        selector: &MemoryExpr,
         rem: &backend::TupleRemoveAttrs,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
-        let reg = self.registry.clone();
-
         // TODO: use query logic instead of full table scan for speedup.
         // TODO: figure out how to do this in one step. Two step process
         // right now due to borrow checker errors.
-
+        //
         let mut to_remove = Vec::new();
 
         for (entity_id, entity) in self.entities.iter() {
-            if self.entity_filter(entity, selector, &*reg.read().unwrap()) {
+            if self.entity_filter(entity, selector) {
                 let mut removed_attr_ids = Vec::new();
                 for attr_id in &rem.attrs {
-                    if entity.contains_key(&attr_id) {
-                        removed_attr_ids.push(attr_id);
+                    let attr = reg.require_attr(*attr_id)?;
+                    if entity.contains_key(&attr.local_id) {
+                        removed_attr_ids.push(attr);
                     }
                 }
 
@@ -574,7 +574,7 @@ impl MemoryStore {
 
             let attrs = removed_attr_ids
                 .into_iter()
-                .filter_map(|attr_id| Some((*attr_id, entity.remove(&attr_id)?)))
+                .filter_map(|attr| Some((attr.local_id, entity.remove(&attr.local_id)?)))
                 .collect();
 
             revert.push(RevertOp::TupleAttrsRemoved {
@@ -589,7 +589,12 @@ impl MemoryStore {
     /// Apply database operations.
     /// [RevertOp]s are collected into the provided revert list, which allows
     /// undoing operations.
-    fn apply_db_ops(&mut self, ops: Vec<DbOp>, revert: &mut RevertList) -> Result<(), AnyError> {
+    fn apply_db_ops(
+        &mut self,
+        ops: Vec<DbOp>,
+        revert: &mut RevertList,
+        reg: &Registry,
+    ) -> Result<(), AnyError> {
         use crate::backend::TupleOp;
 
         // FIXME: implement validate_ checks via registry for all operations.
@@ -618,7 +623,8 @@ impl MemoryStore {
                     TupleOp::Replace(_) => todo!(),
                     TupleOp::Merge(_) => todo!(),
                     TupleOp::RemoveAttrs(remove) => {
-                        self.tuple_select_remove(&sel.selector, &remove, revert)?;
+                        let expr = self.build_memory_expr(sel.selector, reg)?;
+                        self.tuple_select_remove(&expr, &remove, revert, reg)?;
                     }
                     TupleOp::Delete(_) => todo!(),
                 },
@@ -632,9 +638,10 @@ impl MemoryStore {
         &mut self,
         create: query::mutate::Create,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         let ops = self.registry.read().unwrap().validate_create(create)?;
-        self.apply_db_ops(ops, revert)?;
+        self.apply_db_ops(ops, revert, reg)?;
         Ok(())
     }
 
@@ -642,6 +649,7 @@ impl MemoryStore {
         &mut self,
         repl: query::mutate::Replace,
         revert: &mut RevertList,
+        registry: &Registry,
     ) -> Result<(), AnyError> {
         let old = match self.entities.get(&repl.id) {
             Some(tuple) => Some(self.tuple_to_data_map(&tuple)?),
@@ -649,7 +657,7 @@ impl MemoryStore {
         };
 
         let ops = self.registry.read().unwrap().validate_replace(repl, old)?;
-        self.apply_db_ops(ops, revert)?;
+        self.apply_db_ops(ops, revert, registry)?;
         Ok(())
     }
 
@@ -657,17 +665,18 @@ impl MemoryStore {
         &mut self,
         merge: query::mutate::Merge,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         if let Some(old_tuple) = self.entities.get(&merge.id) {
             let old = self.tuple_to_data_map(old_tuple)?;
             let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
-            self.apply_db_ops(ops, revert)
+            self.apply_db_ops(ops, revert, reg)
         } else {
             let create = query::mutate::Create {
                 id: merge.id,
                 data: merge.data,
             };
-            self.apply_create(create, revert)
+            self.apply_create(create, revert, reg)
         }
     }
 
@@ -675,6 +684,7 @@ impl MemoryStore {
         &mut self,
         delete: query::mutate::Delete,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         let old = self
             .entities
@@ -682,8 +692,8 @@ impl MemoryStore {
             .ok_or_else(|| anyhow!("Entity not found: {:?}", delete.id))
             .and_then(|t| self.tuple_to_data_map(t))?;
 
-        let ops = self.registry.read().unwrap().validate_delete(delete, old)?;
-        self.apply_db_ops(ops, revert)?;
+        let ops = reg.validate_delete(delete, old)?;
+        self.apply_db_ops(ops, revert, reg)?;
         Ok(())
     }
 
@@ -691,6 +701,7 @@ impl MemoryStore {
     fn apply_batch_impl(
         &mut self,
         batch: query::mutate::BatchUpdate,
+        reg: &Registry,
     ) -> Result<RevertList, AnyError> {
         // FIXME: rollback when errors happen.
 
@@ -698,10 +709,12 @@ impl MemoryStore {
 
         for action in batch.actions {
             let res = match action {
-                query::mutate::Mutate::Create(create) => self.apply_create(create, &mut revert),
-                query::mutate::Mutate::Replace(repl) => self.apply_replace(repl, &mut revert),
-                query::mutate::Mutate::Merge(merge) => self.apply_merge(merge, &mut revert),
-                query::mutate::Mutate::Delete(del) => self.apply_delete(del, &mut revert),
+                query::mutate::Mutate::Create(create) => {
+                    self.apply_create(create, &mut revert, reg)
+                }
+                query::mutate::Mutate::Replace(repl) => self.apply_replace(repl, &mut revert, reg),
+                query::mutate::Mutate::Merge(merge) => self.apply_merge(merge, &mut revert, reg),
+                query::mutate::Mutate::Delete(del) => self.apply_delete(del, &mut revert, reg),
             };
 
             if let Err(err) = res {
@@ -718,7 +731,9 @@ impl MemoryStore {
         &mut self,
         batch: crate::query::mutate::BatchUpdate,
     ) -> Result<(), AnyError> {
-        self.apply_batch_impl(batch)?;
+        let shared_reg = self.registry().clone();
+        let reg = shared_reg.read().unwrap();
+        self.apply_batch_impl(batch, &reg)?;
         Ok(())
     }
 
@@ -737,7 +752,9 @@ impl MemoryStore {
         &mut self,
         batch: crate::query::mutate::BatchUpdate,
     ) -> Result<RevertEpoch, AnyError> {
-        let ops = self.apply_batch_impl(batch)?;
+        let shared_reg = self.registry().clone();
+        let reg = shared_reg.read().unwrap();
+        let ops = self.apply_batch_impl(batch, &reg)?;
         let epoch = self.persist_revert_epoch(ops);
         Ok(epoch)
     }
@@ -766,7 +783,7 @@ impl MemoryStore {
                         if let Some(value) = value_opt {
                             data.insert(attr_id, value);
                         } else {
-                            data.remove(&id);
+                            data.remove(&attr_id);
                         }
                     }
                 }
@@ -855,7 +872,7 @@ impl MemoryStore {
         }
 
         let mut revert = Vec::new();
-        if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert) {
+        if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert, &reg) {
             self.apply_revert(revert);
             Err(err)
         } else {
@@ -887,20 +904,20 @@ impl MemoryStore {
     ) -> Result<query::select::Page<Item>, AnyError> {
         // TODO: query validation and planning
 
-        let reg = self.registry.read().unwrap();
+        let reg = self.registry().read().unwrap();
 
-        let items: Vec<(&Id, &MemoryTuple)> = if let Some(filter) = query.filter {
-            // Fast path for single ident select.
+        let id_select = query.filter.as_ref().and_then(expr::expr_is_entity_ident);
 
-            if let Some(Ident::Id(id)) = expr::expr_is_entity_ident(&filter) {
+        let items: Vec<(&Id, &MemoryTuple)> = match (id_select, query.filter) {
+            (Some(ident), _) => {
+                // TODO: remove once query planner is implemented.
                 // Fast path for single ID select.
                 // This is messy and should be handled by an external query
                 // planner, but it helps for now.
-
-                if let Some(tuple) = self.entities.get(&id) {
+                if let Some(tuple) = self.resolve_entity(&ident) {
                     let id = tuple
                         .0
-                        .get(&schema::builtin::ATTR_ID)
+                        .get(&registry::ATTR_ID_LOCAL)
                         .unwrap()
                         .as_id_ref()
                         .unwrap();
@@ -908,41 +925,22 @@ impl MemoryStore {
                 } else {
                     vec![]
                 }
-            } else {
-                self.entities
-                    .iter()
-                    .filter(|(_id, item)| {
-                        // Skip builtin types.
-
-                        if let Some(id) = item
-                            .get(&crate::schema::builtin::ATTR_TYPE)
-                            .and_then(|x| x.as_id())
-                        {
-                            if crate::schema::builtin::id_is_builtin_entity_type(id) {
-                                return false;
-                            }
-                        }
-
-                        let flag = self.entity_filter(item, &filter, &*reg);
-                        flag
-                    })
-                    .collect()
             }
-        } else {
-            self.entities
-                .iter()
-                .filter(|(_id, item)| {
-                    if let Some(id) = item
-                        .get(&crate::schema::builtin::ATTR_TYPE)
-                        .and_then(|x| x.as_id())
-                    {
-                        if crate::schema::builtin::id_is_builtin_entity_type(id) {
-                            return false;
-                        }
+            (_, Some(value_filter)) => {
+                let filter = self.build_memory_expr(value_filter, &reg)?;
+
+                let mut items = Vec::new();
+
+                for (id, entity) in self.entities.iter() {
+                    if !self.entity_filter(entity, &filter) {
+                        continue;
                     }
-                    true
-                })
-                .collect()
+
+                    items.push((id, entity));
+                }
+                items
+            }
+            _ => self.entities.iter().collect(),
         };
 
         if !query.sort.is_empty() {
@@ -980,92 +978,98 @@ impl MemoryStore {
         })
     }
 
-    fn eval_expr<'a>(
-        &self,
-        entity: &MemoryTuple,
-        expr: &'a query::expr::Expr,
-        reg: &crate::registry::Registry,
-    ) -> std::borrow::Cow<'a, Value> {
-        use std::borrow::Cow;
+    fn build_memory_expr(&self, expr: expr::Expr, reg: &Registry) -> Result<MemoryExpr, AnyError> {
+        use expr::Expr as E;
 
-        let out = match expr {
-            query::expr::Expr::Literal(v) => Cow::Borrowed(v),
-            query::expr::Expr::Attr(ident) => match ident {
-                Ident::Id(id) => entity
-                    .get(id)
-                    .map(|x| Cow::Owned(x.to_value()))
-                    .unwrap_or(cowal_unit()),
-                Ident::Name(name) => reg
-                    .attr_by_name(name)
-                    .and_then(|attr| {
-                        entity
-                            .get(&attr.schema.id)
-                            .map(|x| Cow::Owned(x.to_value()))
-                    })
-                    .unwrap_or(cowal_unit()),
-            },
-            query::expr::Expr::Ident(ident) => match ident {
-                Ident::Id(id) => Cow::Owned(Value::Id(*id)),
-                Ident::Name(name) => {
-                    if let Some(id) = self.idents.get(name.as_ref()) {
-                        Cow::Owned(id.clone().into())
-                    } else {
-                        cowal_unit()
-                    }
-                }
-            },
-            query::expr::Expr::Variable(_) => todo!(),
-            query::expr::Expr::UnaryOp { op, expr } => {
-                let value = self.eval_expr(entity, expr, reg);
+        match expr {
+            E::Literal(lit) => Ok(MemoryExpr::Literal(MemoryValue::from_value_standalone(lit))),
+            E::Attr(attr) => {
+                let local_id = reg.require_attr_by_ident(&attr)?.local_id;
+                Ok(MemoryExpr::Attr(local_id))
+            }
+            E::Ident(ident) => {
+                let id = self
+                    .resolve_ident(&ident)
+                    .ok_or_else(|| EntityNotFound::new(ident))?;
+                Ok(MemoryExpr::Ident(id))
+            }
+            E::Variable(e) => Ok(MemoryExpr::Variable(e)),
+            E::UnaryOp { op, expr } => Ok(MemoryExpr::UnaryOp {
+                op,
+                expr: Box::new(self.build_memory_expr(*expr, reg)?),
+            }),
+            E::BinaryOp { left, op, right } => Ok(MemoryExpr::BinaryOp {
+                left: Box::new(self.build_memory_expr(*left, reg)?),
+                op,
+                right: Box::new(self.build_memory_expr(*right, reg)?),
+            }),
+            E::If { value, then, or } => Ok(MemoryExpr::If {
+                value: Box::new(self.build_memory_expr(*value, reg)?),
+                then: Box::new(self.build_memory_expr(*then, reg)?),
+                or: Box::new(self.build_memory_expr(*or, reg)?),
+            }),
+        }
+    }
+
+    fn eval_expr<'a>(
+        entity: &'a MemoryTuple,
+        expr: &'a MemoryExpr,
+    ) -> std::borrow::Cow<'a, MemoryValue> {
+        use query::expr::BinaryOp;
+        use std::borrow::Cow;
+        use MemoryExpr as E;
+
+        match expr {
+            E::Literal(v) => Cow::Borrowed(v),
+            E::Attr(local_id) => entity
+                .get(local_id)
+                .map(|attr_value| Cow::Borrowed(attr_value))
+                .unwrap_or(cowal_unit()),
+            E::Ident(id) => Cow::Owned(MemoryValue::Id(*id)),
+            E::Variable(_v) => todo!(),
+            E::UnaryOp { op, expr } => {
+                let value = Self::eval_expr(entity, expr);
                 match op {
                     query::expr::UnaryOp::Not => {
-                        let flag = value.as_bool().unwrap_or(false);
-                        Cow::Owned(Value::Bool(!flag))
+                        Cow::Owned(MemoryValue::Bool(value.as_bool_discard_other()))
                     }
                 }
             }
-            query::expr::Expr::BinaryOp { left, op, right } => match op {
+            E::BinaryOp { left, op, right } => match op {
                 query::expr::BinaryOp::And => {
-                    let left_flag = self.eval_expr(entity, left, reg).as_bool().unwrap_or(false);
-                    let flag = if left_flag {
-                        self.eval_expr(entity, right, reg)
-                            .as_bool()
-                            .unwrap_or(false)
+                    let left_flag = Self::eval_expr(entity, left);
+
+                    if left_flag.is_true() {
+                        let right = Self::eval_expr(entity, right);
+                        right
                     } else {
-                        false
-                    };
-                    Cow::Owned(Value::Bool(flag))
+                        Cow::Owned(MemoryValue::Bool(false))
+                    }
                 }
                 query::expr::BinaryOp::Or => {
-                    let left_flag = self.eval_expr(entity, left, reg).as_bool().unwrap_or(false);
-                    let flag = if left_flag {
-                        true
+                    let left_flag = Self::eval_expr(entity, left);
+                    if left_flag.is_true() {
+                        left_flag
                     } else {
-                        self.eval_expr(entity, right, reg)
-                            .as_bool()
-                            .unwrap_or(false)
-                    };
-                    Cow::Owned(Value::Bool(flag))
+                        Self::eval_expr(entity, right)
+                    }
                 }
                 other => {
-                    let left = self.eval_expr(entity, left, reg);
-                    let right = self.eval_expr(entity, right, reg);
+                    let left = Self::eval_expr(entity, left);
+                    let right = Self::eval_expr(entity, right);
 
                     let flag = match other {
-                        query::expr::BinaryOp::Eq => {
-                            tracing::trace!(?left, ?right, "BinaryOp::Eq");
-                            left == right
-                        }
-                        query::expr::BinaryOp::Neq => left != right,
-                        query::expr::BinaryOp::Gt => left > right,
-                        query::expr::BinaryOp::Gte => left >= right,
-                        query::expr::BinaryOp::Lt => left < right,
-                        query::expr::BinaryOp::Lte => left <= right,
-                        query::expr::BinaryOp::Contains => match (left.as_ref(), right.as_ref()) {
-                            (Value::String(value), Value::String(pattern)) => {
-                                value.contains(pattern)
+                        BinaryOp::Eq => left == right,
+                        BinaryOp::Neq => left != right,
+                        BinaryOp::Gt => left > right,
+                        BinaryOp::Gte => left >= right,
+                        BinaryOp::Lt => left < right,
+                        BinaryOp::Lte => left <= right,
+                        BinaryOp::Contains => match (left.as_ref(), right.as_ref()) {
+                            (MemoryValue::String(value), MemoryValue::String(pattern)) => {
+                                value.as_ref().contains(pattern.as_ref())
                             }
-                            (Value::List(left), Value::List(right)) => {
+                            (MemoryValue::List(left), MemoryValue::List(right)) => {
                                 left.iter().any(|item| right.contains(item))
                             }
                             (_left, _right) => {
@@ -1074,45 +1078,39 @@ impl MemoryStore {
                                 false
                             }
                         },
-                        query::expr::BinaryOp::In => {
+                        BinaryOp::In => {
                             tracing::trace!(?left, ?right, "comparing BinaryOp::In");
                             // TODO: probably need to cover more variants here!
                             match (left.as_ref(), right.as_ref()) {
-                                (value, Value::List(items)) => items.iter().any(|x| x == value),
+                                (value, MemoryValue::List(items)) => {
+                                    items.iter().any(|x| x == value)
+                                }
                                 _other => false,
                             }
                         }
 
                         // Covered above.
-                        query::expr::BinaryOp::And | query::expr::BinaryOp::Or => {
+                        BinaryOp::And | query::expr::BinaryOp::Or => {
                             unreachable!()
                         }
                     };
-                    Cow::Owned(Value::Bool(flag))
+                    Cow::Owned(MemoryValue::Bool(flag))
                 }
             },
-            query::expr::Expr::If { value, then, or } => {
-                let flag = self
-                    .eval_expr(entity, &*value, reg)
-                    .as_bool()
-                    .unwrap_or(false);
-                if flag {
-                    self.eval_expr(entity, &*then, reg)
+            E::If { value, then, or } => {
+                let flag = Self::eval_expr(entity, &*value);
+                // TODO: handle non-boolean flag! (report warning/error)
+                if flag.is_true() {
+                    Self::eval_expr(entity, &*then)
                 } else {
-                    self.eval_expr(entity, &*or, reg)
+                    Self::eval_expr(entity, &*or)
                 }
             }
-        };
-        out
+        }
     }
 
-    fn entity_filter(
-        &self,
-        entity: &MemoryTuple,
-        expr: &query::expr::Expr,
-        reg: &crate::registry::Registry,
-    ) -> bool {
-        self.eval_expr(entity, expr, reg).as_bool().unwrap_or(false)
+    fn entity_filter(&self, entity: &MemoryTuple, expr: &memory_data::MemoryExpr) -> bool {
+        Self::eval_expr(entity, expr).as_bool_discard_other()
     }
 
     pub fn purge_all_data(&mut self) {
@@ -1149,8 +1147,8 @@ impl MemoryStore {
 }
 
 #[inline]
-const fn cowal_unit<'a>() -> std::borrow::Cow<'a, Value> {
-    std::borrow::Cow::Owned(Value::Unit)
+const fn cowal_unit<'a>() -> std::borrow::Cow<'a, MemoryValue> {
+    std::borrow::Cow::Owned(MemoryValue::Unit)
 }
 
 /// An identifier for the current version of a database.
@@ -1171,11 +1169,11 @@ enum RevertOp {
     },
     TupleMerged {
         id: Id,
-        replaced_data: Vec<(Id, Option<super::memory_data::MemoryValue>)>,
+        replaced_data: Vec<(LocalAttributeId, Option<super::memory_data::MemoryValue>)>,
     },
     TupleAttrsRemoved {
         id: Id,
-        attrs: Vec<(Id, super::memory_data::MemoryValue)>,
+        attrs: Vec<(LocalAttributeId, super::memory_data::MemoryValue)>,
     },
     TupleDeleted {
         id: Id,
@@ -1194,3 +1192,29 @@ enum RevertOp {
 }
 
 type RevertList = Vec<RevertOp>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_expr_eval() {
+        use memory_data::MemoryExpr;
+
+        let reg = Registry::new();
+        let title_id = reg.require_attr_by_name("factor/title").unwrap().local_id;
+
+        let mut tuple = MemoryTuple::new();
+        let hello = MemoryValue::String(memory_data::SharedStr::from_string("hello".to_string()));
+        tuple.0.insert(title_id, hello.clone());
+
+        let expr = MemoryExpr::BinaryOp {
+            left: Box::new(MemoryExpr::Attr(title_id)),
+            op: expr::BinaryOp::Eq,
+            right: Box::new(MemoryExpr::Literal(hello)),
+        };
+
+        let flag = MemoryStore::eval_expr(&tuple, &expr);
+        assert_eq!(flag.as_bool_discard_other(), true);
+    }
+}

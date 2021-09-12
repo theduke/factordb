@@ -9,6 +9,12 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct LocalAttributeId(u32);
 
+impl LocalAttributeId {
+    pub(super) const fn from_u32(val: u32) -> Self {
+        Self(val)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RegisteredAttribute {
     pub local_id: LocalAttributeId,

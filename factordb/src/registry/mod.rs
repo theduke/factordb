@@ -32,6 +32,9 @@ pub use self::{
 
 const MAX_NAME_LEN: usize = 50;
 
+pub const ATTR_ID_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(1);
+pub const ATTR_TYPE_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(5);
+
 #[derive(Clone, Debug)]
 pub struct Registry {
     entities: entity_registry::EntityRegistry,
@@ -152,8 +155,16 @@ impl Registry {
     fn add_builtins(&mut self) {
         let schema = schema::builtin::builtin_db_schema();
         for attr in schema.attributes {
-            self.register_attribute(attr)
+            let local_id = self
+                .register_attribute(attr.clone())
                 .expect("Internal error: could not register builtin attribute");
+
+            if attr.id == schema::builtin::ATTR_ID {
+                assert_eq!(local_id, ATTR_ID_LOCAL);
+            }
+            if attr.id == schema::builtin::ATTR_TYPE {
+                assert_eq!(local_id, ATTR_TYPE_LOCAL);
+            }
         }
         for entity in schema.entities {
             self.register_entity(entity.clone(), true).expect(&format!(
@@ -526,7 +537,7 @@ impl Registry {
         let mut ops = Vec::new();
 
         for (attr_name, value) in attrs.iter() {
-            let attr = self.attr_by_name(attr_name).unwrap();
+            let attr = self.require_attr_by_name(attr_name)?;
             for index in self.indexes.attribute_indexes(attr.local_id) {
                 if index.schema.attributes.len() > 1 {
                     return Err(anyhow!("Multi-attribute indexes are not implemented yet!"));
