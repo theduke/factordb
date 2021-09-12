@@ -5,6 +5,8 @@ use crate::{
     Value, ValueMap,
 };
 
+use super::EntityContainer;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeSchema {
     #[serde(rename = "factor/id")]
@@ -121,6 +123,11 @@ pub trait AttrMapExt {
     fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
     where
         A::Type: Into<Value>;
+
+    fn try_into_entity<E>(self) -> Result<E, crate::data::value::ValueDeserializeError>
+    where
+        Self: Sized,
+        E: EntityContainer + serde::de::DeserializeOwned;
 }
 
 impl AttrMapExt for ValueMap<String> {
@@ -187,5 +194,13 @@ impl AttrMapExt for ValueMap<String> {
         A::Type: Into<Value>,
     {
         self.insert(A::QUALIFIED_NAME.to_string(), value.into());
+    }
+
+    fn try_into_entity<E>(self) -> Result<E, crate::data::value::ValueDeserializeError>
+    where
+        Self: Sized,
+        E: EntityContainer + serde::de::DeserializeOwned,
+    {
+        crate::data::value::from_value_map(self)
     }
 }
