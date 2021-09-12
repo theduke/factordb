@@ -27,7 +27,7 @@ pub enum Expr {
     Literal(Value),
     /// Select the value of an attribute.
     Attr(Ident),
-    /// Resolve the value of an [`Indent`] into an [`Id`].
+    /// Resolve the value of an [`Ident`] into an [`Id`].
     Ident(Ident),
     Variable(String),
     UnaryOp {
@@ -185,113 +185,113 @@ where
     }
 }
 
-/// Try to resolve an expression as a simple id or ident select.
-pub(crate) fn expr_is_entity_ident(expr: &Expr) -> Option<Ident> {
-    use crate::schema::builtin::{AttrId, AttrIdent, ATTR_ID, ATTR_IDENT};
+// /// Try to resolve an expression as a simple id or ident select.
+// pub(crate) fn expr_is_entity_ident(expr: &Expr) -> Option<Ident> {
+//     use crate::schema::builtin::{AttrId, AttrIdent, ATTR_ID, ATTR_IDENT};
 
-    match expr {
-        Expr::BinaryOp {
-            left,
-            op: BinaryOp::Eq,
-            right,
-        } => {
-            let left = left.as_ref();
-            let right = right.as_ref();
+//     match expr {
+//         Expr::BinaryOp {
+//             left,
+//             op: BinaryOp::Eq,
+//             right,
+//         } => {
+//             let left = left.as_ref();
+//             let right = right.as_ref();
 
-            let (ident, literal) = match (left, right) {
-                (Expr::Attr(ident), Expr::Literal(value)) => (ident, value),
-                (Expr::Literal(value), Expr::Attr(ident)) => (ident, value),
-                _ => {
-                    return None;
-                }
-            };
+//             let (ident, literal) = match (left, right) {
+//                 (Expr::Attr(ident), Expr::Literal(value)) => (ident, value),
+//                 (Expr::Literal(value), Expr::Attr(ident)) => (ident, value),
+//                 _ => {
+//                     return None;
+//                 }
+//             };
 
-            match ident {
-                // Id
-                Ident::Id(ATTR_ID) => literal.as_id().map(Ident::from),
-                Ident::Name(name) if name == AttrId::QUALIFIED_NAME => {
-                    literal.as_id().map(Ident::from)
-                }
-                // Ident.
-                Ident::Id(ATTR_IDENT) => literal
-                    .as_str()
-                    .map(|name| Ident::Name(name.to_string().into())),
-                Ident::Name(name) if name == AttrIdent::QUALIFIED_NAME => literal
-                    .as_str()
-                    .map(|name| Ident::Name(name.to_string().into())),
-                _ => None,
-            }
-        }
-        _ => None,
-    }
-}
+//             match ident {
+//                 // Id
+//                 Ident::Id(ATTR_ID) => literal.as_id().map(Ident::from),
+//                 Ident::Name(name) if name == AttrId::QUALIFIED_NAME => {
+//                     literal.as_id().map(Ident::from)
+//                 }
+//                 // Ident.
+//                 Ident::Id(ATTR_IDENT) => literal
+//                     .as_str()
+//                     .map(|name| Ident::Name(name.to_string().into())),
+//                 Ident::Name(name) if name == AttrIdent::QUALIFIED_NAME => literal
+//                     .as_str()
+//                     .map(|name| Ident::Name(name.to_string().into())),
+//                 _ => None,
+//             }
+//         }
+//         _ => None,
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        schema::builtin::{AttrId, AttrIdent, ATTR_ID, ATTR_IDENT},
-        Id,
-    };
+    // use crate::{
+    //     schema::builtin::{AttrId, AttrIdent, ATTR_ID, ATTR_IDENT},
+    //     Id,
+    // };
 
-    use super::*;
+    // use super::*;
 
-    #[test]
-    fn test_expr_is_entity_ident() {
-        let nil_ident = Ident::from(Id::nil());
+    //#[test]
+    //fn test_expr_is_entity_ident() {
+    //    let nil_ident = Ident::from(Id::nil());
 
-        // ID.
+    //    // ID.
 
-        let a = Expr::eq(
-            Expr::Attr(ATTR_ID.into()),
-            Expr::Literal(Value::Id(Id::nil())),
-        );
-        assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Attr(ATTR_ID.into()),
+    //        Expr::Literal(Value::Id(Id::nil())),
+    //    );
+    //    assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
-        let a = Expr::eq(
-            Expr::Literal(Value::Id(Id::nil())),
-            Expr::Attr(ATTR_ID.into()),
-        );
-        assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Literal(Value::Id(Id::nil())),
+    //        Expr::Attr(ATTR_ID.into()),
+    //    );
+    //    assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
-        let a = Expr::eq(
-            Expr::Attr(AttrId::IDENT),
-            Expr::Literal(Value::Id(Id::nil())),
-        );
-        assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Attr(AttrId::IDENT),
+    //        Expr::Literal(Value::Id(Id::nil())),
+    //    );
+    //    assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
-        let a = Expr::eq(
-            Expr::Literal(Value::Id(Id::nil())),
-            Expr::Attr(AttrId::IDENT),
-        );
-        assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Literal(Value::Id(Id::nil())),
+    //        Expr::Attr(AttrId::IDENT),
+    //    );
+    //    assert_eq!(Some(nil_ident.clone()), expr_is_entity_ident(&a));
 
-        // IDENT.
-        //
-        let hello_value = Value::from("hello");
-        let hello_ident = Ident::from("hello");
+    //    // IDENT.
+    //    //
+    //    let hello_value = Value::from("hello");
+    //    let hello_ident = Ident::from("hello");
 
-        let a = Expr::eq(
-            Expr::Attr(ATTR_IDENT.into()),
-            Expr::Literal(hello_value.clone()),
-        );
-        assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Attr(ATTR_IDENT.into()),
+    //        Expr::Literal(hello_value.clone()),
+    //    );
+    //    assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
 
-        let a = Expr::eq(
-            Expr::Literal(hello_value.clone()),
-            Expr::Attr(ATTR_IDENT.into()),
-        );
-        assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Literal(hello_value.clone()),
+    //        Expr::Attr(ATTR_IDENT.into()),
+    //    );
+    //    assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
 
-        let a = Expr::eq(
-            Expr::Attr(AttrIdent::IDENT),
-            Expr::Literal(hello_value.clone()),
-        );
-        assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
+    //    let a = Expr::eq(
+    //        Expr::Attr(AttrIdent::IDENT),
+    //        Expr::Literal(hello_value.clone()),
+    //    );
+    //    assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
 
-        let a = Expr::eq(
-            Expr::Literal(hello_value.clone()),
-            Expr::Attr(AttrIdent::IDENT),
-        );
-        assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
-    }
+    //    let a = Expr::eq(
+    //        Expr::Literal(hello_value.clone()),
+    //        Expr::Attr(AttrIdent::IDENT),
+    //    );
+    //    assert_eq!(Some(hello_ident.clone()), expr_is_entity_ident(&a));
+    //}
 }

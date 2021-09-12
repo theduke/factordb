@@ -253,7 +253,6 @@ async fn test_query_contains_with_two_lists(db: &Db) {
     .await
     .unwrap();
 
-
     db.create(
         Id::random(),
         map! {

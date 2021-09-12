@@ -1,4 +1,5 @@
-use fnv::FnvHashMap;
+use std::collections::HashMap;
+
 use ordered_float::OrderedFloat;
 
 use crate::{
@@ -145,13 +146,13 @@ impl MemoryValue {
     //     }
     // }
 
-    pub fn as_id_ref(&self) -> Option<&Id> {
-        if let Self::Id(id) = self {
-            Some(id)
-        } else {
-            None
-        }
-    }
+    // pub fn as_id_ref(&self) -> Option<&Id> {
+    //     if let Self::Id(id) = self {
+    //         Some(id)
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 impl<'a> From<&'a MemoryValue> for Value {
@@ -162,18 +163,20 @@ impl<'a> From<&'a MemoryValue> for Value {
 
 // MemoryTuple
 
-#[derive(Debug)]
-pub(super) struct MemoryTuple(pub fnv::FnvHashMap<LocalAttributeId, MemoryValue>);
+type XHashMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<xxhash_rust::xxh3::Xxh3>>;
+
+#[derive(Debug, Clone)]
+pub(super) struct MemoryTuple(pub XHashMap<LocalAttributeId, MemoryValue>);
 
 impl MemoryTuple {
     #[allow(unused)]
     pub fn new() -> Self {
-        Self(FnvHashMap::default())
+        Self(Default::default())
     }
 }
 
 impl std::ops::Deref for MemoryTuple {
-    type Target = fnv::FnvHashMap<LocalAttributeId, MemoryValue>;
+    type Target = XHashMap<LocalAttributeId, MemoryValue>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -201,9 +204,8 @@ pub(super) enum MemoryExpr {
     Literal(MemoryValue),
     /// Select the value of an attribute.
     Attr(LocalAttributeId),
-    /// Resolve the value of an [`Indent`] into an [`Id`].
+    /// Resolve the value of an [`Ident`] into an [`Id`].
     Ident(Id),
-    Variable(String),
     UnaryOp {
         op: expr::UnaryOp,
         expr: Box<Self>,

@@ -1,3 +1,5 @@
+pub mod query_planner;
+
 #[cfg(feature = "memory")]
 pub mod memory;
 

@@ -1,11 +1,21 @@
+use std::borrow::Cow;
+
 use anyhow::{anyhow, Context, Result};
 
 use crate::{
-    backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
+    backend::{
+        self,
+        query_planner::{self, QueryOp, ResolvedExpr},
+        DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
+    },
     data::{value::ValueMap, DataMap, Id, Ident, Value},
     error::{self, EntityNotFound},
-    query::{self, expr, migrate::Migration, select::Item},
-    registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
+    query::{
+        self,
+        migrate::Migration,
+        select::{Item, Page},
+    },
+    registry::{LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
     schema, AnyError,
 };
 
@@ -30,6 +40,8 @@ pub struct MemoryStore {
     revert_epoch: RevertEpoch,
     revert_ops: Option<(RevertEpoch, RevertList)>,
 }
+
+type TupleIter<'a> = Box<dyn Iterator<Item = Cow<'a, MemoryTuple>> + 'a>;
 
 impl MemoryStore {
     pub fn new(registry: crate::registry::SharedRegistry) -> Self {
@@ -117,20 +129,20 @@ impl MemoryStore {
         Ok(MemoryTuple(map))
     }
 
-    fn tuple_to_data_map(&self, tuple: &MemoryTuple) -> Result<DataMap, AnyError> {
+    fn tuple_to_data_map(&self, tuple: &MemoryTuple) -> DataMap {
         let reg = self.registry.read().unwrap();
 
         let map: std::collections::BTreeMap<_, _> = tuple
             .0
             .iter()
-            .map(|(id, value)| -> Result<_, AnyError> {
+            .map(|(id, value)| {
                 let attr = reg.attr(*id);
                 let value = value.into();
-                Ok((attr.schema.ident.clone(), value))
+                (attr.schema.ident.clone(), value)
             })
-            .collect::<Result<_, _>>()?;
+            .collect();
 
-        Ok(ValueMap(map))
+        ValueMap(map)
     }
 
     // fn persist_tuple(&mut self, tuple: TuplePersist) -> Result<Id, AnyError> {
@@ -554,7 +566,7 @@ impl MemoryStore {
         let mut to_remove = Vec::new();
 
         for (entity_id, entity) in self.entities.iter() {
-            if self.entity_filter(entity, selector) {
+            if Self::entity_filter(entity, selector) {
                 let mut removed_attr_ids = Vec::new();
                 for attr_id in &rem.attrs {
                     let attr = reg.require_attr(*attr_id)?;
@@ -623,7 +635,8 @@ impl MemoryStore {
                     TupleOp::Replace(_) => todo!(),
                     TupleOp::Merge(_) => todo!(),
                     TupleOp::RemoveAttrs(remove) => {
-                        let expr = self.build_memory_expr(sel.selector, reg)?;
+                        let resolved = query_planner::resolve_expr(sel.selector, reg)?;
+                        let expr = self.build_memory_expr(resolved, reg)?;
                         self.tuple_select_remove(&expr, &remove, revert, reg)?;
                     }
                     TupleOp::Delete(_) => todo!(),
@@ -652,7 +665,7 @@ impl MemoryStore {
         registry: &Registry,
     ) -> Result<(), AnyError> {
         let old = match self.entities.get(&repl.id) {
-            Some(tuple) => Some(self.tuple_to_data_map(&tuple)?),
+            Some(tuple) => Some(self.tuple_to_data_map(&tuple)),
             None => None,
         };
 
@@ -668,7 +681,7 @@ impl MemoryStore {
         reg: &Registry,
     ) -> Result<(), AnyError> {
         if let Some(old_tuple) = self.entities.get(&merge.id) {
-            let old = self.tuple_to_data_map(old_tuple)?;
+            let old = self.tuple_to_data_map(old_tuple);
             let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
             self.apply_db_ops(ops, revert, reg)
         } else {
@@ -690,7 +703,7 @@ impl MemoryStore {
             .entities
             .get(&delete.id)
             .ok_or_else(|| anyhow!("Entity not found: {:?}", delete.id))
-            .and_then(|t| self.tuple_to_data_map(t))?;
+            .map(|t| self.tuple_to_data_map(t))?;
 
         let ops = reg.validate_delete(delete, old)?;
         self.apply_db_ops(ops, revert, reg)?;
@@ -895,7 +908,81 @@ impl MemoryStore {
     pub fn entity(&self, id: Ident) -> Result<DataMap, AnyError> {
         self.must_resolve_entity(&id)
             .map_err(AnyError::from)
-            .and_then(|tuple| self.tuple_to_data_map(tuple))
+            .map(|tuple| self.tuple_to_data_map(tuple))
+    }
+
+    fn run_query_op<'a>(
+        &'a self,
+        input: impl Iterator<Item = Cow<'a, MemoryTuple>> + 'a,
+        op: query_planner::QueryOp<MemoryValue, MemoryExpr>,
+    ) -> TupleIter<'_> {
+        match op {
+            query_planner::QueryOp::SelectEntity { id } => {
+                if let Some(entity) = self.entities.get(&id) {
+                    Box::new(vec![Cow::Borrowed(entity)].into_iter())
+                } else {
+                    Box::new(vec![].into_iter())
+                }
+            }
+            query_planner::QueryOp::Scan => Box::new(self.entities.values().map(Cow::Borrowed)),
+            query_planner::QueryOp::Filter { expr } => {
+                Box::new(input.filter(move |tuple| Self::entity_filter(tuple, &expr)))
+            }
+            query_planner::QueryOp::Limit { limit } => Box::new(input.take(limit as usize)),
+            query_planner::QueryOp::Merge { left, right } => {
+                let left_iter = self.run_query_op(vec![].into_iter(), *left);
+                let right_iter = self.run_query_op(vec![].into_iter(), *right);
+                Box::new(left_iter.chain(right_iter))
+            }
+            query_planner::QueryOp::IndexSelect { .. } => {
+                todo!()
+            }
+            query_planner::QueryOp::IndexScan { .. } => todo!(),
+            query_planner::QueryOp::IndexScanPrefix { .. } => todo!(),
+            query_planner::QueryOp::Sort { .. } => todo!(),
+        }
+    }
+
+    fn run_query_ops<'a>(
+        &'a self,
+        ops: Vec<query_planner::QueryOp<MemoryValue, MemoryExpr>>,
+    ) -> TupleIter<'a> {
+        let mut iter: TupleIter<'_> = Box::new(vec![].into_iter());
+
+        for op in ops {
+            iter = self.run_query_op(iter, op);
+        }
+
+        iter
+    }
+
+    fn build_query_op(
+        &self,
+        op: QueryOp<Value, ResolvedExpr>,
+        reg: &Registry,
+    ) -> Result<QueryOp<MemoryValue, MemoryExpr>, AnyError> {
+        let op = match op {
+            QueryOp::SelectEntity { id } => QueryOp::SelectEntity { id },
+            QueryOp::Scan => QueryOp::Scan,
+            QueryOp::Merge { .. } => todo!(),
+            QueryOp::IndexSelect { index, value } => QueryOp::IndexSelect {
+                index,
+                value: MemoryValue::from_value_standalone(value),
+            },
+            QueryOp::IndexScan { from, until } => QueryOp::IndexScan {
+                from: MemoryValue::from_value_standalone(from),
+                until: MemoryValue::from_value_standalone(until),
+            },
+            QueryOp::IndexScanPrefix { prefix } => QueryOp::IndexScanPrefix {
+                prefix: MemoryValue::from_value_standalone(prefix),
+            },
+            QueryOp::Sort { attr, order } => QueryOp::Sort { attr, order },
+            QueryOp::Filter { expr } => QueryOp::Filter {
+                expr: self.build_memory_expr(expr, reg)?,
+            },
+            QueryOp::Limit { limit } => QueryOp::Limit { limit },
+        };
+        Ok(op)
     }
 
     pub fn select(
@@ -906,108 +993,66 @@ impl MemoryStore {
 
         let reg = self.registry().read().unwrap();
 
-        let id_select = query.filter.as_ref().and_then(expr::expr_is_entity_ident);
+        let raw_ops = query_planner::plan_select(query, &reg)?;
+        let mem_ops = raw_ops
+            .into_iter()
+            .map(|op| self.build_query_op(op, &reg))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let items: Vec<(&Id, &MemoryTuple)> = match (id_select, query.filter) {
-            (Some(ident), _) => {
-                // TODO: remove once query planner is implemented.
-                // Fast path for single ID select.
-                // This is messy and should be handled by an external query
-                // planner, but it helps for now.
-                if let Some(tuple) = self.resolve_entity(&ident) {
-                    let id = tuple
-                        .0
-                        .get(&registry::ATTR_ID_LOCAL)
-                        .unwrap()
-                        .as_id_ref()
-                        .unwrap();
-                    vec![(id, tuple)]
-                } else {
-                    vec![]
-                }
-            }
-            (_, Some(value_filter)) => {
-                let filter = self.build_memory_expr(value_filter, &reg)?;
-
-                let mut items = Vec::new();
-
-                for (id, entity) in self.entities.iter() {
-                    if !self.entity_filter(entity, &filter) {
-                        continue;
-                    }
-
-                    items.push((id, entity));
-                }
-                items
-            }
-            _ => self.entities.iter().collect(),
-        };
-
-        if !query.sort.is_empty() {
-            todo!()
-        }
-
-        let items = if let Some(cursor) = query.cursor {
-            items
-                .into_iter()
-                .skip_while(|(id, _)| **id != cursor)
-                .take(query.limit as usize)
-                .map(|(_id, data)| {
-                    Ok(Item {
-                        data: self.tuple_to_data_map(data)?,
-                        joins: Vec::new(),
-                    })
+        let items = self
+            .run_query_ops(mem_ops)
+            .map(|tuple| {
+                Ok(Item {
+                    data: self.tuple_to_data_map(tuple.as_ref()),
+                    joins: Vec::new(),
                 })
-                .collect::<Result<_, AnyError>>()?
-        } else {
-            items
-                .into_iter()
-                .take(query.limit as usize)
-                .map(|(_id, data)| {
-                    Ok(Item {
-                        data: self.tuple_to_data_map(data)?,
-                        joins: Vec::new(),
-                    })
-                })
-                .collect::<Result<_, AnyError>>()?
-        };
+            })
+            .collect::<Result<Vec<Item>, anyhow::Error>>()?;
 
-        Ok(query::select::Page {
+        Ok(Page {
             items,
             next_cursor: None,
         })
     }
 
-    fn build_memory_expr(&self, expr: expr::Expr, reg: &Registry) -> Result<MemoryExpr, AnyError> {
-        use expr::Expr as E;
+    fn build_memory_expr(
+        &self,
+        expr: ResolvedExpr,
+        reg: &Registry,
+    ) -> Result<MemoryExpr, AnyError> {
+        use ResolvedExpr as E;
 
         match expr {
             E::Literal(lit) => Ok(MemoryExpr::Literal(MemoryValue::from_value_standalone(lit))),
-            E::Attr(attr) => {
-                let local_id = reg.require_attr_by_ident(&attr)?.local_id;
-                Ok(MemoryExpr::Attr(local_id))
-            }
+            E::Attr(attr) => Ok(MemoryExpr::Attr(attr)),
             E::Ident(ident) => {
                 let id = self
                     .resolve_ident(&ident)
                     .ok_or_else(|| EntityNotFound::new(ident))?;
                 Ok(MemoryExpr::Ident(id))
             }
-            E::Variable(e) => Ok(MemoryExpr::Variable(e)),
             E::UnaryOp { op, expr } => Ok(MemoryExpr::UnaryOp {
                 op,
                 expr: Box::new(self.build_memory_expr(*expr, reg)?),
             }),
-            E::BinaryOp { left, op, right } => Ok(MemoryExpr::BinaryOp {
-                left: Box::new(self.build_memory_expr(*left, reg)?),
-                op,
-                right: Box::new(self.build_memory_expr(*right, reg)?),
+            E::BinaryOp(op) => Ok(MemoryExpr::BinaryOp {
+                left: Box::new(self.build_memory_expr(op.left, reg)?),
+                op: op.op,
+                right: Box::new(self.build_memory_expr(op.right, reg)?),
             }),
             E::If { value, then, or } => Ok(MemoryExpr::If {
                 value: Box::new(self.build_memory_expr(*value, reg)?),
                 then: Box::new(self.build_memory_expr(*then, reg)?),
                 or: Box::new(self.build_memory_expr(*or, reg)?),
             }),
+            E::Op(_) => {
+                #[cfg(debug_assertions)]
+                {
+                    panic!("Invalid ResolvedExpr")
+                }
+                #[cfg(not(debug_assertions))]
+                Err(anyhow!("Internal error: Invalid resolved expr"))
+            }
         }
     }
 
@@ -1016,7 +1061,6 @@ impl MemoryStore {
         expr: &'a MemoryExpr,
     ) -> std::borrow::Cow<'a, MemoryValue> {
         use query::expr::BinaryOp;
-        use std::borrow::Cow;
         use MemoryExpr as E;
 
         match expr {
@@ -1026,7 +1070,6 @@ impl MemoryStore {
                 .map(|attr_value| Cow::Borrowed(attr_value))
                 .unwrap_or(cowal_unit()),
             E::Ident(id) => Cow::Owned(MemoryValue::Id(*id)),
-            E::Variable(_v) => todo!(),
             E::UnaryOp { op, expr } => {
                 let value = Self::eval_expr(entity, expr);
                 match op {
@@ -1109,7 +1152,7 @@ impl MemoryStore {
         }
     }
 
-    fn entity_filter(&self, entity: &MemoryTuple, expr: &memory_data::MemoryExpr) -> bool {
+    fn entity_filter(entity: &MemoryTuple, expr: &memory_data::MemoryExpr) -> bool {
         Self::eval_expr(entity, expr).as_bool_discard_other()
     }
 
@@ -1195,6 +1238,8 @@ type RevertList = Vec<RevertOp>;
 
 #[cfg(test)]
 mod tests {
+    use crate::query::expr::BinaryOp;
+
     use super::*;
 
     #[test]
@@ -1210,7 +1255,7 @@ mod tests {
 
         let expr = MemoryExpr::BinaryOp {
             left: Box::new(MemoryExpr::Attr(title_id)),
-            op: expr::BinaryOp::Eq,
+            op: BinaryOp::Eq,
             right: Box::new(MemoryExpr::Literal(hello)),
         };
 
