@@ -1,0 +1,22 @@
+[package]
+name = "factor_tests"
+version = "0.1.0"
+edition = "2018"
+
+[[bench]]
+name = "memory"
+harness = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+criterion = { version = "0.3.5", features = ["async_futures"] }
+
+factordb = { path = "../factordb" }
+futures = "0.3.17"
+rand = "0.8.4"
+serde = { version = "1.0.130", features = ["derive"] }
+uuid = "0.8.2"
+
+[dev-dependencies]
+criterion = "0.3.5"

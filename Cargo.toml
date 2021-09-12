@@ -5,6 +5,7 @@ members = [
     "factordb",
     "factor_macros",
     "factor_tools",
+    "factor_tests",
 
     # Backends
     "factor_sqlite",
