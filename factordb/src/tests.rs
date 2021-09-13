@@ -86,8 +86,32 @@ async fn test_db_with_test_schema(db: &Db) {
             test_index_unique,
             test_index_non_unique,
             test_sort_simple,
+            test_query_entity_select_ident,
         ]
     );
+}
+
+async fn test_query_entity_select_ident(db: &Db) {
+    let id = Id::random();
+    db.create(
+        id,
+        map! {
+            "factor/title": "hello",
+            "factor/ident": "hello-ident",
+        },
+    )
+    .await
+    .unwrap();
+
+    let page = db
+        .select(
+            Select::new().with_filter(Expr::eq(AttrId::expr(), Expr::Ident("hello-ident".into()))),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].data.get_id().unwrap(), id);
 }
 
 async fn test_merge_list_attr(db: &Db) {
