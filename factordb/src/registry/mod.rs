@@ -34,6 +34,7 @@ const MAX_NAME_LEN: usize = 50;
 
 pub const ATTR_ID_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(1);
 pub const ATTR_TYPE_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(5);
+pub const INDEX_IDENT_LOCAL: LocalIndexId = LocalIndexId::from_u32(2);
 
 #[derive(Clone, Debug)]
 pub struct Registry {
@@ -173,8 +174,12 @@ impl Registry {
             ));
         }
         for index in schema.indexes {
-            self.register_index(index)
+            let local_id = self
+                .register_index(index.clone())
                 .expect("Internal error: could not register builtin index");
+            if index.id == schema::builtin::INDEX_IDENT {
+                assert_eq!(local_id, INDEX_IDENT_LOCAL);
+            }
         }
     }
 
