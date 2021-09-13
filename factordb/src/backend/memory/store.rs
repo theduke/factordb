@@ -1136,7 +1136,7 @@ impl MemoryStore {
                 let value = Self::eval_expr(entity, expr);
                 match op {
                     query::expr::UnaryOp::Not => {
-                        Cow::Owned(MemoryValue::Bool(value.as_bool_discard_other()))
+                        Cow::Owned(MemoryValue::Bool(!value.as_bool_discard_other()))
                     }
                 }
             }
