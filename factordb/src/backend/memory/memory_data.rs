@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use fnv::FnvHashMap;
 use ordered_float::OrderedFloat;
 
 use crate::{
@@ -163,10 +162,8 @@ impl<'a> From<&'a MemoryValue> for Value {
 
 // MemoryTuple
 
-type XHashMap<K, V> = HashMap<K, V, std::hash::BuildHasherDefault<xxhash_rust::xxh3::Xxh3>>;
-
 #[derive(Debug, Clone)]
-pub(super) struct MemoryTuple(pub XHashMap<LocalAttributeId, MemoryValue>);
+pub(super) struct MemoryTuple(pub FnvHashMap<LocalAttributeId, MemoryValue>);
 
 impl MemoryTuple {
     #[allow(unused)]
@@ -176,7 +173,7 @@ impl MemoryTuple {
 }
 
 impl std::ops::Deref for MemoryTuple {
-    type Target = XHashMap<LocalAttributeId, MemoryValue>;
+    type Target = FnvHashMap<LocalAttributeId, MemoryValue>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
