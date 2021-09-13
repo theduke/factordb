@@ -706,7 +706,7 @@ impl MemoryStore {
         let old = self
             .entities
             .get(&delete.id)
-            .ok_or_else(|| anyhow!("Entity not found: {:?}", delete.id))
+            .ok_or_else(|| EntityNotFound::new(delete.id.into()))
             .map(|t| self.tuple_to_data_map(t))?;
 
         let ops = reg.validate_delete(delete, old)?;

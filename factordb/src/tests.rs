@@ -87,8 +87,20 @@ async fn test_db_with_test_schema(db: &Db) {
             test_index_non_unique,
             test_sort_simple,
             test_query_entity_select_ident,
+            test_entity_delete_not_found,
         ]
     );
+}
+
+async fn test_entity_delete_not_found(db: &Db) {
+    let id = Id::random();
+    db.create(id, map! {"factor/title": "title"}).await.unwrap();
+    db.delete(id).await.unwrap();
+
+    let err = db.delete(id).await.expect_err("Must fail");
+    dbg!(&err);
+    dbg!(&err.downcast_ref::<error::EntityNotFound>());
+    assert!(err.is::<error::EntityNotFound>());
 }
 
 async fn test_query_entity_select_ident(db: &Db) {
