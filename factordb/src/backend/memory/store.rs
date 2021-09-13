@@ -15,13 +15,13 @@ use crate::{
         migrate::Migration,
         select::{Item, Order, Page},
     },
-    registry::{LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
+    registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
     schema, AnyError,
 };
 
 use super::{
     index::{self, MemoryIndexMap},
-    memory_data::{self, MemoryExpr, MemoryTuple, MemoryValue},
+    memory_data::{self, MemoryExpr, MemoryTuple, MemoryValue, SharedStr},
 };
 
 /// Memory store for building a backend.
@@ -32,7 +32,6 @@ pub struct MemoryStore {
     interner: super::interner::Interner,
     registry: crate::registry::SharedRegistry,
     entities: fnv::FnvHashMap<Id, MemoryTuple>,
-    idents: std::collections::HashMap<String, Id>,
     indexes: MemoryIndexMap,
 
     ignore_index_constraints: bool,
@@ -49,7 +48,6 @@ impl MemoryStore {
             interner: super::interner::Interner::new(),
             registry: registry.clone(),
             entities: fnv::FnvHashMap::default(),
-            idents: std::collections::HashMap::new(),
             indexes: self::index::new_memory_index_map(),
             revert_epoch: 0,
             revert_ops: None,
@@ -86,7 +84,13 @@ impl MemoryStore {
     fn resolve_ident(&self, ident: &Ident) -> Option<Id> {
         match ident {
             Ident::Id(id) => Some(*id),
-            Ident::Name(name) => self.idents.get(name.as_ref()).cloned(),
+            Ident::Name(name) => {
+                self.indexes
+                    .get(registry::INDEX_IDENT_LOCAL)
+                    .get_unique(&MemoryValue::String(SharedStr::from_string(
+                        name.to_string(),
+                    )))
+            }
         }
     }
 
@@ -1227,7 +1231,6 @@ impl MemoryStore {
         });
         */
         self.entities.clear();
-        self.idents.clear();
         self.interner.clear();
         self.indexes = index::new_memory_index_map();
         self.registry.write().unwrap().reset();

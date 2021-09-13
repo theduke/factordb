@@ -23,9 +23,9 @@ impl UniqueIndex {
         }
     }
 
-    // pub(super) fn get(&self, value: &MemoryValue) -> Option<Id> {
-    //     self.data.get(value).cloned()
-    // }
+    pub(super) fn get(&self, value: &MemoryValue) -> Option<Id> {
+        self.data.get(value).cloned()
+    }
 
     pub(super) fn insert_unchecked(&mut self, value: MemoryValue, id: Id) {
         self.data.insert(value, id);
@@ -120,22 +120,29 @@ impl Default for MultiIndex {
 }
 
 #[derive(Debug)]
-pub enum Index {
+pub(super) enum Index {
     Unique(UniqueIndex),
     Multi(MultiIndex),
 }
 
 impl Index {
-    pub(super) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         match self {
             Index::Unique(idx) => idx.clear(),
             Index::Multi(idx) => idx.clear(),
         }
     }
+
+    pub fn get_unique(&self, value: &MemoryValue) -> Option<Id> {
+        match self {
+            Index::Unique(idx) => idx.get(value),
+            Index::Multi(_) => None,
+        }
+    }
 }
 
-pub type MemoryIndexMap = crate::registry::IndexMap<Index>;
+pub(super) type MemoryIndexMap = crate::registry::IndexMap<Index>;
 
-pub fn new_memory_index_map() -> MemoryIndexMap {
+pub(super) fn new_memory_index_map() -> MemoryIndexMap {
     MemoryIndexMap::new(Index::Unique(UniqueIndex::new()))
 }
