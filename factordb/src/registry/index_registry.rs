@@ -8,6 +8,12 @@ use super::{attribute_registry::AttributeRegistry, LocalAttributeId};
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct LocalIndexId(u32);
 
+impl LocalIndexId {
+    pub(super) const fn from_u32(val: u32) -> Self {
+        Self(val)
+    }
+}
+
 const MAX_INDEX_NAME_LEN: usize = 300;
 
 /// A "map" of values indexed by a [`LocalIndexId`].
@@ -94,6 +100,7 @@ impl IndexRegistry {
         self.items.truncate(1);
         self.uids.clear();
         self.names.clear();
+        self.attribute_id_map.clear();
     }
 
     fn add(
