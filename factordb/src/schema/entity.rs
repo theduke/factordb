@@ -1,4 +1,6 @@
-use crate::data::{DataMap, Id, Ident};
+use serde::de::DeserializeOwned;
+
+use crate::data::{value::ValueDeserializeError, DataMap, Id, Ident};
 
 use super::AttrMapExt;
 
@@ -122,5 +124,12 @@ pub trait EntityContainer {
         let mut map = crate::data::value::to_value_map(self)?;
         map.insert_attr::<super::builtin::AttrType>(ty);
         Ok(map)
+    }
+
+    fn try_from_map(map: DataMap) -> Result<Self, ValueDeserializeError>
+    where
+        Self: Sized + DeserializeOwned,
+    {
+        crate::data::value::from_value_map(map)
     }
 }
