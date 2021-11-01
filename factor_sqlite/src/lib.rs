@@ -192,6 +192,12 @@ impl factordb::backend::Backend for SqliteDb {
         let s = self.clone();
         async move { s.purge_all_data().await }.boxed()
     }
+
+    fn migrations(
+        &self,
+    ) -> factordb::backend::BackendFuture<Vec<factordb::query::migrate::Migration>> {
+        todo!()
+    }
 }
 
 // #[tokio::test]
