@@ -78,32 +78,19 @@ impl Db {
     }
 
     pub async fn replace(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::mutate::BatchUpdate {
-            actions: vec![query::mutate::Mutate::Replace(query::mutate::Replace {
-                id,
-                data,
-            })],
-        })
-        .await
+        self.batch(Mutate::replace(id, data).into()).await
     }
 
     pub async fn merge(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::mutate::BatchUpdate {
-            actions: vec![query::mutate::Mutate::Merge(query::mutate::Merge {
-                id,
-                data,
-            })],
-        })
-        .await
+        self.batch(Mutate::merge(id, data).into()).await
+    }
+
     pub async fn patch(&self, id: Id, patch: Patch) -> Result<(), AnyError> {
         self.batch(Mutate::patch(id, patch).into()).await
     }
 
     pub async fn delete(&self, id: Id) -> Result<(), AnyError> {
-        self.batch(query::mutate::BatchUpdate {
-            actions: vec![query::mutate::Mutate::Delete(query::mutate::Delete { id })],
-        })
-        .await
+        self.batch(Mutate::delete(id).into()).await
     }
 
     pub async fn batch(&self, batch: query::mutate::BatchUpdate) -> Result<(), AnyError> {
