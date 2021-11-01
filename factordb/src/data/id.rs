@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 
 use crate::AnyError;
 
@@ -107,6 +107,13 @@ impl Ident {
         }
     }
 
+    pub fn as_id(&self) -> Option<Id> {
+        match self {
+            Ident::Id(id) => Some(*id),
+            Ident::Name(_) => None,
+        }
+    }
+
     /// Returns `true` if the ident is [`Id`].
     pub fn is_id(&self) -> bool {
         matches!(self, Self::Id(..))
@@ -115,6 +122,14 @@ impl Ident {
     /// Returns `true` if the ident is [`Name`].
     pub fn is_name(&self) -> bool {
         matches!(self, Self::Name(..))
+    }
+
+    pub fn from_str(value: &str) -> Self {
+        if let Ok(id) = uuid::Uuid::from_str(value) {
+            Self::Id(Id(id))
+        } else {
+            Self::Name(value.to_string().into())
+        }
     }
 }
 
