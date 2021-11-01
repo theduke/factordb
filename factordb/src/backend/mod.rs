@@ -8,7 +8,7 @@ pub mod log;
 
 use crate::{
     data::{DataMap, Id, Ident, Value},
-    query::{self, expr::Expr, select::Item},
+    query::{self, expr::Expr, migrate::Migration, select::Item},
     registry::{LocalIndexId, SharedRegistry},
     schema, AnyError,
 };
@@ -41,6 +41,8 @@ pub trait Backend {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
+
+    fn migrations(&self) -> BackendFuture<Vec<Migration>>;
 }
 
 #[derive(Clone, Debug)]

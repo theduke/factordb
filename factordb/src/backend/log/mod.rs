@@ -62,6 +62,7 @@ struct State {
 struct MutableState {
     store: Box<dyn LogStore + Send + Sync + 'static>,
     current_event_id: EventId,
+    migrations: Vec<query::migrate::Migration>,
 }
 
 impl MutableState {
@@ -87,6 +88,7 @@ impl LogDb {
             mem: RwLock::new(memory),
             registry,
             mutable: futures::lock::Mutex::new(MutableState {
+                migrations: Vec::new(),
                 store: Box::new(store),
                 current_event_id: 0,
             }),
@@ -144,6 +146,8 @@ impl LogDb {
 
             self.state.mem.write().unwrap().purge_all_data();
 
+            let mut migrations = Vec::new();
+
             let mut event_id = 0;
             {
                 let mut stream = mutable.store.iter_events(0, EventId::MAX).await?;
@@ -171,15 +175,18 @@ impl LogDb {
                                 .mem
                                 .write()
                                 .unwrap()
-                                .migrate(migration)
+                                .migrate(migration.clone())
                                 .context(format!(
                                     "Could not apply event '{}' to memory state",
                                     event_id
                                 ))?;
+                            migrations.push(migration);
                         }
                     }
                 }
             }
+
+            mutable.migrations = migrations;
             mutable.current_event_id = event_id;
         }
         Ok(())
@@ -227,6 +234,20 @@ impl LogDb {
         migration: query::migrate::Migration,
         is_internal: bool,
     ) -> Result<(), AnyError> {
+        if let Some(name) = &migration.name {
+            // Ensure name uniqueness.
+            let state = self.state.mutable.lock().await;
+
+            let name_exists = state
+                .migrations
+                .iter()
+                .filter_map(|m| m.name.as_ref())
+                .any(|n| n == name);
+            if name_exists {
+                anyhow::bail!("Duplicate migration name: '{}'", name);
+            }
+        }
+
         // First, check if the migration would actually change anything.
         // If not, we do not write it.
         // This is important to not spam the log with migrations when UPSERTS
@@ -318,6 +339,11 @@ impl Backend for LogDb {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(&*self)
     }
+
+    fn migrations(&self) -> BackendFuture<Vec<query::migrate::Migration>> {
+        let s = self.clone();
+        async move { Ok(s.state.mutable.lock().await.migrations.clone()) }.boxed()
+    }
 }
 
 /// Defines a storage backend used by a [LogStore].
@@ -374,6 +400,7 @@ mod tests {
             let db = crate::Db::new(log.clone());
 
             let mig = query::migrate::Migration {
+                name: None,
                 actions: vec![query::migrate::SchemaAction::AttributeCreate(
                     query::migrate::AttributeCreate {
                         schema: schema::AttributeSchema::new(

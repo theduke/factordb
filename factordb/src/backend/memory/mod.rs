@@ -65,6 +65,11 @@ impl super::Backend for MemoryDb {
         let res = self.state.write().unwrap().migrate(migration).map(|_| ());
         ready(res).boxed()
     }
+
+    fn migrations(&self) -> BackendFuture<Vec<query::migrate::Migration>> {
+        // TODO: keep track of migrations!?
+        ready(Ok(Vec::new())).boxed()
+    }
 }
 
 #[cfg(test)]

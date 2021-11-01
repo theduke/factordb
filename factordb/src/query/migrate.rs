@@ -54,12 +54,21 @@ pub enum SchemaAction {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Migration {
+    pub name: Option<String>,
     pub actions: Vec<SchemaAction>,
 }
 
 impl Migration {
     pub fn new() -> Self {
         Self {
+            name: None,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn with_name(name: String) -> Self {
+        Self {
+            name: Some(name),
             actions: Vec::new(),
         }
     }
