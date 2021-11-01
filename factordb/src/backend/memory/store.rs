@@ -697,6 +697,23 @@ impl MemoryStore {
         }
     }
 
+    fn apply_patch(
+        &mut self,
+        epatch: query::mutate::EntityPatch,
+        revert: &mut RevertList,
+        registry: &Registry,
+    ) -> Result<(), AnyError> {
+        let current_entity = self.entity(epatch.id.into())?;
+
+        let ops = self
+            .registry
+            .read()
+            .unwrap()
+            .validate_patch(epatch, current_entity)?;
+        self.apply_db_ops(ops, revert, registry)?;
+        Ok(())
+    }
+
     fn apply_delete(
         &mut self,
         delete: query::mutate::Delete,
@@ -732,6 +749,7 @@ impl MemoryStore {
                 query::mutate::Mutate::Replace(repl) => self.apply_replace(repl, &mut revert, reg),
                 query::mutate::Mutate::Merge(merge) => self.apply_merge(merge, &mut revert, reg),
                 query::mutate::Mutate::Delete(del) => self.apply_delete(del, &mut revert, reg),
+                query::mutate::Mutate::Patch(patch) => self.apply_patch(patch, &mut revert, reg),
             };
 
             if let Err(err) = res {

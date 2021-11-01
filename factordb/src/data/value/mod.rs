@@ -1,7 +1,7 @@
 mod de;
 mod map;
+pub mod patch;
 mod ser;
-// pub mod patch;
 
 use anyhow::anyhow;
 use ordered_float::OrderedFloat;

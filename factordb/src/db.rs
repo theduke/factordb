@@ -4,8 +4,8 @@ use data::DataMap;
 
 use crate::{
     backend::Backend,
-    data::{self, Id, Ident},
-    query,
+    data::{self, value::patch::Patch, Id, Ident},
+    query::{self, mutate::Mutate},
     schema::EntityContainer,
     AnyError,
 };
@@ -95,6 +95,8 @@ impl Db {
             })],
         })
         .await
+    pub async fn patch(&self, id: Id, patch: Patch) -> Result<(), AnyError> {
+        self.batch(Mutate::patch(id, patch).into()).await
     }
 
     pub async fn delete(&self, id: Id) -> Result<(), AnyError> {

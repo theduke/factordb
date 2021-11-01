@@ -689,6 +689,30 @@ impl Registry {
         Ok(ops)
     }
 
+    pub fn validate_patch(
+        &self,
+        epatch: query::mutate::EntityPatch,
+        current_entity: DataMap,
+    ) -> Result<Vec<DbOp>, AnyError> {
+        debug_assert_eq!(Some(epatch.id), current_entity.get_id());
+
+        let new_entity = epatch.patch.apply_map(current_entity.clone())?;
+        let data = self.validate_attributes(new_entity)?;
+
+        let index_ops = self.build_index_ops_update(&data, &current_entity)?;
+
+        let mut ops = Vec::new();
+        ops.push(DbOp::Tuple(TupleOp::Replace(TupleReplace {
+            id: epatch.id,
+            data,
+            index_ops,
+        })));
+
+        // FIXME: cleanup for old data (index removal etc)
+
+        Ok(ops)
+    }
+
     pub fn validate_merge(
         &self,
         merge: query::mutate::Merge,

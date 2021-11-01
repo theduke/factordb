@@ -3,7 +3,7 @@ use schema::AttributeSchema;
 
 use crate::{
     backend::Backend,
-    data::{Id, Value, ValueType},
+    data::{value::patch::Patch, Id, Value, ValueType},
     error::{self, UniqueConstraintViolation},
     map,
     query::{self, expr::Expr, migrate::Migration, select::Select},
@@ -81,6 +81,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_select,
             test_query_in,
             test_merge_list_attr,
+            test_patch,
             test_query_contains_with_two_lists,
             test_assert_fails_with_incorrect_value_type,
             test_index_unique,
@@ -153,8 +154,46 @@ async fn test_merge_list_attr(db: &Db) {
     assert_eq!(values, &v);
 }
 
+async fn test_patch(db: &Db) {
+    let id = Id::random();
+    db.create(
+        id,
+        map! {
+            "factor/type": ENTITY_COMMENT,
+            "factor/title": "hello",
+            "test/text": "no",
+            "test/int": vec![22, 55],
+        },
+    )
+    .await
+    .unwrap();
+
+    db.patch(
+        id,
+        Patch::new()
+            .remove("factor/title")
+            .replace("test/text", "yes")
+            .add("test/int", 33)
+            .remove_with_old("test/int", 55),
+    )
+    .await
+    .unwrap();
+
+    let map = db.entity(id).await.unwrap();
+    assert_eq!(
+        map,
+        map! {
+            "factor/id": id,
+            "factor/type": ENTITY_COMMENT,
+            "test/text": "yes",
+            "test/int": vec![22, 33]
+        }
+    );
+}
+
 async fn test_create_attribute(f: &Db) {
     let mig = query::migrate::Migration {
+        name: None,
         actions: vec![query::migrate::SchemaAction::AttributeCreate(
             query::migrate::AttributeCreate {
                 schema: schema::AttributeSchema::new(NS_TEST, "text", ValueType::String),

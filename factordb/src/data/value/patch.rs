@@ -1,147 +1,337 @@
-// use anyhow::anyhow;
+use std::collections::btree_map;
 
-// use crate::{data::DataMap, AnyError};
+use anyhow::bail;
 
-// use super::Value;
+use crate::{data::DataMap, AnyError};
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-// pub struct Patch {
-//     pub ops: Vec<PatchItem>,
-// }
+use super::Value;
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-// pub enum PatchPathElem {
-//     Key(String),
-//     ListIndex(usize),
-// }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Patch(pub Vec<PatchOp>);
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-// pub struct PatchPath {
-//     pub elems: Vec<PatchPathElem>,
-// }
+impl Patch {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
 
-// impl PatchPath {
-//     fn render_elems(elems: &[PatchPathElem]) -> String {
-//         let path = elems
-//             .iter()
-//             .map(|elem| match elem {
-//                 PatchPathElem::Key(key) => key.to_string(),
-//                 PatchPathElem::ListIndex(index) => index.to_string(),
-//             })
-//             .collect::<Vec<_>>()
-//             .join("/");
+    pub fn add(mut self, path: impl Into<PatchPath>, value: impl Into<Value>) -> Self {
+        self.0.push(PatchOp::Add {
+            path: path.into(),
+            value: value.into(),
+        });
+        self
+    }
 
-//         path.insert(0, '/');
-//         path
-//     }
-// }
+    pub fn replace(mut self, path: impl Into<PatchPath>, new_value: impl Into<Value>) -> Self {
+        self.0.push(PatchOp::Replace {
+            path: path.into(),
+            new_value: new_value.into(),
+            current_value: None,
+        });
+        self
+    }
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-// pub struct PatchItem {
-//     pub path: PatchPath,
-//     pub op: PatchOp,
-// }
+    pub fn replace_with_old(
+        mut self,
+        path: impl Into<PatchPath>,
+        new_value: impl Into<Value>,
+        old_value: impl Into<Value>,
+    ) -> Self {
+        self.0.push(PatchOp::Replace {
+            path: path.into(),
+            new_value: new_value.into(),
+            current_value: Some(old_value.into()),
+        });
+        self
+    }
 
-// impl PatchItem {
-//     fn apply_map(self, map: &mut DataMap) -> Result<(), AnyError> {
-//         let mut parents = Vec::new();
-//         Self::apply_map_elems(&mut parents, &self.path.elems, self.op, map)
-//     }
+    pub fn remove(mut self, path: impl Into<PatchPath>) -> Self {
+        self.0.push(PatchOp::Remove {
+            path: path.into(),
+            value: None,
+        });
+        self
+    }
 
-//     fn apply_map_elems<'a>(
-//         parent_path: &mut Vec<PatchPathElem>,
-//         elems: &'a [PatchPathElem],
-//         op: PatchOp,
-//         map: &mut DataMap,
-//     ) -> Result<(), AnyError> {
-//         match elems {
-//             [] => Err(anyhow!("Invalid empty path")),
-//             [PatchPathElem::Key(key)] => match op {
-//                 PatchOp::Add { value } => {
-//                     map.insert(key.clone(), value);
-//                     Ok(())
-//                 }
-//                 PatchOp::Remove => {  
-//                     map.remove(key).map(|_x| ()); Ok(()) 
-//                 },
-//                 PatchOp::Replace { new_value } => {
-//                     // TODO: should we error out if old value does not exist?
-//                     map.insert(key.clone(), new_value);
-//                     Ok(())
-//                 }
-//                 // PatchOp::Move { new_path } => {
-//                 //     let value = map.remove(key).ok_or_else(|| {
-//                 //         anyhow::anyhow!(
-//                 //             "Can't move key at path '{}': key '{}' not found",
-//                 //             PatchPath::render_elems(&parent_path),
-//                 //             key
-//                 //         )
-//                 //     })?;
-//                 // }
-//                 // PatchOp::Copy { new_path } => todo!(),
-//             },
-//             [PatchPathElem::ListIndex(_), ..] => {
-//                 Err(anyhow!("Invalid path: trying to get list index of a map"))
-//             }
-//             [PatchPathElem::Key(key), rest @ ..] => {
-//                 let nested = map
-//                     .get_mut(key)
-//                     .ok_or_else(|| anyhow!("Invalid path: key '{}' not found", key))?;
-//                 parent_path.push(PatchPathElem::Key(key.clone()));
-//                 Self::apply_elems(parent_path, rest, op, nested)
-//             }
-//         }
-//     }
+    pub fn remove_with_old(
+        mut self,
+        path: impl Into<PatchPath>,
+        old_value: impl Into<Value>,
+    ) -> Self {
+        self.0.push(PatchOp::Remove {
+            path: path.into(),
+            value: Some(old_value.into()),
+        });
+        self
+    }
 
-//     fn apply_elems(
-//         parent_path: &mut Vec<PatchPathElem>,
-//         elems: &[PatchPathElem],
-//         op: PatchOp,
-//         value: &mut Value,
-//     ) -> Result<(), AnyError> {
-//         match elems {
-//             [] => Err(anyhow!("Invalid empty path")),
-//             [PatchPathElem::Key(key)] => {
-//                 let map = value.as_map_mut().ok_or_else(|| anyhow!("Can't access key '{}': not a map", key))?;
-//                 let value_key: Value = key.to_string().into();
+    pub fn op(mut self, op: PatchOp) -> Self {
+        self.0.push(op);
+        self
+    }
 
-//                 match op {
-//                     PatchOp::Add { value } => {
-//                         map.insert(value_key, value);
-//                         Ok(())
-//                     }
-//                     PatchOp::Remove => {
-//                         map.remove(&value_key);
-//                         Ok(())
-//                     },
-//                     PatchOp::Replace { new_value } => {
-//                         map.insert(value_key, new_value);
-//                         Ok(())
-//                     },
-//                 }
+    pub fn apply_map(self, mut target: DataMap) -> Result<DataMap, AnyError> {
+        for op in self.0 {
+            op.apply_map(&mut target)?;
+        }
+        Ok(target)
+    }
+}
 
-//             },
-//             [PatchPathElem::Key(key), rest @ ..] => {
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum PatchOp {
+    Add {
+        path: PatchPath,
+        value: Value,
+    },
+    Replace {
+        path: PatchPath,
+        new_value: Value,
+        current_value: Option<Value>,
+    },
+    Remove {
+        path: PatchPath,
+        value: Option<Value>,
+    },
+    // Move { new_path: PatchPath },
+    // Copy { new_path: PatchPath },
+}
 
-//                 let map = value.as_map_mut().ok_or_else(|| anyhow!("Can't access key '{}': not a map", key))?;
-//                 let value_key: Value = key.to_string().into();
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PatchPath(pub Vec<PatchPathElem>);
 
-//                 let nested = map.get_mut(&value_key).ok_or_else(|| anyhow!("Key not found: '{}'", key))?;
-//                 parent_path.push(PatchPathElem::Key(key.clone()));
-//                 Self::apply_elems(parent_path, rest, op, nested)
-//             }
-//             [PatchPathElem::ListIndex(_), ..] => {
-//                 Err(anyhow!("Invalid path: trying to get list index of a map"))
-//             }
-//         }
-//     }
-// }
+impl From<String> for PatchPath {
+    fn from(v: String) -> Self {
+        Self(vec![PatchPathElem::Key(v)])
+    }
+}
 
-// #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-// pub enum PatchOp {
-//     Add { value: Value },
-//     Remove,
-//     Replace { new_value: Value },
-//     // Move { new_path: PatchPath },
-//     // Copy { new_path: PatchPath },
-// }
+impl<'a> From<&'a String> for PatchPath {
+    fn from(v: &'a String) -> Self {
+        Self(vec![PatchPathElem::Key(v.clone())])
+    }
+}
+
+impl<'a> From<&'a str> for PatchPath {
+    fn from(v: &'a str) -> Self {
+        Self(vec![PatchPathElem::Key(v.to_string())])
+    }
+}
+
+impl From<String> for PatchPathElem {
+    fn from(v: String) -> Self {
+        PatchPathElem::Key(v)
+    }
+}
+
+impl<'a> From<&'a String> for PatchPathElem {
+    fn from(v: &'a String) -> Self {
+        PatchPathElem::Key(v.clone())
+    }
+}
+
+impl<'a> From<&'a str> for PatchPathElem {
+    fn from(v: &'a str) -> Self {
+        PatchPathElem::Key(v.to_string())
+    }
+}
+
+impl<E> From<Vec<E>> for PatchPath
+where
+    E: Into<PatchPathElem>,
+{
+    fn from(v: Vec<E>) -> Self {
+        Self(v.into_iter().map(|e| e.into()).collect())
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum PatchPathElem {
+    Key(String),
+    ListIndex(usize),
+}
+
+impl PatchPath {
+    fn render(&self) -> String {
+        let mut s = String::new();
+        for elem in &self.0 {
+            s.push('/');
+            match elem {
+                PatchPathElem::Key(key) => {
+                    s.push_str(key);
+                }
+                PatchPathElem::ListIndex(index) => {
+                    s.push_str(&index.to_string());
+                }
+            }
+        }
+        s
+    }
+}
+
+impl std::fmt::Display for PatchPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.render())
+    }
+}
+
+impl PatchOp {
+    fn apply_map(self, target: &mut DataMap) -> Result<(), AnyError> {
+        match self {
+            PatchOp::Add { path, value } => match path.0.as_slice() {
+                [] => {
+                    bail!("Invalid empty path");
+                }
+                [PatchPathElem::ListIndex(_), ..] => {
+                    bail!("Invalid list index into map");
+                }
+                [PatchPathElem::Key(key)] => match target.get_mut(key) {
+                    None => {
+                        target.insert(key.to_string(), value);
+                        Ok(())
+                    }
+                    Some(u @ Value::Unit) => {
+                        *u = value;
+                        Ok(())
+                    }
+                    Some(Value::List(items)) => {
+                        items.push(value);
+                        Ok(())
+                    }
+                    Some(Value::Map(_)) => {
+                        bail!("Tried to add value to a map");
+                    }
+                    Some(literal) => {
+                        *literal = Value::List(vec![literal.clone(), value]);
+                        Ok(())
+                    }
+                },
+                [PatchPathElem::Key(_key), _rest @ ..] => {
+                    // TODO: implement nesting.
+                    todo!("Nested patch not implemented");
+                }
+            },
+            PatchOp::Remove {
+                path,
+                value: old_value,
+            } => match path.0.as_slice() {
+                [] => {
+                    bail!("Invalid empty path");
+                }
+                [PatchPathElem::ListIndex(_), ..] => {
+                    bail!("Invalid list index into map");
+                }
+                [PatchPathElem::Key(key)] => {
+                    if let Some(old_value) = old_value {
+                        match target.entry(key.to_string()) {
+                            btree_map::Entry::Vacant(_) => Ok(()),
+                            btree_map::Entry::Occupied(mut current_value) => {
+                                match current_value.get_mut() {
+                                    Value::List(items) => {
+                                        items.retain(|v| v != &old_value);
+                                        Ok(())
+                                    }
+                                    other if other == &old_value => {
+                                        // Value matches the given old_value, so
+                                        // remove the key.
+                                        std::mem::drop(other);
+                                        current_value.remove();
+                                        Ok(())
+                                    }
+                                    _ => {
+                                        // Value does not match the given old_value, so don't remove.
+                                        bail!("Could not remove key: specified old value does not match");
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        target.remove(key);
+                        Ok(())
+                    }
+                }
+                [PatchPathElem::Key(_key), _rest @ ..] => {
+                    // TODO: implement nesting.
+                    todo!("Nested patch not implemented");
+                }
+            },
+            PatchOp::Replace {
+                path,
+                new_value,
+                current_value: old_value,
+            } => match path.0.as_slice() {
+                [] => {
+                    bail!("Invalid empty path");
+                }
+                [PatchPathElem::ListIndex(_), ..] => {
+                    bail!("Invalid list index into map");
+                }
+                [PatchPathElem::Key(key)] => {
+                    if let Some(old_value) = old_value {
+                        match target.entry(key.to_string()) {
+                            btree_map::Entry::Vacant(entry) => {
+                                entry.insert(new_value);
+                                Ok(())
+                            }
+                            btree_map::Entry::Occupied(mut current_value) => {
+                                match current_value.get_mut() {
+                                    current if current == &old_value => {
+                                        // Value matches the given old_value, so
+                                        // replace it.
+                                        *current = new_value;
+                                        Ok(())
+                                    }
+                                    _ => {
+                                        bail!("Could not replace key: expected value does not match current value");
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        target.insert(key.clone(), new_value);
+                        Ok(())
+                    }
+                }
+                [PatchPathElem::Key(_key), _rest @ ..] => {
+                    // TODO: implement nesting.
+                    todo!("Nested patch not implemented");
+                }
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::map;
+
+    use super::*;
+
+    #[test]
+    fn test_patch() {
+        let m = map! {
+            "a": 1,
+            "b": true,
+            "c": vec![1, 2],
+            "d": vec![42, 69],
+        };
+        let out = Patch::new()
+            .remove("a")
+            .replace("b", false)
+            .add("c", 9)
+            .add("x", 22)
+            .remove_with_old("d", 42)
+            .apply_map(m)
+            .unwrap();
+
+        assert_eq!(
+            out,
+            map! {
+                "b": false,
+                "c": vec![1, 2, 9],
+                "d": vec![69],
+                "x": 22,
+            }
+        );
+    }
+}

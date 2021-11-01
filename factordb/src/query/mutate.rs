@@ -1,5 +1,5 @@
 use crate::{
-    data::{DataMap, Id},
+    data::{value::patch::Patch, DataMap, Id},
     schema::AttrMapExt,
 };
 
@@ -32,6 +32,28 @@ impl Merge {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct EntityPatch {
+    pub id: Id,
+    pub patch: Patch,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Remove {
+    pub id: Id,
+    pub data: DataMap,
+}
+
+impl Remove {
+    pub fn try_from_map(map: DataMap) -> Result<Self, crate::AnyError> {
+        let id = map
+            .get_id()
+            .and_then(Id::as_non_nil)
+            .ok_or_else(|| anyhow::anyhow!("Remove data must have a non-nil id"))?;
+        Ok(Self { id, data: map })
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Delete {
     pub id: Id,
 }
@@ -41,6 +63,7 @@ pub enum Mutate {
     Create(Create),
     Replace(Replace),
     Merge(Merge),
+    Patch(EntityPatch),
     Delete(Delete),
 }
 
@@ -54,6 +77,10 @@ impl Mutate {
         Self::Create(Create { id, data })
     }
 
+    pub fn replace(id: Id, data: DataMap) -> Self {
+        Self::Replace(Replace { id, data })
+    }
+
     pub fn merge(id: Id, data: DataMap) -> Self {
         Self::Merge(Merge { id, data })
     }
@@ -63,6 +90,10 @@ impl Mutate {
             .get_id()
             .ok_or_else(|| anyhow::anyhow!("Update requires an id"))?;
         Ok(Self::Merge(Merge { id, data }))
+    }
+
+    pub fn patch(id: Id, patch: Patch) -> Self {
+        Self::Patch(EntityPatch { id, patch })
     }
 
     pub fn delete(id: Id) -> Self {
