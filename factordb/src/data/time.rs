@@ -19,6 +19,10 @@ impl Timestamp {
     pub fn from_millis(millis: u64) -> Self {
         Self(millis)
     }
+
+    pub fn to_datetime(&self) -> chrono::DateTime<chrono::Utc> {
+        chrono::Utc.timestamp(self.0 as i64, 0)
+    }
 }
 
 impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
@@ -29,6 +33,6 @@ impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
 
 impl From<Timestamp> for chrono::DateTime<chrono::Utc> {
     fn from(v: Timestamp) -> Self {
-        chrono::Utc.timestamp(v.0 as i64, 0)
+        v.to_datetime()
     }
 }
