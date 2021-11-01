@@ -59,7 +59,7 @@ pub enum SchemaItem {
     Entity(EntitySchema),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq, Eq)]
 pub struct DbSchema {
     pub attributes: Vec<AttributeSchema>,
     pub entities: Vec<EntitySchema>,
@@ -79,5 +79,13 @@ impl DbSchema {
             Ident::Id(id) => entity.id == *id,
             Ident::Name(name) => entity.ident.as_str() == name,
         })
+    }
+
+    pub fn merge(mut self, other: Self) -> Self {
+        self.attributes.extend(other.attributes);
+        self.entities.extend(other.entities);
+        self.indexes.extend(other.indexes);
+
+        self
     }
 }
