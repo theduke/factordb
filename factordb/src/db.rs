@@ -26,6 +26,18 @@ impl Db {
         &self.backend
     }
 
+    pub fn schema(&self) -> Result<crate::schema::DbSchema, AnyError> {
+        let reg = {
+            self.backend()
+                .registry()
+                .read()
+                .map_err(|_| AnyError::msg("Could not retrieve registry"))?
+                .clone()
+        };
+
+        Ok(reg.build_schema())
+    }
+
     pub async fn entity<I>(&self, id: I) -> Result<DataMap, AnyError>
     where
         I: Into<Ident>,

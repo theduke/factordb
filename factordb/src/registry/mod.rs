@@ -20,7 +20,7 @@ use crate::{
     },
     data::{DataMap, Id, IdMap, Ident, Value, ValueType},
     error, query,
-    schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality},
+    schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality, DbSchema},
     AnyError,
 };
 
@@ -52,6 +52,29 @@ impl Registry {
         };
         s.add_builtins();
         s
+    }
+
+    pub fn build_schema(&self) -> DbSchema {
+        DbSchema {
+            attributes: self
+                .attrs
+                .items
+                .iter()
+                .map(|item| item.schema.clone())
+                .collect(),
+            entities: self
+                .entities
+                .items
+                .iter()
+                .map(|item| item.schema.clone())
+                .collect(),
+            indexes: self
+                .indexes
+                .items
+                .iter()
+                .map(|item| item.schema.clone())
+                .collect(),
+        }
     }
 
     /// Reset all state.

@@ -68,7 +68,7 @@ pub struct RegisteredIndex {
 
 #[derive(Clone, Debug)]
 pub struct IndexRegistry {
-    items: Vec<RegisteredIndex>,
+    pub items: Vec<RegisteredIndex>,
     uids: FnvHashMap<Id, LocalIndexId>,
     names: FnvHashMap<String, LocalIndexId>,
 
