@@ -478,7 +478,9 @@ impl MemoryStore {
                 match (old_value, new_value) {
                     (MemoryValue::List(mut old_items), Value::List(new_items)) => {
                         for item in new_items {
-                            old_items.push(self.interner.intern_value(item));
+                            if !old_items.contains(&item) {
+                                old_items.push(self.interner.intern_value(item));
+                            }
                         }
                         old.0.insert(attr.local_id, MemoryValue::List(old_items));
                     }
