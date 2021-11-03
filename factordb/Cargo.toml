@@ -12,18 +12,19 @@ memory = []
 log = ["memory"]
 
 [dependencies]
-anyhow = { version = "1.0.41", features = ["backtrace"] }
+anyhow = { version = "1.0.45", features = ["backtrace"] }
 chrono = { version = "0.4.19", features = ["serde"] }
 fnv = "1.0.7"
-futures = "0.3.15"
-ordered-float = { version =  "2.5.1", features = ["serde"] }
-serde = { version = "1.0.126", features = ["derive"] }
-serde_json = "1.0.64"
-tracing = "0.1.26"
+futures = "0.3.17"
+ordered-float = { version = "2.8.0", features = ["serde"] }
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.68"
+tracing = "0.1.29"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 
 factor_macros = { version = "0.1", path = "../factor_macros" }
 url = { version = "2.2.2", features = ["serde"] }
+typescript-type-def = "0.3.1"
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.2.20", features = ["fmt"] }
+tracing-subscriber = { version = "0.3.1", features = ["fmt"] }

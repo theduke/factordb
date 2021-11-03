@@ -8,5 +8,7 @@ members = [
     "factor_tests",
 
     # Backends
-    "factor_sqlite",
+    # Disabled: not functional
+    # also needs deadpool-sqlite to upgrade to rusqlite 0.26
+    #"factor_sqlite",
 ]

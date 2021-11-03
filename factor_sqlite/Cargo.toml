@@ -12,12 +12,12 @@ bundled = ["rusqlite/bundled"]
 default = ["bundled"]
 
 [dependencies]
-rusqlite = { version = "0.25.3", features = ["uuid"] }
-deadpool = { version = "0.8.0", features = ["managed", "rt_tokio_1"], default-features = false }
-deadpool-sqlite = "0.1.0"
+rusqlite = { version = "0.26.1", features = ["uuid"] }
+deadpool = { version = "0.9.1", features = ["managed", "rt_tokio_1"], default-features = false }
+deadpool-sqlite = "0.3.0"
 factordb = { path = "../factordb" }
-futures = "0.3.15"
-async-trait = "0.1.50"
-tokio = { version = "1.6.1", features = ["macros"] }
-anyhow = "1.0.41"
-serde_json = "1.0.64"
+futures = "0.3.17"
+async-trait = "0.1.51"
+tokio = { version = "1.13.0", features = ["macros"] }
+anyhow = "1.0.45"
+serde_json = "1.0.68"
