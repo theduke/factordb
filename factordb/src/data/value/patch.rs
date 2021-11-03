@@ -195,7 +195,9 @@ impl PatchOp {
                         Ok(())
                     }
                     Some(Value::List(items)) => {
-                        items.push(value);
+                        if !items.contains(&value) {
+                            items.push(value);
+                        }
                         Ok(())
                     }
                     Some(Value::Map(_)) => {
