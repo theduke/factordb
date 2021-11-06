@@ -36,6 +36,7 @@ pub struct Select {
     #[serde(default = "HashMap::new")]
     pub variables: HashMap<String, Value>,
     pub limit: u64,
+    pub offset: u64,
     pub cursor: Option<Id>,
 }
 
@@ -47,6 +48,7 @@ impl Select {
             sort: Vec::new(),
             variables: Default::default(),
             limit: 100,
+            offset: 0,
             cursor: None,
         }
     }

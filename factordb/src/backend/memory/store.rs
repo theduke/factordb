@@ -986,33 +986,34 @@ impl MemoryStore {
         op: query_planner::QueryOp<MemoryValue, MemoryExpr>,
     ) -> TupleIter<'_> {
         match op {
-            query_planner::QueryOp::SelectEntity { id } => {
+            QueryOp::SelectEntity { id } => {
                 if let Some(entity) = self.entities.get(&id) {
                     Box::new(vec![Cow::Borrowed(entity)].into_iter())
                 } else {
                     Box::new(vec![].into_iter())
                 }
             }
-            query_planner::QueryOp::Scan => Box::new(self.entities.values().map(Cow::Borrowed)),
-            query_planner::QueryOp::Filter { expr } => {
+            QueryOp::Scan => Box::new(self.entities.values().map(Cow::Borrowed)),
+            QueryOp::Filter { expr } => {
                 Box::new(input.filter(move |tuple| Self::entity_filter(tuple, &expr)))
             }
-            query_planner::QueryOp::Limit { limit } => Box::new(input.take(limit as usize)),
-            query_planner::QueryOp::Merge { left, right } => {
+            QueryOp::Limit { limit } => Box::new(input.take(limit as usize)),
+            QueryOp::Merge { left, right } => {
                 let left_iter = self.run_query_op(vec![].into_iter(), *left);
                 let right_iter = self.run_query_op(vec![].into_iter(), *right);
                 Box::new(left_iter.chain(right_iter))
             }
-            query_planner::QueryOp::IndexSelect { .. } => {
+            QueryOp::IndexSelect { .. } => {
                 todo!()
             }
-            query_planner::QueryOp::IndexScan { .. } => todo!(),
-            query_planner::QueryOp::IndexScanPrefix { .. } => todo!(),
-            query_planner::QueryOp::Sort { sorts } => {
+            QueryOp::IndexScan { .. } => todo!(),
+            QueryOp::IndexScanPrefix { .. } => todo!(),
+            QueryOp::Sort { sorts } => {
                 let mut items: Vec<_> = input.collect();
                 Self::apply_sort(&mut items, &sorts);
                 Box::new(items.into_iter())
             }
+            QueryOp::Skip { count } => Box::new(input.skip(count as usize)),
         }
     }
 
@@ -1064,6 +1065,7 @@ impl MemoryStore {
                 expr: self.build_memory_expr(expr, reg)?,
             },
             QueryOp::Limit { limit } => QueryOp::Limit { limit },
+            QueryOp::Skip { count } => QueryOp::Skip { count },
         };
         Ok(op)
     }
@@ -1093,8 +1095,8 @@ impl MemoryStore {
             .collect::<Result<Vec<Item>, anyhow::Error>>()?;
 
         Ok(Page {
-            items,
             next_cursor: None,
+            items,
         })
     }
 

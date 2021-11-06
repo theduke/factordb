@@ -19,6 +19,7 @@ pub enum QueryOp<V = Value, E = Expr> {
     Scan,
     Filter { expr: E },
     Limit { limit: u64 },
+    Skip { count: u64 },
     Merge { left: Box<Self>, right: Box<Self> },
     IndexSelect { index: LocalIndexId, value: V },
     IndexScan { from: V, until: V },
@@ -87,6 +88,11 @@ pub fn plan_select(
                 })
                 .collect::<Result<_, anyhow::Error>>()?,
         })
+    }
+    if query.offset > 0 {
+        ops.push(QueryOp::Skip {
+            count: query.offset,
+        });
     }
     ops.push(QueryOp::Limit { limit: query.limit });
 
