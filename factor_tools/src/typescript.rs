@@ -15,11 +15,16 @@ pub fn schema_to_typescript(
     module.add(Item::Comment("DO NOT EDIT MANUALLY".into()));
     module.add_newlines(1);
 
-    let attr_name_constants = schema.attributes.iter().map(|attr| Item::Const {
-        name: attr.ident.replace('/', "_").to_screaming_snake_case(),
-        ty: None,
-        value: Value::Str(attr.ident.clone()),
-    });
+    let attr_name_constants = schema
+        .attributes
+        .iter()
+        // Skip the sentinel
+        .skip(1)
+        .map(|attr| Item::Const {
+            name: attr.ident.replace('/', "_").to_screaming_snake_case(),
+            ty: None,
+            value: Value::Str(attr.ident.clone()),
+        });
     module.items.extend(attr_name_constants);
     module.add_newlines(1);
 
@@ -86,6 +91,8 @@ pub fn schema_to_typescript(
     let entities = schema
         .entities
         .iter()
+        // Skip the sentinel.
+        .skip(1)
         .map(|entity| build_entity(entity, schema))
         .collect::<Result<Vec<Vec<_>>, _>>()?
         .into_iter()
@@ -164,6 +171,7 @@ fn build_entity(
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 enum Value {
     Str(String),
     Array(Vec<Self>),
@@ -202,6 +210,7 @@ impl Value {
     }
 }
 
+#[derive(Debug)]
 enum Type {
     Constant(Value),
     Any,
@@ -255,16 +264,19 @@ impl Type {
     }
 }
 
+#[derive(Debug)]
 struct ObjectType {
     fields: Vec<FieldDef>,
 }
 
+#[derive(Debug)]
 struct FieldDef {
     name: String,
     is_optional: bool,
     ty: Type,
 }
 
+#[derive(Debug)]
 enum Item {
     Newlines(usize),
     TypeAlias {
@@ -342,6 +354,7 @@ impl Item {
     }
 }
 
+#[derive(Debug)]
 struct Module {
     items: Vec<Item>,
 }
