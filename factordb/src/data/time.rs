@@ -23,10 +23,20 @@ impl Timestamp {
     pub fn to_datetime(&self) -> chrono::DateTime<chrono::Utc> {
         chrono::Utc.timestamp(self.0 as i64, 0)
     }
+
+    pub fn from_chrono_utc_datetime(t: chrono::NaiveDateTime) -> Self {
+        Self(t.timestamp() as u64)
+    }
 }
 
 impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
     fn from(v: chrono::DateTime<chrono::Utc>) -> Self {
+        Self(v.timestamp() as u64)
+    }
+}
+
+impl From<chrono::DateTime<chrono::FixedOffset>> for Timestamp {
+    fn from(v: chrono::DateTime<chrono::FixedOffset>) -> Self {
         Self(v.timestamp() as u64)
     }
 }
