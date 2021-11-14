@@ -61,6 +61,8 @@ pub enum SchemaItem {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq, Eq)]
 pub struct DbSchema {
+    // FIXME: make these private and provide accessors.
+    // They should no tbe pub because of the sentinel 0 id.
     pub attributes: Vec<AttributeSchema>,
     pub entities: Vec<EntitySchema>,
     pub indexes: Vec<IndexSchema>,
