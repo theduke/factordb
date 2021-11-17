@@ -60,18 +60,24 @@ impl Registry {
                 .attrs
                 .items
                 .iter()
+                // Skip sentinel
+                .skip(1)
                 .map(|item| item.schema.clone())
                 .collect(),
             entities: self
                 .entities
                 .items
                 .iter()
+                // Skip sentinel
+                .skip(1)
                 .map(|item| item.schema.clone())
                 .collect(),
             indexes: self
                 .indexes
                 .items
                 .iter()
+                // Skip sentinel
+                .skip(1)
                 .map(|item| item.schema.clone())
                 .collect(),
         }
