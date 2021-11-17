@@ -15,10 +15,7 @@ impl Patch {
     }
 
     pub fn add(mut self, path: impl Into<PatchPath>, value: impl Into<Value>) -> Self {
-        self.0.push(PatchOp::Add {
-            path: path.into(),
-            value: value.into(),
-        });
+        self.0.push(PatchOp::add(path, value));
         self
     }
 
@@ -95,6 +92,15 @@ pub enum PatchOp {
     },
     // Move { new_path: PatchPath },
     // Copy { new_path: PatchPath },
+}
+
+impl PatchOp {
+    pub fn add(path: impl Into<PatchPath>, value: impl Into<Value>) -> Self {
+        Self::Add {
+            path: path.into(),
+            value: value.into(),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
