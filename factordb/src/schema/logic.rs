@@ -1,15 +1,21 @@
 use anyhow::{anyhow, bail};
 
 use crate::{
-    backend::{DbOp, SelectOpt, TupleOp},
+    backend::{DbOp, SelectOpt, TupleOp, TuplePatch},
     data::{
-        value::{to_value, to_value_map},
+        value::{patch::Patch, to_value, to_value_map},
         Id,
     },
-    query::migrate::{self, Migration, SchemaAction},
+    query::{
+        expr::Expr,
+        migrate::{self, Migration, SchemaAction},
+    },
     registry::Registry,
-    schema::{builtin, AttrMapExt},
-    AnyError, Ident,
+    schema::{
+        builtin::{self, AttrType, NS_FACTOR},
+        AttrMapExt,
+    },
+    AnyError, Ident, Value,
 };
 
 use super::{AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, IndexSchema};
@@ -256,6 +262,70 @@ fn build_entity_create(
     Ok(vec![action])
 }
 
+fn build_entity_attribute_add(
+    reg: &mut Registry,
+    add: migrate::EntityAttributeAdd,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let attr = reg.require_attr_by_name(&add.attribute)?;
+    let mut entity = reg
+        .entity_by_name(&add.entity)
+        .ok_or_else(|| anyhow!("Entity type '{}' does not exist", add.entity))?
+        .schema
+        .clone();
+
+    if !is_internal && entity.parse_namespace()? == NS_FACTOR {
+        bail!("Can't modify builtin entitites");
+    }
+
+    if entity
+        .attributes
+        .iter()
+        .any(|a| a.attribute == attr.schema.id.into())
+    {
+        bail!(
+            "Entity '{}' already has the attribute '{}'",
+            entity.ident,
+            attr.schema.ident
+        );
+    }
+
+    let ops: Vec<DbOp> = if add.cardinality == Cardinality::Required {
+        if let Some(value) = &add.default_value {
+            vec![DbOp::Select(SelectOpt {
+                selector: Expr::eq(Expr::attr::<AttrType>(), entity.ident),
+                op: TupleOp::Patch(TuplePatch {
+                    id: Id::nil(),
+                    patch: Patch::new().replace_with_old(
+                        attr.schema.ident.clone(),
+                        value.clone(),
+                        Value::Unit,
+                        false,
+                    ),
+                    index_ops: vec![],
+                }),
+            })]
+        } else {
+            bail!(
+                "Adding attribute '{}' with required cardinality to entity '{}' requires a default value", 
+                attr.schema.ident, entity.ident);
+        }
+    } else {
+        vec![]
+    };
+
+    entity.attributes.push(EntityAttribute {
+        attribute: attr.schema.id.into(),
+        cardinality: add.cardinality,
+    });
+
+    let action = ResolvedAction {
+        action: SchemaAction::EntityAttributeAdd(add),
+        ops,
+    };
+    Ok(vec![action])
+}
+
 fn build_entity_upsert(
     reg: &mut Registry,
     upsert: migrate::EntityUpsert,
@@ -421,6 +491,7 @@ fn build_action(
         SchemaAction::AttributeUpsert(upsert) => build_attribute_upsert(reg, upsert, is_internal),
         SchemaAction::AttributeDelete(del) => build_attribute_delete(reg, del),
         SchemaAction::EntityCreate(create) => build_entity_create(reg, create, is_internal),
+        SchemaAction::EntityAttributeAdd(add) => build_entity_attribute_add(reg, add, is_internal),
         SchemaAction::EntityUpsert(upsert) => build_entity_upsert(reg, upsert, is_internal),
         SchemaAction::EntityDelete(del) => build_entity_delete(reg, del, is_internal),
         SchemaAction::IndexCreate(create) => build_index_create(reg, create),

@@ -6,9 +6,16 @@ use crate::{
     data::{value::patch::Patch, Id, Value, ValueType},
     error::{self, UniqueConstraintViolation},
     map,
-    query::{self, expr::Expr, migrate::Migration, select::Select},
+    query::{
+        self,
+        expr::Expr,
+        migrate::{EntityAttributeAdd, Migration, SchemaAction},
+        select::Select,
+    },
     schema::{
-        self, builtin::AttrId, AttrMapExt, AttributeDescriptor, EntityAttribute, EntitySchema,
+        self,
+        builtin::{AttrId, AttrTitle},
+        AttrMapExt, AttributeDescriptor, EntityAttribute, EntitySchema,
     },
     Db,
 };
@@ -89,6 +96,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_sort_simple,
             test_query_entity_select_ident,
             test_entity_delete_not_found,
+            test_entity_attr_add_with_default,
         ]
     );
 }
@@ -102,6 +110,83 @@ async fn test_entity_delete_not_found(db: &Db) {
     dbg!(&err);
     dbg!(&err.downcast_ref::<error::EntityNotFound>());
     assert!(err.is::<error::EntityNotFound>());
+}
+
+async fn test_entity_attr_add_with_default(db: &Db) {
+    let ty = "t/AddTest";
+    db.migrate(Migration::new().entity_create(EntitySchema {
+        id: Id::nil(),
+        ident: ty.to_string(),
+        title: None,
+        description: None,
+        attributes: vec![EntityAttribute {
+            attribute: AttrTitle::IDENT.clone(),
+            cardinality: schema::Cardinality::Required,
+        }],
+        extends: vec![],
+        strict: true,
+    }))
+    .await
+    .unwrap();
+
+    let id_no_default = Id::random();
+    db.create(
+        id_no_default,
+        map! {
+            "factor/type": ty,
+            "factor/title": "hello",
+        },
+    )
+    .await
+    .unwrap();
+
+    let id_with_default = Id::random();
+    db.create(
+        id_with_default,
+        map! {
+            "factor/type": ty,
+            "factor/title": "hello",
+            "test/int": 100,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Migration should fail without a default value.
+    let err = db
+        .migrate(
+            Migration::new().action(SchemaAction::EntityAttributeAdd(EntityAttributeAdd {
+                entity: ty.into(),
+                attribute: "test/int".into(),
+                cardinality: schema::Cardinality::Required,
+                default_value: None,
+            })),
+        )
+        .await
+        .expect_err("Must fail");
+    assert!(err.to_string().contains("requires a default value"));
+
+    // Now supply a default value.
+    db.migrate(
+        Migration::new().action(SchemaAction::EntityAttributeAdd(EntityAttributeAdd {
+            entity: ty.into(),
+            attribute: "test/int".into(),
+            cardinality: schema::Cardinality::Required,
+            default_value: Some(42.into()),
+        })),
+    )
+    .await
+    .unwrap();
+
+    // The previously created entity should now have the new attribute with the default value.
+    let entity = db.entity(id_no_default).await.unwrap();
+    let val = entity.get("test/int").unwrap().as_int().unwrap();
+    assert_eq!(val, 42);
+
+    // The entity with a correct value should still have the old one.
+    let entity = db.entity(id_with_default).await.unwrap();
+    let val = entity.get("test/int").unwrap().as_int().unwrap();
+    assert_eq!(val, 100);
 }
 
 async fn test_query_entity_select_ident(db: &Db) {

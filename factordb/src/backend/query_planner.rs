@@ -54,26 +54,28 @@ pub enum ResolvedExpr<V = Value> {
     Op(Box<QueryOp<V, ResolvedExpr<V>>>),
 }
 
+pub fn plan_select_expr(
+    expr: Expr,
+    reg: &Registry,
+) -> Result<Vec<QueryOp<Value, ResolvedExpr>>, AnyError> {
+    let resolved = resolve_expr(expr, reg)?;
+    let optimized = build_select_expr(resolved);
+
+    match optimized {
+        ResolvedExpr::Op(op) => Ok(vec![*op]),
+        other => Ok(vec![QueryOp::Scan, QueryOp::Filter { expr: other }]),
+    }
+}
+
 pub fn plan_select(
     query: Select,
     reg: &Registry,
 ) -> Result<Vec<QueryOp<Value, ResolvedExpr>>, AnyError> {
-    let mut ops: Vec<QueryOp<Value, ResolvedExpr>> = vec![];
-
-    if let Some(filter) = query.filter {
-        let resolved = resolve_expr(filter, reg)?;
-        let optimized = build_select_expr(resolved);
-
-        match optimized {
-            ResolvedExpr::Op(op) => ops.push(*op),
-            other => {
-                ops.push(QueryOp::Scan);
-                ops.push(QueryOp::Filter { expr: other });
-            }
-        }
+    let mut ops = if let Some(filter) = query.filter {
+        plan_select_expr(filter, reg)?
     } else {
-        ops.push(QueryOp::Scan);
-    }
+        vec![QueryOp::Scan]
+    };
 
     if !query.sort.is_empty() {
         ops.push(QueryOp::Sort {
@@ -150,5 +152,31 @@ fn pass_simplify_entity_id_eq(expr: ResolvedExpr) -> (ResolvedExpr, bool) {
             }
         }
         other => (other, false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::schema::{builtin::AttrId, AttributeDescriptor};
+
+    use super::*;
+
+    #[test]
+    fn test_query_plan_efficient_single_entity_select() {
+        let id = Id::random();
+        let reg = Registry::new();
+        let ops = plan_select(
+            Select::new().with_filter(Expr::eq(AttrId::expr(), id)),
+            &reg,
+        )
+        .unwrap();
+        match ops.as_slice() {
+            [QueryOp::SelectEntity { id: x }, QueryOp::Limit { limit: 100 }] => {
+                assert_eq!(*x, id);
+            }
+            _other => {
+                panic!("Expected a single select");
+            }
+        }
     }
 }

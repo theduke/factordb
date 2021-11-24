@@ -24,6 +24,7 @@ impl Patch {
             path: path.into(),
             new_value: new_value.into(),
             current_value: None,
+            must_replace: false,
         });
         self
     }
@@ -33,11 +34,13 @@ impl Patch {
         path: impl Into<PatchPath>,
         new_value: impl Into<Value>,
         old_value: impl Into<Value>,
+        must_replace: bool,
     ) -> Self {
         self.0.push(PatchOp::Replace {
             path: path.into(),
             new_value: new_value.into(),
             current_value: Some(old_value.into()),
+            must_replace,
         });
         self
     }
@@ -85,6 +88,11 @@ pub enum PatchOp {
         path: PatchPath,
         new_value: Value,
         current_value: Option<Value>,
+        /// If true, patching will produce an error if the real current value
+        /// does not match the specified one.
+        /// If false, then the old value will be left in tact without generating
+        /// an error.
+        must_replace: bool,
     },
     Remove {
         path: PatchPath,
@@ -267,6 +275,7 @@ impl PatchOp {
                 path,
                 new_value,
                 current_value: old_value,
+                must_replace,
             } => match path.0.as_slice() {
                 [] => {
                     bail!("Invalid empty path");
@@ -289,6 +298,7 @@ impl PatchOp {
                                         *current = new_value;
                                         Ok(())
                                     }
+                                    _ if !must_replace => Ok(()),
                                     _ => {
                                         bail!("Could not replace key: expected value does not match current value");
                                     }

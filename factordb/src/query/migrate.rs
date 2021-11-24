@@ -1,8 +1,24 @@
-use crate::schema::{self, IndexSchema};
+use crate::{
+    schema::{self, Cardinality, IndexSchema},
+    Value,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeCreate {
     pub schema: schema::AttributeSchema,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct EntityAttributeAdd {
+    /// The qualified name of the entity.
+    pub entity: String,
+    /// The qualified name of the attribute to add.
+    pub attribute: String,
+    /// Cardinality for the attribute.
+    pub cardinality: Cardinality,
+    /// Optional default value.
+    /// This is required if the cardinality is [`Cardinality::Required`].
+    pub default_value: Option<Value>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -46,6 +62,7 @@ pub enum SchemaAction {
     AttributeUpsert(AttributeUpsert),
     AttributeDelete(AttributeDelete),
     EntityCreate(EntityCreate),
+    EntityAttributeAdd(EntityAttributeAdd),
     EntityUpsert(EntityUpsert),
     EntityDelete(EntityDelete),
     IndexCreate(IndexCreate),
@@ -71,6 +88,11 @@ impl Migration {
             name: Some(name),
             actions: Vec::new(),
         }
+    }
+
+    pub fn action(mut self, action: SchemaAction) -> Self {
+        self.actions.push(action);
+        self
     }
 
     pub fn attr_create(mut self, attr: schema::AttributeSchema) -> Self {

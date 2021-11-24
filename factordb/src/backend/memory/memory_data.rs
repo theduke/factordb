@@ -4,7 +4,7 @@ use ordered_float::OrderedFloat;
 use crate::{
     data::{Id, Value},
     query::expr,
-    registry::LocalAttributeId,
+    registry::{LocalAttributeId, ATTR_ID_LOCAL},
 };
 
 // SharedStr
@@ -137,14 +137,6 @@ impl MemoryValue {
         }
     }
 
-    // pub fn as_id(&self) -> Option<Id> {
-    //     if let Self::Id(id) = self {
-    //         Some(*id)
-    //     } else {
-    //         None
-    //     }
-    // }
-
     // pub fn as_id_ref(&self) -> Option<&Id> {
     //     if let Self::Id(id) = self {
     //         Some(id)
@@ -152,6 +144,14 @@ impl MemoryValue {
     //         None
     //     }
     // }
+
+    pub(super) fn as_id(&self) -> Option<Id> {
+        if let Self::Id(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> From<&'a MemoryValue> for Value {
@@ -169,6 +169,10 @@ impl MemoryTuple {
     #[allow(unused)]
     pub fn new() -> Self {
         Self(Default::default())
+    }
+
+    pub fn get_id(&self) -> Option<Id> {
+        self.0.get(&ATTR_ID_LOCAL).and_then(|v| v.as_id())
     }
 }
 

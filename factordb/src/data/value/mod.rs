@@ -313,9 +313,25 @@ impl Value {
         matches!(self, Self::UInt(..))
     }
 
+    pub fn as_uint(&self) -> Option<u64> {
+        if let Self::UInt(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
     /// Returns `true` if the value is [`Int`].
     pub fn is_int(&self) -> bool {
         matches!(self, Self::Int(..))
+    }
+
+    pub fn as_int(&self) -> Option<i64> {
+        if let Self::Int(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
     }
 
     /// Returns `true` if the value is [`Float`].

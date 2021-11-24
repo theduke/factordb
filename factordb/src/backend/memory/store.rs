@@ -8,11 +8,16 @@ use crate::{
         query_planner::{self, QueryOp, ResolvedExpr, Sort},
         DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
     },
-    data::{value::ValueMap, DataMap, Id, Ident, Value},
+    data::{
+        value::{patch::Patch, ValueMap},
+        DataMap, Id, Ident, Value,
+    },
     error::{self, EntityNotFound},
     query::{
         self,
+        expr::Expr,
         migrate::Migration,
+        mutate::EntityPatch,
         select::{Item, Order, Page},
     },
     registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
@@ -559,6 +564,38 @@ impl MemoryStore {
         }
     }
 
+    fn tuple_select_patch(
+        &mut self,
+        expr: &Expr,
+        patch: &Patch,
+        revert: &mut RevertList,
+        reg: &Registry,
+    ) -> Result<(), AnyError> {
+        let raw_ops = query_planner::plan_select_expr(expr.clone(), reg)?;
+        let ops = self.build_query_ops(raw_ops, reg)?;
+        let ids: Vec<Id> = self
+            .run_query_ops(ops)
+            .filter_map(|tuple| tuple.get_id())
+            .collect();
+
+        for id in ids {
+            let mem_entity = self.entities.get(&id).unwrap();
+            let entity = self.tuple_to_data_map(mem_entity);
+
+            let ops = reg.validate_patch(
+                EntityPatch {
+                    id: mem_entity.get_id().unwrap(),
+                    patch: patch.clone(),
+                },
+                entity,
+            )?;
+
+            self.apply_db_ops(ops, revert, reg)?;
+        }
+
+        Ok(())
+    }
+
     fn tuple_select_remove(
         &mut self,
         selector: &MemoryExpr,
@@ -591,6 +628,7 @@ impl MemoryStore {
         for (entity_id, removed_attr_ids) in to_remove {
             let entity = self.entities.get_mut(&entity_id).unwrap();
 
+            // FIXME: need to respect index changes via registry.build_remove!
             let attrs = removed_attr_ids
                 .into_iter()
                 .filter_map(|attr| Some((attr.local_id, entity.remove(&attr.local_id)?)))
@@ -636,6 +674,10 @@ impl MemoryStore {
                     TupleOp::Delete(del) => {
                         self.tuple_delete(del, revert)?;
                     }
+                    TupleOp::Patch(_patch) => {
+                        // will never exist as a real op.
+                        unreachable!()
+                    }
                 },
                 DbOp::Select(sel) => match sel.op {
                     TupleOp::Create(_) => todo!(),
@@ -647,6 +689,9 @@ impl MemoryStore {
                         self.tuple_select_remove(&expr, &remove, revert, reg)?;
                     }
                     TupleOp::Delete(_) => todo!(),
+                    TupleOp::Patch(patch) => {
+                        self.tuple_select_patch(&sel.selector, &patch.patch, revert, reg)?;
+                    }
                 },
             }
         }
@@ -906,6 +951,7 @@ impl MemoryStore {
                 query::migrate::SchemaAction::EntityCreate(_) => {}
                 query::migrate::SchemaAction::EntityUpsert(_) => {}
                 query::migrate::SchemaAction::EntityDelete(_) => {}
+                query::migrate::SchemaAction::EntityAttributeAdd(_) => {}
             }
         }
 
@@ -1070,6 +1116,16 @@ impl MemoryStore {
         Ok(op)
     }
 
+    fn build_query_ops(
+        &self,
+        ops: Vec<QueryOp<Value, ResolvedExpr>>,
+        reg: &Registry,
+    ) -> Result<Vec<QueryOp<MemoryValue, MemoryExpr>>, AnyError> {
+        ops.into_iter()
+            .map(|op| self.build_query_op(op, &reg))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
     pub fn select(
         &self,
         query: query::select::Select,
@@ -1079,10 +1135,7 @@ impl MemoryStore {
         let reg = self.registry().read().unwrap();
 
         let raw_ops = query_planner::plan_select(query, &reg)?;
-        let mem_ops = raw_ops
-            .into_iter()
-            .map(|op| self.build_query_op(op, &reg))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mem_ops = self.build_query_ops(raw_ops, &reg)?;
 
         let items = self
             .run_query_ops(mem_ops)

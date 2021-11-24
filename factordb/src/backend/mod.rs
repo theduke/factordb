@@ -7,7 +7,7 @@ pub mod memory;
 pub mod log;
 
 use crate::{
-    data::{DataMap, Id, Ident, Value},
+    data::{value::patch::Patch, DataMap, Id, Ident, Value},
     query::{self, expr::Expr, migrate::Migration, select::Item},
     registry::{LocalIndexId, SharedRegistry},
     schema, AnyError,
@@ -95,6 +95,13 @@ pub struct TupleMerge {
 }
 
 #[derive(Clone, Debug)]
+pub struct TuplePatch {
+    pub id: Id,
+    pub patch: Patch,
+    pub index_ops: Vec<TupleIndexOp>,
+}
+
+#[derive(Clone, Debug)]
 pub struct TupleDelete {
     pub id: Id,
     pub index_ops: Vec<TupleIndexRemove>,
@@ -112,6 +119,7 @@ pub enum TupleOp {
     Create(TupleCreate),
     Replace(TupleReplace),
     Merge(TupleMerge),
+    Patch(TuplePatch),
     RemoveAttrs(TupleRemoveAttrs),
     Delete(TupleDelete),
 }
