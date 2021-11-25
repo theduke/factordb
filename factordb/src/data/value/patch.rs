@@ -92,6 +92,7 @@ pub enum PatchOp {
         /// does not match the specified one.
         /// If false, then the old value will be left in tact without generating
         /// an error.
+        #[serde(default)]
         must_replace: bool,
     },
     Remove {
