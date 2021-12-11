@@ -84,12 +84,13 @@ impl EntityRegistry {
         Ok(local_id)
     }
 
-    #[inline]
+    // #[inline]
     // pub fn get_maybe_deleted(&self, id: LocalEntityId) -> &RegisteredEntity {
     //     // NOTE: this panics, but this is acceptable because a LocalEntityId
     //     // is always valid.
     //     &self.items[id.0 as usize]
     // }
+
     #[inline]
     pub fn get(&self, id: LocalEntityId) -> Option<&RegisteredEntity> {
         // NOTE: this panics, but this is acceptable because a LocalEntityId
