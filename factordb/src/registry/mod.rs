@@ -462,7 +462,14 @@ impl Registry {
                     }
                 }
             }
-            ValueType::Const(_) => todo!(),
+            ValueType::Const(const_val) => {
+                if value != const_val {
+                    return Err(AnyError::msg(format!(
+                        "Invalid attribute '{name}' expected '{:?}, got {:?}'",
+                        const_val, value
+                    )));
+                }
+            }
         }
         Ok(())
     }
