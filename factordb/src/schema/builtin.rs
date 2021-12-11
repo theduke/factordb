@@ -425,7 +425,7 @@ impl EntityDescriptor for IndexSchemaType {
         EntitySchema {
             id: INDEX_ID,
             ident: Self::QUALIFIED_NAME.to_string(),
-            title: Some("Entity".into()),
+            title: Some("Index".into()),
             description: None,
             attributes: vec![
                 ATTR_ID.into(),
@@ -458,7 +458,7 @@ fn index_ident() -> IndexSchema {
     IndexSchema {
         id: INDEX_IDENT,
         ident: "factor/index_ident".into(),
-        title: Some("Globabl ident attribute index".into()),
+        title: Some("Global ident attribute index".into()),
         attributes: vec![ATTR_IDENT],
         description: None,
         unique: true,
