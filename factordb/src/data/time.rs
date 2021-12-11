@@ -21,7 +21,9 @@ impl Timestamp {
     }
 
     pub fn to_datetime(&self) -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc.timestamp(self.0 as i64, 0)
+        let seconds = (self.0 / 1000) as i64;
+        let nanos = ((self.0 % 1000) * 1_000_000) as u32;
+        chrono::Utc.timestamp(seconds, nanos)
     }
 
     pub fn from_chrono_utc_datetime(t: chrono::NaiveDateTime) -> Self {
