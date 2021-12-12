@@ -141,6 +141,10 @@ impl Expr {
         Self::binary(left, BinaryOp::Or, right)
     }
 
+    pub fn or_with(self, other: impl Into<Self>) -> Self {
+        Self::or(self, other.into())
+    }
+
     pub fn eq<I1, I2>(left: I1, right: I2) -> Self
     where
         I1: Into<Self>,
