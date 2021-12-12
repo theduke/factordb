@@ -782,7 +782,7 @@ impl MemoryStore {
     /// Apply a batch of operations.
     fn apply_batch_impl(
         &mut self,
-        batch: query::mutate::BatchUpdate,
+        batch: query::mutate::Batch,
         reg: &Registry,
     ) -> Result<RevertList, AnyError> {
         // FIXME: rollback when errors happen.
@@ -810,10 +810,7 @@ impl MemoryStore {
         Ok(revert)
     }
 
-    pub fn apply_batch(
-        &mut self,
-        batch: crate::query::mutate::BatchUpdate,
-    ) -> Result<(), AnyError> {
+    pub fn apply_batch(&mut self, batch: crate::query::mutate::Batch) -> Result<(), AnyError> {
         let shared_reg = self.registry().clone();
         let reg = shared_reg.read().unwrap();
         self.apply_batch_impl(batch, &reg)?;
@@ -833,7 +830,7 @@ impl MemoryStore {
     /// apply the revert.
     pub fn apply_batch_revertable(
         &mut self,
-        batch: crate::query::mutate::BatchUpdate,
+        batch: crate::query::mutate::Batch,
     ) -> Result<RevertEpoch, AnyError> {
         let shared_reg = self.registry().clone();
         let reg = shared_reg.read().unwrap();

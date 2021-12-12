@@ -33,7 +33,7 @@ pub trait Backend {
     fn entity(&self, id: Ident) -> BackendFuture<DataMap>;
     fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<Item>>;
 
-    fn apply_batch(&self, batch: query::mutate::BatchUpdate) -> BackendFuture<()>;
+    fn apply_batch(&self, batch: query::mutate::Batch) -> BackendFuture<()>;
     fn migrate(&self, migration: query::migrate::Migration) -> BackendFuture<()>;
 
     fn purge_all_data(&self) -> BackendFuture<()>;

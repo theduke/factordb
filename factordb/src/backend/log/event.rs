@@ -1,4 +1,4 @@
-use crate::query::{migrate::Migration, mutate::BatchUpdate};
+use crate::query::{migrate::Migration, mutate::Batch};
 
 /// A event persisted in the log.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -31,6 +31,6 @@ impl LogEvent {
 /// A log operation stored in a log event.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub(super) enum LogOp {
-    Batch(BatchUpdate),
+    Batch(Batch),
     Migrate(Migration),
 }

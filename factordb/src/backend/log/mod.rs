@@ -15,7 +15,7 @@ use futures::{
     stream::BoxStream,
     FutureExt, StreamExt,
 };
-use query::mutate::BatchUpdate;
+use query::mutate::Batch;
 
 use crate::{
     data,
@@ -276,7 +276,7 @@ impl LogDb {
         Ok(())
     }
 
-    async fn apply_batch(self, batch: BatchUpdate) -> Result<(), AnyError> {
+    async fn apply_batch(self, batch: Batch) -> Result<(), AnyError> {
         let mut mutable = self.state.mutable.lock().await;
         let revert_epoch = self
             .state
@@ -314,7 +314,7 @@ impl Backend for LogDb {
         ready(res).boxed()
     }
 
-    fn apply_batch(&self, batch: BatchUpdate) -> super::BackendFuture<()> {
+    fn apply_batch(&self, batch: Batch) -> super::BackendFuture<()> {
         self.clone().apply_batch(batch).boxed()
     }
 
@@ -466,7 +466,7 @@ mod tests {
                 vec![
                     LogEvent {
                         id: 1,
-                        op: LogOp::Batch(BatchUpdate {
+                        op: LogOp::Batch(Batch {
                             actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
                                 id,
                                 data
@@ -475,7 +475,7 @@ mod tests {
                     },
                     LogEvent {
                         id: 2,
-                        op: LogOp::Batch(BatchUpdate {
+                        op: LogOp::Batch(Batch {
                             actions: vec![query::mutate::Mutate::Delete(query::mutate::Delete {
                                 id
                             }),]

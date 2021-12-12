@@ -126,11 +126,11 @@ impl From<Delete> for Mutate {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct BatchUpdate {
+pub struct Batch {
     pub actions: Vec<Mutate>,
 }
 
-impl BatchUpdate {
+impl Batch {
     pub fn with_action(action: impl Into<Mutate>) -> Self {
         Self {
             actions: vec![action.into()],
@@ -138,14 +138,14 @@ impl BatchUpdate {
     }
 }
 
-impl From<Mutate> for BatchUpdate {
+impl From<Mutate> for Batch {
     fn from(v: Mutate) -> Self {
         Self { actions: vec![v] }
     }
 }
 
-impl From<Vec<Mutate>> for BatchUpdate {
+impl From<Vec<Mutate>> for Batch {
     fn from(v: Vec<Mutate>) -> Self {
-        BatchUpdate { actions: v }
+        Batch { actions: v }
     }
 }

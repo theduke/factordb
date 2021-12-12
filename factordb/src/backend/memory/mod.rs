@@ -56,7 +56,7 @@ impl super::Backend for MemoryDb {
         ready(res).boxed()
     }
 
-    fn apply_batch(&self, batch: query::mutate::BatchUpdate) -> BackendFuture<()> {
+    fn apply_batch(&self, batch: query::mutate::Batch) -> BackendFuture<()> {
         let res = self.state.write().unwrap().apply_batch(batch);
         ready(res).boxed()
     }

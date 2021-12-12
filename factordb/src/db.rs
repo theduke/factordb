@@ -71,7 +71,7 @@ impl Db {
     }
 
     pub async fn create(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::mutate::BatchUpdate {
+        self.batch(query::mutate::Batch {
             actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
                 id,
                 data,
@@ -105,7 +105,7 @@ impl Db {
         self.batch(Mutate::delete(id).into()).await
     }
 
-    pub async fn batch(&self, batch: query::mutate::BatchUpdate) -> Result<(), AnyError> {
+    pub async fn batch(&self, batch: query::mutate::Batch) -> Result<(), AnyError> {
         self.backend.apply_batch(batch).await
     }
 
