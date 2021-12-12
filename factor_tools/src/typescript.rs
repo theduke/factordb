@@ -18,8 +18,6 @@ pub fn schema_to_typescript(
     let attr_name_constants = schema
         .attributes
         .iter()
-        // Skip the sentinel
-        .skip(1)
         .map(|attr| Item::Const {
             name: attr.ident.replace('/', "_").to_screaming_snake_case(),
             ty: None,
@@ -91,8 +89,6 @@ pub fn schema_to_typescript(
     let entities = schema
         .entities
         .iter()
-        // Skip the sentinel.
-        .skip(1)
         .map(|entity| build_entity(entity, schema))
         .collect::<Result<Vec<Vec<_>>, _>>()?
         .into_iter()
