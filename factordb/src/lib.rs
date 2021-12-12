@@ -8,6 +8,8 @@ pub mod schema;
 pub mod backend;
 pub mod registry;
 
+pub mod prelude;
+
 mod db;
 
 pub use self::{
