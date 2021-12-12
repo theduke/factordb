@@ -15,14 +15,11 @@ pub fn schema_to_typescript(
     module.add(Item::Comment("DO NOT EDIT MANUALLY".into()));
     module.add_newlines(1);
 
-    let attr_name_constants = schema
-        .attributes
-        .iter()
-        .map(|attr| Item::Const {
-            name: attr.ident.replace('/', "_").to_screaming_snake_case(),
-            ty: None,
-            value: Value::Str(attr.ident.clone()),
-        });
+    let attr_name_constants = schema.attributes.iter().map(|attr| Item::Const {
+        name: attr.ident.replace('/', "_").to_screaming_snake_case(),
+        ty: None,
+        value: Value::Str(attr.ident.clone()),
+    });
     module.items.extend(attr_name_constants);
     module.add_newlines(1);
 
