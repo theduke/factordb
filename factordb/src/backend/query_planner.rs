@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+
 use crate::{
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
@@ -104,7 +105,9 @@ pub fn plan_select(
             count: query.offset,
         });
     }
-    ops.push(QueryOp::Limit { limit: query.limit });
+    if query.limit > 0 {
+        ops.push(QueryOp::Limit { limit: query.limit });
+    }
 
     Ok(ops)
 }
@@ -204,11 +207,11 @@ mod tests {
         )
         .unwrap();
         match ops.as_slice() {
-            [QueryOp::SelectEntity { id: x }, QueryOp::Limit { limit: 100 }] => {
+            [QueryOp::SelectEntity { id: x }] => {
                 assert_eq!(*x, id);
             }
-            _other => {
-                panic!("Expected a single select");
+            other => {
+                panic!("Expected a single select, got {:?}", other);
             }
         }
     }
