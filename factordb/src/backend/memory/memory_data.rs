@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use fnv::FnvHashMap;
 use ordered_float::OrderedFloat;
 
@@ -221,5 +223,9 @@ pub(super) enum MemoryExpr {
         value: Box<Self>,
         then: Box<Self>,
         or: Box<Self>,
+    },
+    InLiteral {
+        value: Box<Self>,
+        items: HashSet<MemoryValue>,
     },
 }

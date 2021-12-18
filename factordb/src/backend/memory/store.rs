@@ -1196,6 +1196,16 @@ impl MemoryStore {
                 #[cfg(not(debug_assertions))]
                 Err(anyhow!("Internal error: Invalid resolved expr"))
             }
+            E::InLiteral { value, items } => {
+                let items = items
+                    .into_iter()
+                    .map(|v| MemoryValue::from_value_standalone(v))
+                    .collect();
+                Ok(MemoryExpr::InLiteral {
+                    value: Box::new(self.build_memory_expr(*value, reg)?),
+                    items,
+                })
+            }
         }
     }
 
@@ -1298,6 +1308,10 @@ impl MemoryStore {
                 } else {
                     Self::eval_expr(entity, &*or)
                 }
+            }
+            E::InLiteral { value, items } => {
+                let value = Self::eval_expr(entity, value);
+                Cow::Owned(MemoryValue::Bool(items.contains(&*value)))
             }
         }
     }

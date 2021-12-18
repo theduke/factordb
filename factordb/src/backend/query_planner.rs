@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::{
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
@@ -47,6 +48,12 @@ pub enum ResolvedExpr<V = Value> {
         expr: Box<Self>,
     },
     BinaryOp(Box<BinaryExpr<V>>),
+    /// Special variant of `In` that only compares with literal values.
+    /// Separated out to allow more efficient comparisons.
+    InLiteral {
+        value: Box<Self>,
+        items: HashSet<V>,
+    },
     If {
         value: Box<Self>,
         then: Box<Self>,
@@ -121,6 +128,7 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
             op,
             expr: Box::new(resolve_expr(*expr, reg)?),
         }),
+        // TODO: normalize BinaryOp::In into ResolvedExpr::InLiteral if possible.
         Expr::BinaryOp { left, op, right } => Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
             left: resolve_expr(*left, reg)?,
             op,
