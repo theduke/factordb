@@ -215,8 +215,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
     .unwrap();
 
     // Ensure that the attribute was added to the schema.
-    db
-        .schema()
+    db.schema()
         .unwrap()
         .resolve_entity(&ty.into())
         .unwrap()

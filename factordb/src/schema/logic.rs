@@ -269,8 +269,7 @@ fn build_entity_attribute_add(
     is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let attr = reg.require_attr_by_name(&add.attribute)?.clone();
-    let entity = reg
-        .require_entity_by_name_mut(&add.entity)?;
+    let entity = reg.require_entity_by_name_mut(&add.entity)?;
 
     if !is_internal && entity.schema.parse_namespace()? == NS_FACTOR {
         bail!("Can't modify builtin entitites");
