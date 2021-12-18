@@ -19,6 +19,7 @@ macro_rules! map {
         $( $key:literal : $value:expr  ),* $(,)?
     } => {
         {
+            #[allow(unused_mut)]
             let mut map = $crate::data::DataMap::new();
             $(
                 {
