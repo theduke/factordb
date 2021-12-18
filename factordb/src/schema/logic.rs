@@ -12,7 +12,7 @@ use crate::{
     },
     registry::Registry,
     schema::{
-        builtin::{self, AttrType, NS_FACTOR},
+        builtin::{self, NS_FACTOR},
         AttrMapExt,
     },
     AnyError, Ident, Value,
@@ -131,6 +131,7 @@ fn build_attribute_create(
     }));
 
     let mut actions = vec![action];
+
     actions.extend(index_actions);
 
     Ok(actions)
@@ -292,8 +293,9 @@ fn build_entity_attribute_add(
 
     let ops: Vec<DbOp> = if add.cardinality == Cardinality::Required {
         if let Some(value) = &add.default_value {
+            // TODO: write a test that validates that nested entity types are also correctly updated.
             vec![DbOp::Select(SelectOpt {
-                selector: Expr::eq(Expr::attr::<AttrType>(), entity.ident),
+                selector: Expr::InheritsEntityType(entity.ident.clone()),
                 op: TupleOp::Patch(TuplePatch {
                     id: Id::nil(),
                     patch: Patch::new().replace_with_old(
