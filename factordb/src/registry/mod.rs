@@ -135,8 +135,22 @@ impl Registry {
     }
 
     #[inline]
+    pub fn entity_by_name_mut(&self, name: &str) -> Option<&RegisteredEntity> {
+        self.entities.get_by_name(name)
+    }
+
+    #[inline]
     pub fn require_entity_by_name(&self, name: &str) -> Result<&RegisteredEntity, EntityNotFound> {
         self.entities.must_get_by_name(name)
+    }
+
+    #[inline]
+    pub fn require_entity_by_name_mut(
+        &mut self,
+        name: &str,
+    ) -> Result<&mut RegisteredEntity, EntityNotFound> {
+        let id = self.require_entity_by_name(name)?.local_id;
+        Ok(self.entities.get_mut(id).unwrap())
     }
 
     pub fn entity_child_ids(&self, id: LocalEntityId) -> &FnvHashSet<Id> {

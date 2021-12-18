@@ -214,6 +214,17 @@ async fn test_entity_attr_add_with_default(db: &Db) {
     .await
     .unwrap();
 
+    // Ensure that the attribute was added to the schema.
+    db
+        .schema()
+        .unwrap()
+        .resolve_entity(&ty.into())
+        .unwrap()
+        .attributes
+        .iter()
+        .find(|a| a.attribute.as_name().unwrap() == "test/int")
+        .expect("attribute not added to schema!");
+
     // The previously created entity should now have the new attribute with the default value.
     let entity = db.entity(id_no_default).await.unwrap();
     let val = entity.get("test/int").unwrap().as_int().unwrap();

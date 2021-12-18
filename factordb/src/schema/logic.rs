@@ -268,25 +268,23 @@ fn build_entity_attribute_add(
     add: migrate::EntityAttributeAdd,
     is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
-    let attr = reg.require_attr_by_name(&add.attribute)?;
-    let mut entity = reg
-        .entity_by_name(&add.entity)
-        .ok_or_else(|| anyhow!("Entity type '{}' does not exist", add.entity))?
-        .schema
-        .clone();
+    let attr = reg.require_attr_by_name(&add.attribute)?.clone();
+    let entity = reg
+        .require_entity_by_name_mut(&add.entity)?;
 
-    if !is_internal && entity.parse_namespace()? == NS_FACTOR {
+    if !is_internal && entity.schema.parse_namespace()? == NS_FACTOR {
         bail!("Can't modify builtin entitites");
     }
 
     if entity
+        .schema
         .attributes
         .iter()
         .any(|a| a.attribute == attr.schema.id.into())
     {
         bail!(
             "Entity '{}' already has the attribute '{}'",
-            entity.ident,
+            entity.schema.ident,
             attr.schema.ident
         );
     }
@@ -295,7 +293,7 @@ fn build_entity_attribute_add(
         if let Some(value) = &add.default_value {
             // TODO: write a test that validates that nested entity types are also correctly updated.
             vec![DbOp::Select(SelectOpt {
-                selector: Expr::InheritsEntityType(entity.ident.clone()),
+                selector: Expr::InheritsEntityType(entity.schema.ident.clone()),
                 op: TupleOp::Patch(TuplePatch {
                     id: Id::nil(),
                     patch: Patch::new().replace_with_old(
@@ -310,14 +308,14 @@ fn build_entity_attribute_add(
         } else {
             bail!(
                 "Adding attribute '{}' with required cardinality to entity '{}' requires a default value", 
-                attr.schema.ident, entity.ident);
+                attr.schema.ident, entity.schema.ident);
         }
     } else {
         vec![]
     };
 
-    entity.attributes.push(EntityAttribute {
-        attribute: attr.schema.id.into(),
+    entity.schema.attributes.push(EntityAttribute {
+        attribute: attr.schema.ident.into(),
         cardinality: add.cardinality,
     });
 
