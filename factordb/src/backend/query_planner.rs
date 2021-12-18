@@ -3,7 +3,7 @@ use crate::{
         expr::{BinaryOp, Expr, UnaryOp},
         select::{Order, Select},
     },
-    registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL},
+    registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL},
     AnyError, Id, Ident, Value,
 };
 
@@ -123,6 +123,23 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
             then: Box::new(resolve_expr(*then, reg)?),
             or: Box::new(resolve_expr(*or, reg)?),
         }),
+        Expr::InheritsEntityType(type_name) => {
+            // TODO: collecting strings here is stupid and redundant.
+            // Must be a cleaner way to structure this!
+            // Probably want a dedicted expr to check the type!
+            let ty = reg.require_entity_by_name(&type_name)?;
+            let mut children: Vec<_> = ty
+                .nested_children
+                .iter()
+                .filter_map(|id| Some(Value::from(reg.entity_by_id(*id)?.schema.ident.clone())))
+                .collect();
+            children.push(ty.schema.ident.clone().into());
+            Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
+                left: ResolvedExpr::Attr(ATTR_TYPE_LOCAL),
+                op: BinaryOp::In,
+                right: ResolvedExpr::Literal(Value::List(children)),
+            })))
+        }
     }
 }
 

@@ -34,6 +34,10 @@ const ATTR_TEXT: &'static str = "text";
 const ATTR_INT: &'static str = "int";
 const ENTITY_COMMENT: &'static str = "test/comment";
 
+const ENTITY_FILE: &'static str = "test/File";
+const ENTITY_IMAGE: &'static str = "test/Image";
+const ENTITY_IMAGE_JPEG: &'static str = "test/ImageJpeg";
+
 async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
         .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
@@ -48,6 +52,36 @@ async fn apply_test_schema(db: &Db) {
                 cardinality: schema::Cardinality::Many,
             }],
             extends: Vec::new(),
+            strict: false,
+        })
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_FILE.into(),
+            title: Some("File".into()),
+            description: None,
+            attributes: vec![EntityAttribute {
+                attribute: "test/int".into(),
+                cardinality: schema::Cardinality::Many,
+            }],
+            extends: Vec::new(),
+            strict: false,
+        })
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_IMAGE.into(),
+            title: Some("Image".into()),
+            description: None,
+            attributes: vec![],
+            extends: vec![ENTITY_FILE.into()],
+            strict: false,
+        })
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_IMAGE_JPEG.into(),
+            title: Some("Jpeg Image".into()),
+            description: None,
+            attributes: vec![],
+            extends: vec![ENTITY_IMAGE.into()],
             strict: false,
         });
 
@@ -96,6 +130,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_index_non_unique,
             test_sort_simple,
             test_query_entity_select_ident,
+            test_query_entity_is_type_nested,
             test_entity_delete_not_found,
             test_entity_attr_add_with_default,
         ]
@@ -211,6 +246,30 @@ async fn test_query_entity_select_ident(db: &Db) {
 
     assert_eq!(page.items.len(), 1);
     assert_eq!(page.items[0].data.get_id().unwrap(), id);
+}
+
+async fn test_query_entity_is_type_nested(db: &Db) {
+    let id1 = Id::random();
+    db.create(id1, map! {"factor/type": ENTITY_FILE})
+        .await
+        .unwrap();
+
+    let id2 = Id::random();
+    db.create(id2, map! {"factor/type": ENTITY_IMAGE})
+        .await
+        .unwrap();
+
+    let id3 = Id::random();
+    db.create(id3, map! {"factor/type": ENTITY_IMAGE_JPEG})
+        .await
+        .unwrap();
+
+    let page = db
+        .select(Select::new().with_filter(Expr::InheritsEntityType(ENTITY_FILE.to_string())))
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 3);
 }
 
 async fn test_merge_list_attr(db: &Db) {

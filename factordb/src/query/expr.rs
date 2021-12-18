@@ -24,6 +24,9 @@ pub enum UnaryOp {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
+    /// Match entities that either match the given entity type or inherit from
+    /// it.
+    InheritsEntityType(String),
     Literal(Value),
     /// Select the value of an attribute.
     Attr(Ident),
@@ -177,6 +180,10 @@ impl Expr {
 
     pub fn is_entity<T: EntityDescriptor>() -> Self {
         Self::eq(Expr::attr::<AttrType>(), T::QUALIFIED_NAME)
+    }
+
+    pub fn is_entity_nested<T: EntityDescriptor>() -> Self {
+        Self::InheritsEntityType(T::QUALIFIED_NAME.to_string())
     }
 }
 

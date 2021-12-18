@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Context};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
     data::{Id, Ident},
-    error, schema, AnyError,
+    error::{self, EntityNotFound},
+    schema, AnyError,
 };
 
 use super::attribute_registry::AttributeRegistry;
@@ -20,6 +21,9 @@ pub struct RegisteredEntity {
     pub is_deleted: bool,
     pub namespace: String,
     pub plain_name: String,
+    pub extends: FnvHashSet<LocalEntityId>,
+    /// Stores all child ids, including nested children.
+    pub nested_children: FnvHashSet<Id>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,6 +51,8 @@ impl EntityRegistry {
             is_deleted: true,
             namespace: String::new(),
             plain_name: String::new(),
+            extends: FnvHashSet::default(),
+            nested_children: FnvHashSet::default(),
         };
         Self {
             items: vec![sentinel],
@@ -61,19 +67,45 @@ impl EntityRegistry {
         self.names.clear();
     }
 
+    fn add_entity_hierarchy(&mut self, parent: LocalEntityId, child_id: Id) {
+        if let Some(parent) = self.get_mut(parent) {
+            parent.nested_children.insert(child_id);
+
+            let nested = parent.extends.clone();
+            for nested_parent in nested {
+                self.add_entity_hierarchy(nested_parent, child_id);
+            }
+        }
+    }
+
     fn add(&mut self, schema: crate::schema::EntitySchema) -> Result<LocalEntityId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
+        assert!(!schema.id.is_nil());
 
         let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)?;
 
         let local_id = LocalEntityId(self.items.len() as u32);
+
+        let parent_ids = schema
+            .extends
+            .iter()
+            .map(|name| self.must_get_by_ident(name).map(|e| e.local_id))
+            .collect::<Result<FnvHashSet<LocalEntityId>, EntityNotFound>>()?;
+
+        for parent_id in &parent_ids {
+            self.add_entity_hierarchy(*parent_id, schema.id);
+        }
+
         let item = RegisteredEntity {
             local_id,
             namespace: namespace.to_string(),
             plain_name: plain_name.to_string(),
             schema,
             is_deleted: false,
+            extends: parent_ids,
+            nested_children: FnvHashSet::default(),
         };
+
         self.uids.insert(item.schema.id, local_id);
         if self.names.contains_key(&item.schema.ident) {
             self.names.remove(&item.schema.ident);
@@ -96,6 +128,18 @@ impl EntityRegistry {
         // NOTE: this panics, but this is acceptable because a LocalEntityId
         // is always valid.
         let item = &self.items[id.0 as usize];
+        if item.is_deleted {
+            None
+        } else {
+            Some(item)
+        }
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self, id: LocalEntityId) -> Option<&mut RegisteredEntity> {
+        // NOTE: this panics, but this is acceptable because a LocalEntityId
+        // is always valid.
+        let item = &mut self.items[id.0 as usize];
         if item.is_deleted {
             None
         } else {

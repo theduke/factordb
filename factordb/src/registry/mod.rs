@@ -2,6 +2,7 @@ mod attribute_registry;
 mod entity_registry;
 mod index_registry;
 
+use fnv::FnvHashSet;
 pub use index_registry::IndexMap;
 
 use std::{
@@ -19,7 +20,8 @@ use crate::{
         TupleIndexReplace, TupleMerge, TupleOp, TupleReplace,
     },
     data::{DataMap, Id, IdMap, Ident, Value, ValueType},
-    error, query,
+    error::{self, EntityNotFound},
+    query,
     schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality, DbSchema},
     AnyError,
 };
@@ -118,6 +120,11 @@ impl Registry {
     }
 
     #[inline]
+    pub fn entity_by_id(&self, id: Id) -> Option<&RegisteredEntity> {
+        self.entities.get_by_uid(id)
+    }
+
+    #[inline]
     pub fn entity_by_ident(&self, ident: &Ident) -> Option<&RegisteredEntity> {
         self.entities.get_by_ident(ident)
     }
@@ -125,6 +132,15 @@ impl Registry {
     #[inline]
     pub fn entity_by_name(&self, name: &str) -> Option<&RegisteredEntity> {
         self.entities.get_by_name(name)
+    }
+
+    #[inline]
+    pub fn require_entity_by_name(&self, name: &str) -> Result<&RegisteredEntity, EntityNotFound> {
+        self.entities.must_get_by_name(name)
+    }
+
+    pub fn entity_child_ids(&self, id: LocalEntityId) -> &FnvHashSet<Id> {
+        &self.entities.get(id).unwrap().nested_children
     }
 
     pub fn iter_entities(&self) -> impl Iterator<Item = &RegisteredEntity> {
