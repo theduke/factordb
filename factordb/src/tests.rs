@@ -530,13 +530,29 @@ async fn test_query_in(db: &Db) {
 
     let page_match = vec![data];
 
-    let filter = Expr::in_(Expr::ident("test/int"), Value::List(vec![42.into()]));
+    let filter = Expr::in_(Expr::ident("test/int"), vec![42]);
     let items = db
         .select(Select::new().with_filter(filter))
         .await
         .unwrap()
         .take_data();
     assert_eq!(items, page_match);
+
+    let filter = Expr::in_(Expr::ident("test/int"), vec![42, 43, 0]);
+    let items = db
+        .select(Select::new().with_filter(filter))
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, page_match);
+
+    let filter = Expr::in_(Expr::ident("test/int"), vec![41, 43, 0]);
+    let items = db
+        .select(Select::new().with_filter(filter))
+        .await
+        .unwrap()
+        .take_data();
+    assert!(items.is_empty());
 }
 
 async fn test_query_contains_with_two_lists(db: &Db) {
