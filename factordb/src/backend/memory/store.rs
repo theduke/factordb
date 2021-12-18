@@ -963,6 +963,7 @@ impl MemoryStore {
     }
 
     pub fn migrate(&mut self, mig: Migration) -> Result<(), AnyError> {
+        tracing::trace!(migration=?mig, "applying migration to memory store");
         self.migrate_impl(mig, false)?;
         Ok(())
     }
