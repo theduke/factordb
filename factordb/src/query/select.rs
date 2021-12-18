@@ -58,6 +58,10 @@ impl Select {
         self
     }
 
+    pub fn with_offset(mut self, offset: u64) -> Self {
+        self.offset = offset;
+        self
+    }
     pub fn with_cursor(mut self, cursor: Id) -> Self {
         self.cursor = Some(cursor);
         self
