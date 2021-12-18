@@ -346,6 +346,7 @@ dependencies = [
  "ordered-float",
  "serde",
  "serde_json",
+ "sqlparser",
  "tracing",
  "tracing-subscriber",
  "typescript-type-def",
@@ -945,6 +946,15 @@ name = "smallvec"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ecab6c735a6bb4139c0caafd0cc3635748bbb3acf4550e8138122099251f309"
+
+[[package]]
+name = "sqlparser"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9907f54bd0f7b6ce72c2be1e570a614819ee08e3deb66d90480df341d8a12a8"
+dependencies = [
+ "log",
+]
 
 [[package]]
 name = "strsim"
