@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::data::{DataMap, Id, Ident, Value};
+use crate::{
+    data::{DataMap, Id, Ident, Value},
+    AnyError,
+};
 
 use super::expr::Expr;
 
@@ -53,6 +56,10 @@ impl Select {
         }
     }
 
+    pub fn parse_sql(sql: &str) -> Result<Self, AnyError> {
+        super::sql::parse_select(sql)
+    }
+
     pub fn with_limit(mut self, limit: u64) -> Self {
         self.limit = limit;
         self
@@ -62,6 +69,7 @@ impl Select {
         self.offset = offset;
         self
     }
+
     pub fn with_cursor(mut self, cursor: Id) -> Self {
         self.cursor = Some(cursor);
         self
