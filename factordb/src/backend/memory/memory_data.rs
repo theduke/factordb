@@ -203,6 +203,7 @@ impl std::ops::DerefMut for MemoryTuple {
 #[derive(Debug)]
 pub(super) enum MemoryExpr {
     Literal(MemoryValue),
+    List(Vec<Self>),
     /// Select the value of an attribute.
     Attr(LocalAttributeId),
     /// Resolve the value of an [`Ident`] into an [`Id`].

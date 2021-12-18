@@ -1160,6 +1160,13 @@ impl MemoryStore {
 
         match expr {
             E::Literal(lit) => Ok(MemoryExpr::Literal(MemoryValue::from_value_standalone(lit))),
+            E::List(items) => {
+                let items = items
+                    .into_iter()
+                    .map(|e| self.build_memory_expr(e, reg))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(MemoryExpr::List(items))
+            }
             E::Attr(attr) => Ok(MemoryExpr::Attr(attr)),
             E::Ident(ident) => {
                 let id = self
@@ -1201,6 +1208,13 @@ impl MemoryStore {
 
         match expr {
             E::Literal(v) => Cow::Borrowed(v),
+            E::List(values) => {
+                let values = values
+                    .into_iter()
+                    .map(|v| Self::eval_expr(entity, v).into_owned())
+                    .collect();
+                Cow::Owned(MemoryValue::List(values))
+            }
             E::Attr(local_id) => entity
                 .get(local_id)
                 .map(|attr_value| Cow::Borrowed(attr_value))

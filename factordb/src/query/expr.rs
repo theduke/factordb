@@ -28,6 +28,7 @@ pub enum Expr {
     /// it.
     InheritsEntityType(String),
     Literal(Value),
+    List(Vec<Self>),
     /// Select the value of an attribute.
     Attr(Ident),
     /// Resolve the value of an [`Ident`] into an [`Id`].

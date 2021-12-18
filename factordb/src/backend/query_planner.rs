@@ -37,6 +37,7 @@ pub struct BinaryExpr<V> {
 #[derive(Debug)]
 pub enum ResolvedExpr<V = Value> {
     Literal(V),
+    List(Vec<Self>),
     /// Select the value of an attribute.
     Attr(LocalAttributeId),
     /// Resolve the value of an [`Ident`] into an [`Id`].
@@ -104,6 +105,13 @@ pub fn plan_select(
 pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError> {
     match expr {
         Expr::Literal(v) => Ok(ResolvedExpr::Literal(v)),
+        Expr::List(items) => {
+            let items = items
+                .into_iter()
+                .map(|e| resolve_expr(e, reg))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(ResolvedExpr::List(items))
+        }
         Expr::Attr(ident) => Ok(ResolvedExpr::Attr(
             reg.require_attr_by_ident(&ident)?.local_id,
         )),
