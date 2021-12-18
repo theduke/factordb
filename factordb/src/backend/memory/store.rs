@@ -1190,9 +1190,8 @@ impl MemoryStore {
             }),
             E::Op(_) => {
                 #[cfg(debug_assertions)]
-                {
-                    panic!("Invalid ResolvedExpr")
-                }
+                panic!("Invalid ResolvedExpr");
+
                 #[cfg(not(debug_assertions))]
                 Err(anyhow!("Internal error: Invalid resolved expr"))
             }
@@ -1291,7 +1290,6 @@ impl MemoryStore {
                                 _other => false,
                             }
                         }
-
                         // Covered above.
                         BinaryOp::And | query::expr::BinaryOp::Or => {
                             unreachable!()
