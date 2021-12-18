@@ -89,6 +89,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_query_in,
             test_merge_list_attr,
             test_patch,
+            test_patch_replace_skip_existing,
             test_query_contains_with_two_lists,
             test_assert_fails_with_incorrect_value_type,
             test_index_unique,
@@ -274,6 +275,32 @@ async fn test_patch(db: &Db) {
             "test/int": vec![22, 33]
         }
     );
+}
+
+/// Test that PatchOp::Replace correctly inserts new entries, but does not
+/// replace existing values. (with old = Value::Unit and must_replace = false)
+async fn test_patch_replace_skip_existing(f: &Db) {
+    let id1 = Id::random();
+    f.create(
+        id1,
+        map! {
+            "test/text": "hello",
+        },
+    )
+    .await
+    .unwrap();
+
+    let p = Patch::new().replace_with_old("test/text", "new", Value::Unit, false);
+
+    f.patch(id1, p.clone()).await.unwrap();
+    let data = f.entity(id1).await.unwrap();
+    assert_eq!(data.get("test/text").unwrap(), &Value::from("hello"),);
+
+    let id2 = Id::random();
+    f.create(id2, map! {}).await.unwrap();
+    f.patch(id2, p).await.unwrap();
+    let data = f.entity(id2).await.unwrap();
+    assert_eq!(data.get("test/text").unwrap(), &Value::from("new"),);
 }
 
 async fn test_create_attribute(f: &Db) {
