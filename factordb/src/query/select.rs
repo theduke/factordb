@@ -47,7 +47,7 @@ impl Select {
             filter: None,
             sort: Vec::new(),
             variables: Default::default(),
-            limit: 100,
+            limit: 0,
             offset: 0,
             cursor: None,
         }
