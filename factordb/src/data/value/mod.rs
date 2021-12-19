@@ -450,7 +450,13 @@ impl From<f64> for Value {
 
 impl<'a> From<&'a str> for Value {
     fn from(v: &'a str) -> Self {
-        Self::String(v.into())
+        Self::String(v.to_string())
+    }
+}
+
+impl<'a> From<&'a String> for Value {
+    fn from(v: &'a String) -> Self {
+        Self::String(v.to_string())
     }
 }
 
