@@ -9,7 +9,7 @@ use crate::{
     query::{
         self,
         expr::Expr,
-        migrate::{EntityAttributeAdd, Migration, SchemaAction},
+        migrate::{EntityAttributeAdd, EntityAttributeChangeCardinality, Migration, SchemaAction},
         select::Select,
     },
     schema::{
@@ -133,6 +133,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_query_entity_is_type_nested,
             test_entity_delete_not_found,
             test_entity_attr_add_with_default,
+            test_entity_attr_change_cardinality_from_required_to_optional,
         ]
     );
 }
@@ -233,6 +234,48 @@ async fn test_entity_attr_add_with_default(db: &Db) {
     let entity = db.entity(id_with_default).await.unwrap();
     let val = entity.get("test/int").unwrap().as_int().unwrap();
     assert_eq!(val, 100);
+}
+
+async fn test_entity_attr_change_cardinality_from_required_to_optional(f: &Db) {
+    f.migrate(
+        Migration::new()
+            .attr_create(AttributeSchema {
+                id: Id::nil(),
+                ident: "test/tochange".into(),
+                title: None,
+                description: None,
+                value_type: ValueType::Bool,
+                unique: false,
+                index: false,
+                strict: false,
+            })
+            .entity_create(EntitySchema {
+                id: Id::nil(),
+                ident: "test/MutableEntity".into(),
+                title: None,
+                description: None,
+                attributes: vec![EntityAttribute {
+                    attribute: "test/tochange".into(),
+                    cardinality: schema::Cardinality::Required,
+                }],
+                extends: vec![],
+                strict: false,
+            }),
+    )
+    .await
+    .unwrap();
+
+    f.migrate(
+        Migration::new().action(SchemaAction::EntityAttributeChangeCardinality(
+            EntityAttributeChangeCardinality {
+                entity_type: "test/MutableEntity".into(),
+                attribute: "test/tochange".into(),
+                new_cardinality: schema::Cardinality::Optional,
+            },
+        )),
+    )
+    .await
+    .unwrap();
 }
 
 async fn test_query_entity_select_ident(db: &Db) {

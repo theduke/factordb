@@ -22,6 +22,13 @@ pub struct EntityAttributeAdd {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct EntityAttributeChangeCardinality {
+    pub entity_type: String,
+    pub attribute: String,
+    pub new_cardinality: Cardinality,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeUpsert {
     pub schema: schema::AttributeSchema,
 }
@@ -63,6 +70,7 @@ pub enum SchemaAction {
     AttributeDelete(AttributeDelete),
     EntityCreate(EntityCreate),
     EntityAttributeAdd(EntityAttributeAdd),
+    EntityAttributeChangeCardinality(EntityAttributeChangeCardinality),
     EntityUpsert(EntityUpsert),
     EntityDelete(EntityDelete),
     IndexCreate(IndexCreate),

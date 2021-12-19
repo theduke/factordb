@@ -325,6 +325,54 @@ fn build_entity_attribute_add(
     Ok(vec![action])
 }
 
+fn build_entity_attribute_change_cardinality(
+    reg: &mut Registry,
+    change: migrate::EntityAttributeChangeCardinality,
+    _is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let attr = reg.require_attr_by_name(&change.attribute)?;
+    let entity = reg.require_entity_by_name(&change.entity_type)?;
+
+    let field = entity.schema.attribute(&change.attribute).ok_or_else(|| {
+        anyhow!(
+            "Can't change entity attribute cardinality: entity '{}' does not have attribute '{}'",
+            entity.schema.ident,
+            attr.schema.ident
+        )
+    })?;
+
+    match (field.cardinality, change.new_cardinality) {
+        (Cardinality::Optional, Cardinality::Many) => {}
+        (Cardinality::Optional, Cardinality::Optional) => {
+            bail!("Cardinality is unchanged");
+        }
+        (Cardinality::Optional, Cardinality::Required) => {
+            // TODO: allow this change with a provided default value.
+            bail!("Can't change optional fields to required");
+        }
+        (Cardinality::Required, Cardinality::Optional) => {}
+        (Cardinality::Required, Cardinality::Required) => {
+            bail!("Cardinality is unchanged");
+        }
+        (Cardinality::Required, Cardinality::Many) => {}
+        (Cardinality::Many, Cardinality::Optional) => {
+            // TODO: allow with a migration that trims extranious values.
+            bail!("Can't change cardinality from many to optional");
+        }
+        (Cardinality::Many, Cardinality::Required) => {
+            bail!("Can't change cardinality from many to required");
+        }
+        (Cardinality::Many, Cardinality::Many) => {
+            bail!("Cardinality is unchanged");
+        }
+    }
+
+    Ok(vec![ResolvedAction {
+        action: migrate::SchemaAction::EntityAttributeChangeCardinality(change),
+        ops: vec![],
+    }])
+}
+
 fn build_entity_upsert(
     reg: &mut Registry,
     upsert: migrate::EntityUpsert,
@@ -491,6 +539,9 @@ fn build_action(
         SchemaAction::AttributeDelete(del) => build_attribute_delete(reg, del),
         SchemaAction::EntityCreate(create) => build_entity_create(reg, create, is_internal),
         SchemaAction::EntityAttributeAdd(add) => build_entity_attribute_add(reg, add, is_internal),
+        SchemaAction::EntityAttributeChangeCardinality(change) => {
+            build_entity_attribute_change_cardinality(reg, change, is_internal)
+        }
         SchemaAction::EntityUpsert(upsert) => build_entity_upsert(reg, upsert, is_internal),
         SchemaAction::EntityDelete(del) => build_entity_delete(reg, del, is_internal),
         SchemaAction::IndexCreate(create) => build_index_create(reg, create),

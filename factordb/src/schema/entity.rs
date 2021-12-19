@@ -77,6 +77,12 @@ pub struct EntitySchema {
 }
 
 impl EntitySchema {
+    pub(crate) fn attribute(&self, name: &str) -> Option<&EntityAttribute> {
+        self.attributes
+            .iter()
+            .find(|a| a.attribute.as_name() == Some(name))
+    }
+
     /// Split the ident into (namespace, name)
     pub fn parse_split_ident(&self) -> Result<(&str, &str), crate::AnyError> {
         super::validate_namespaced_ident(&self.ident)

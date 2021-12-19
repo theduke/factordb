@@ -949,6 +949,7 @@ impl MemoryStore {
                 query::migrate::SchemaAction::EntityUpsert(_) => {}
                 query::migrate::SchemaAction::EntityDelete(_) => {}
                 query::migrate::SchemaAction::EntityAttributeAdd(_) => {}
+                query::migrate::SchemaAction::EntityAttributeChangeCardinality(_) => {}
             }
         }
 
