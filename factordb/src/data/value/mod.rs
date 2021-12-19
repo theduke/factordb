@@ -231,6 +231,10 @@ impl Value {
         }
     }
 
+    pub fn new_list<V: Into<Self>, I: IntoIterator<Item = V>>(items: I) -> Self {
+        Self::List(items.into_iter().map(|v| v.into()).collect())
+    }
+
     /// Coerce this value into the type specified by ValueType.
     /// Returns an error if safe coercion is not possible.
     pub fn coerce_mut(&mut self, ty: &ValueType) -> Result<(), AnyError> {
