@@ -338,6 +338,14 @@ impl Value {
         }
     }
 
+    pub fn as_float(&self) -> Option<f64> {
+        if let Self::Float(v) = self {
+            Some(**v)
+        } else {
+            None
+        }
+    }
+
     /// Returns `true` if the value is [`Float`].
     pub fn is_float(&self) -> bool {
         matches!(self, Self::Float(..))
