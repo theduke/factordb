@@ -327,7 +327,10 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::schema::builtin::AttrType;
+    use crate::{
+        prelude::AttributeDescriptor,
+        schema::builtin::{AttrIdent, AttrTitle, AttrType},
+    };
 
     use super::*;
 
@@ -348,9 +351,49 @@ mod tests {
             Select::new().with_offset(42),
         );
 
+        // Values.
+
+        assert_eq!(
+            parse_select("SELECT * FROM entities WHERE 0 = 1").unwrap(),
+            Select::new().with_filter(Expr::eq(0u64, 1u64)),
+        );
+
+        // WHERE
+
         assert_eq!(
             parse_select(r#" SELECT * FROM entities WHERE "factor/type" = 'sometype' "#).unwrap(),
             Select::new().with_filter(Expr::eq(Expr::attr::<AttrType>(), "sometype")),
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT * FROM entities WHERE "factor/type" IN ('ty1', 'ty2') "#)
+                .unwrap(),
+            Select::new().with_filter(Expr::in_(
+                Expr::attr::<AttrType>(),
+                Expr::List(vec![Expr::from("ty1"), Expr::from("ty2")])
+            )),
+        );
+
+        // ORDER BY
+
+        assert_eq!(
+            parse_select(r#" SELECT * FROM entities order by "factor/title" ASC "#).unwrap(),
+            Select::new().with_sort(AttrTitle::expr(), Order::Asc),
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT * FROM entities order by "factor/title" DESC "#).unwrap(),
+            Select::new().with_sort(AttrTitle::expr(), Order::Desc),
+        );
+
+        assert_eq!(
+            parse_select(
+                r#" SELECT * FROM entities order by "factor/title" DESC, "factor/ident" ASC "#
+            )
+            .unwrap(),
+            Select::new()
+                .with_sort(AttrTitle::expr(), Order::Desc)
+                .with_sort(AttrIdent::expr(), Order::Asc),
         );
     }
 }
