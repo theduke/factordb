@@ -7,7 +7,7 @@ pub mod memory;
 pub mod log;
 
 use crate::{
-    data::{value::patch::Patch, DataMap, Id, Ident, Value},
+    data::{patch::Patch, DataMap, Id, Ident, Value},
     query::{self, expr::Expr, migrate::Migration, select::Item},
     registry::{LocalIndexId, SharedRegistry},
     schema, AnyError,

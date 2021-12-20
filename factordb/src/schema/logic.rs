@@ -3,8 +3,9 @@ use anyhow::{anyhow, bail};
 use crate::{
     backend::{DbOp, SelectOpt, TupleOp, TuplePatch},
     data::{
-        value::{patch::Patch, to_value, to_value_map},
-        Id,
+        patch::Patch,
+        value::{to_value, to_value_map},
+        Id, Ident, Value,
     },
     query::{
         expr::Expr,
@@ -15,7 +16,7 @@ use crate::{
         builtin::{self, NS_FACTOR},
         AttrMapExt,
     },
-    AnyError, Ident, Value,
+    AnyError,
 };
 
 use super::{AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, IndexSchema};

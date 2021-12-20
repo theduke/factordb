@@ -13,7 +13,7 @@ impl std::fmt::Display for Id {
     }
 }
 
-impl super::value::ValueTypeDescriptor for Id {
+impl super::value_type::ValueTypeDescriptor for Id {
     fn value_type() -> super::ValueType {
         super::ValueType::Ref
     }

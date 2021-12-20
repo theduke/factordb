@@ -142,7 +142,7 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
                     ident: #full_name.to_string(),
                     title: #title,
                     description: None,
-                    value_type: <Self::Type as factordb::data::value::ValueTypeDescriptor>::value_type(),
+                    value_type: <Self::Type as factordb::data::value_type::ValueTypeDescriptor>::value_type(),
                     index: #index,
                     unique: #unique,
                     strict: #strict,

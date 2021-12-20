@@ -8,10 +8,7 @@ use crate::{
         query_planner::{self, QueryOp, ResolvedExpr, Sort},
         DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
     },
-    data::{
-        value::{patch::Patch, ValueMap},
-        DataMap, Id, Ident, Value,
-    },
+    data::{patch::Patch, DataMap, Id, Ident, Value, ValueMap},
     error::{self, EntityNotFound},
     query::{
         self,

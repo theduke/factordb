@@ -1,5 +1,5 @@
 use crate::{
-    data::{value::patch::Patch, DataMap, Id},
+    data::{patch::Patch, DataMap, Id},
     schema::AttrMapExt,
 };
 

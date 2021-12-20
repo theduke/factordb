@@ -2,7 +2,7 @@ use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::{bail, Context};
 
-use crate::{AnyError, Value};
+use crate::{data::Value, AnyError};
 
 use super::{
     expr::{BinaryOp, Expr},

@@ -1,10 +1,9 @@
 pub use crate::{
     data::{
-        value::{
-            patch::{Patch, PatchOp},
-            ObjectField, ObjectType, Value, ValueMap, ValueType,
-        },
-        DataMap, Id, Ident, Timestamp,
+        patch::{Patch, PatchOp},
+        value::Value,
+        value_type::{ObjectField, ObjectType, ValueType},
+        DataMap, Id, Ident, Timestamp, ValueMap,
     },
     query::{
         expr::Expr,

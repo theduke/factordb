@@ -2,7 +2,9 @@ use std::collections::btree_map;
 
 use anyhow::bail;
 
-use crate::{data::DataMap, AnyError};
+use crate::AnyError;
+
+use super::DataMap;
 
 use super::Value;
 

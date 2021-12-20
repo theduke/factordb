@@ -1,9 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::{
-    data::{Id, Ident, ValueType},
-    Value, ValueMap,
-};
+use crate::data::{Id, Ident, Value, ValueMap, ValueType};
 
 use super::EntityContainer;
 

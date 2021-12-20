@@ -1,4 +1,4 @@
-use crate::Id;
+use crate::data::Id;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IndexSchema {

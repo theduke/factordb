@@ -1,7 +1,7 @@
 use factordb::{
-    query::{expr::Expr, select::Select},
+    prelude::{Expr, Id, Select},
     schema::{AttributeDescriptor, EntityDescriptor},
-    AnyError, Attribute, Entity, Id,
+    AnyError, Attribute, Entity,
 };
 use serde::{Deserialize, Serialize};
 

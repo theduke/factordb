@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use crate::{error, schema, AnyError, Id};
+use crate::{data::Id, error, schema, AnyError};
 
 use super::{attribute_registry::AttributeRegistry, LocalAttributeId};
 

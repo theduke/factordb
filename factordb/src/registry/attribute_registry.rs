@@ -2,8 +2,8 @@ use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
 use crate::{
-    data::{Ident, ValueType},
-    error, schema, AnyError, Id,
+    data::{Id, Ident, ValueType},
+    error, schema, AnyError,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

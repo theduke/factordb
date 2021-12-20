@@ -13,6 +13,8 @@ macro_rules! tri {
 use serde::{de, de::IntoDeserializer, forward_to_deserialize_any};
 use std::{collections::BTreeMap, error::Error, fmt, marker::PhantomData};
 
+use crate::data::Id;
+
 use super::{Value, ValueMap};
 
 pub fn from_value<T: serde::de::DeserializeOwned>(
@@ -300,7 +302,7 @@ impl<'de> de::Visitor<'de> for ValueVisitor {
         // string representation of uuid is 36 chars long
         if value.len() == 36 {
             if let Ok(id) = value.parse::<uuid::Uuid>() {
-                return Ok(Value::Id(crate::Id::from_uuid(id)));
+                return Ok(Value::Id(Id::from_uuid(id)));
             }
         }
         Ok(Value::String(value.to_string()))
@@ -313,7 +315,7 @@ impl<'de> de::Visitor<'de> for ValueVisitor {
         // string representation of uuid is 36 chars long
         if value.len() == 36 {
             if let Ok(id) = value.parse::<uuid::Uuid>() {
-                return Ok(Value::Id(crate::Id::from_uuid(id)));
+                return Ok(Value::Id(Id::from_uuid(id)));
             }
         }
         Ok(Value::String(value.to_string()))

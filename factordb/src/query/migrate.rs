@@ -1,6 +1,6 @@
 use crate::{
+    data::Value,
     schema::{self, Cardinality, IndexSchema},
-    Value,
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

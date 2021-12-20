@@ -11,11 +11,7 @@ pub mod registry;
 pub mod prelude;
 
 mod db;
-
-pub use self::{
-    data::{value::ValueMap, Id, Ident, Value},
-    db::Db,
-};
+pub use self::db::Db;
 
 pub use factor_macros::{Attribute, Entity};
 

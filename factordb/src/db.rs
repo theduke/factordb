@@ -4,7 +4,7 @@ use data::DataMap;
 
 use crate::{
     backend::Backend,
-    data::{self, value::patch::Patch, Id, Ident},
+    data::{self, patch::Patch, Id, Ident},
     query::{self, mutate::Mutate},
     schema::EntityContainer,
     AnyError,

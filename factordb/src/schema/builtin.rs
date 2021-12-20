@@ -287,14 +287,14 @@ impl AttributeDescriptor for AttrAttributes {
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Entity Attributes".into()),
             description: None,
-            value_type: ValueType::Object(crate::data::value::ObjectType {
+            value_type: ValueType::Object(crate::data::value_type::ObjectType {
                 name: Some("ObjectType".to_string()),
                 fields: vec![
-                    crate::data::value::ObjectField {
+                    crate::data::value_type::ObjectField {
                         name: "attribute".to_string(),
                         value_type: ValueType::Ref,
                     },
-                    crate::data::value::ObjectField {
+                    crate::data::value_type::ObjectField {
                         name: "cardinality".to_string(),
                         value_type: ValueType::Union(vec![
                             ValueType::Const("Optional".into()),

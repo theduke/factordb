@@ -3,7 +3,7 @@ use schema::AttributeSchema;
 
 use crate::{
     backend::Backend,
-    data::{value::patch::Patch, Id, Value, ValueType},
+    data::{patch::Patch, Id, Value, ValueType},
     error::{self, UniqueConstraintViolation},
     map,
     query::{
@@ -145,32 +145,64 @@ async fn test_db_with_test_schema(db: &Db) {
 
 async fn test_attr_corcions(db: &Db) {
     // int coerces to uint
-    db.create(Id::random(), map!{
-        "test/uint": 10i64,
-    }).await.unwrap();
+    db.create(
+        Id::random(),
+        map! {
+            "test/uint": 10i64,
+        },
+    )
+    .await
+    .unwrap();
 
     // uint coerces to int
-    db.create(Id::random(), map!{
-        "test/int": 10u64,
-    }).await.unwrap();
+    db.create(
+        Id::random(),
+        map! {
+            "test/int": 10u64,
+        },
+    )
+    .await
+    .unwrap();
 
     // int coerces to float
     let id = Id::random();
-    db.create(id, map!{
-        "test/float": i64::MAX,
-    }).await.unwrap();
+    db.create(
+        id,
+        map! {
+            "test/float": i64::MAX,
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(
-        db.entity(id).await.unwrap().get("test/float").unwrap().as_float().unwrap() as i64,
+        db.entity(id)
+            .await
+            .unwrap()
+            .get("test/float")
+            .unwrap()
+            .as_float()
+            .unwrap() as i64,
         i64::MAX,
     );
 
     // uint coerces to float
     let id = Id::random();
-    db.create(id, map!{
-        "test/float": u64::MAX,
-    }).await.unwrap();
+    db.create(
+        id,
+        map! {
+            "test/float": u64::MAX,
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(
-        db.entity(id).await.unwrap().get("test/float").unwrap().as_float().unwrap() as u64,
+        db.entity(id)
+            .await
+            .unwrap()
+            .get("test/float")
+            .unwrap()
+            .as_float()
+            .unwrap() as u64,
         u64::MAX,
     );
 }

@@ -1,11 +1,7 @@
 use factordb::{
-    data::DataMap,
-    query::{expr::Expr, migrate::Migration, select::Select},
-    schema::{
-        builtin::{AttrDescription, AttrTitle},
-        AttributeDescriptor, EntityDescriptor,
-    },
-    AnyError, Attribute, Db, Entity, Id,
+    prelude::{AttributeDescriptor, DataMap, EntityDescriptor, Expr, Id, Migration, Select},
+    schema::builtin::{AttrDescription, AttrTitle},
+    AnyError, Attribute, Db, Entity,
 };
 use serde::{Deserialize, Serialize};
 

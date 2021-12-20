@@ -68,9 +68,9 @@ impl std::error::Error for EntityNotFound {}
 #[derive(Debug)]
 pub struct UniqueConstraintViolation {
     pub index: String,
-    pub entity_id: crate::Id,
+    pub entity_id: crate::data::Id,
     pub attribute: String,
-    pub value: Option<crate::Value>,
+    pub value: Option<crate::data::Value>,
 }
 
 impl std::fmt::Display for UniqueConstraintViolation {
