@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
 use crate::{
-    data::{Id, Ident, ValueType},
+    data::{Id, IdOrIdent, ValueType},
     error, schema, AnyError,
 };
 
@@ -131,20 +131,20 @@ impl AttributeRegistry {
             .ok_or_else(|| error::AttributeNotFound::new(name.into()))
     }
 
-    pub fn get_by_ident(&self, ident: &Ident) -> Option<&RegisteredAttribute> {
+    pub fn get_by_ident(&self, ident: &IdOrIdent) -> Option<&RegisteredAttribute> {
         match ident {
-            Ident::Id(id) => self.get_by_uid(*id),
-            Ident::Name(name) => self.get_by_name(name),
+            IdOrIdent::Id(id) => self.get_by_uid(*id),
+            IdOrIdent::Name(name) => self.get_by_name(name),
         }
     }
 
     pub fn must_get_by_ident(
         &self,
-        ident: &Ident,
+        ident: &IdOrIdent,
     ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
         match ident {
-            Ident::Id(id) => self.must_get_by_uid(*id),
-            Ident::Name(name) => self.must_get_by_name(name),
+            IdOrIdent::Id(id) => self.must_get_by_uid(*id),
+            IdOrIdent::Name(name) => self.must_get_by_name(name),
         }
     }
 

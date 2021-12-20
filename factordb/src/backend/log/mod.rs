@@ -301,7 +301,7 @@ impl Backend for LogDb {
         &self.state.registry
     }
 
-    fn entity(&self, id: data::Ident) -> BackendFuture<data::DataMap> {
+    fn entity(&self, id: data::IdOrIdent) -> BackendFuture<data::DataMap> {
         let res = self.state.mem.read().unwrap().entity(id);
         ready(res).boxed()
     }

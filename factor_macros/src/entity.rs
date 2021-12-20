@@ -316,7 +316,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             const NAMESPACE: &'static str = #namespace;
             const PLAIN_NAME: &'static str = #entity_name;
             const QUALIFIED_NAME: &'static str = #full_name;
-            const IDENT: factordb::data::Ident = factordb::data::Ident::new_static(Self::QUALIFIED_NAME);
+            const IDENT: factordb::data::IdOrIdent = factordb::data::IdOrIdent::new_static(Self::QUALIFIED_NAME);
 
             fn schema() -> factordb::schema::EntitySchema {
                 factordb::schema::EntitySchema{
@@ -340,7 +340,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 *#id_accessor
             }
 
-            fn entity_type(&self) -> factordb::data::Ident {
+            fn entity_type(&self) -> factordb::data::IdOrIdent {
                 <Self as factordb::schema::EntityDescriptor>::IDENT
             }
         }

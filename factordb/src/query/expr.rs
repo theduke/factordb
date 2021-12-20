@@ -1,5 +1,5 @@
 use crate::{
-    data::{Ident, Value},
+    data::{IdOrIdent, Value},
     schema::{builtin::AttrType, AttributeDescriptor, EntityDescriptor},
 };
 
@@ -30,9 +30,9 @@ pub enum Expr {
     Literal(Value),
     List(Vec<Self>),
     /// Select the value of an attribute.
-    Attr(Ident),
+    Attr(IdOrIdent),
     /// Resolve the value of an [`Ident`] into an [`Id`].
-    Ident(Ident),
+    Ident(IdOrIdent),
     Variable(String),
     UnaryOp {
         op: UnaryOp,
@@ -68,7 +68,7 @@ impl Expr {
 
     pub fn ident<I>(value: I) -> Self
     where
-        I: Into<Ident>,
+        I: Into<IdOrIdent>,
     {
         Self::Attr(value.into())
     }

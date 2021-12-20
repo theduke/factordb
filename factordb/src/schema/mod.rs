@@ -13,7 +13,7 @@ pub use self::index::IndexSchema;
 
 pub mod logic;
 
-use crate::data::Ident;
+use crate::data::IdOrIdent;
 
 pub fn validate_namespace_name(value: &str) -> Result<(), crate::AnyError> {
     if value.is_empty() {
@@ -69,17 +69,17 @@ pub struct DbSchema {
 }
 
 impl DbSchema {
-    pub fn resolve_attr(&self, ident: &Ident) -> Option<&AttributeSchema> {
+    pub fn resolve_attr(&self, ident: &IdOrIdent) -> Option<&AttributeSchema> {
         self.attributes.iter().find(|attr| match &ident {
-            Ident::Id(id) => attr.id == *id,
-            Ident::Name(name) => attr.ident.as_str() == name,
+            IdOrIdent::Id(id) => attr.id == *id,
+            IdOrIdent::Name(name) => attr.ident.as_str() == name,
         })
     }
 
-    pub fn resolve_entity(&self, ident: &Ident) -> Option<&EntitySchema> {
+    pub fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&EntitySchema> {
         self.entities.iter().find(|entity| match &ident {
-            Ident::Id(id) => entity.id == *id,
-            Ident::Name(name) => entity.ident.as_str() == name,
+            IdOrIdent::Id(id) => entity.id == *id,
+            IdOrIdent::Name(name) => entity.ident.as_str() == name,
         })
     }
 

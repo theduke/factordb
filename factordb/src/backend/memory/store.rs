@@ -8,7 +8,7 @@ use crate::{
         query_planner::{self, QueryOp, ResolvedExpr, Sort},
         DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
     },
-    data::{patch::Patch, DataMap, Id, Ident, Value, ValueMap},
+    data::{patch::Patch, DataMap, Id, IdOrIdent, Value, ValueMap},
     error::{self, EntityNotFound},
     query::{
         self,
@@ -83,10 +83,10 @@ impl MemoryStore {
         &self.registry
     }
 
-    fn resolve_ident(&self, ident: &Ident) -> Option<Id> {
+    fn resolve_ident(&self, ident: &IdOrIdent) -> Option<Id> {
         match ident {
-            Ident::Id(id) => Some(*id),
-            Ident::Name(name) => {
+            IdOrIdent::Id(id) => Some(*id),
+            IdOrIdent::Name(name) => {
                 self.indexes
                     .get(registry::INDEX_IDENT_LOCAL)
                     .get_unique(&MemoryValue::String(SharedStr::from_string(
@@ -96,12 +96,15 @@ impl MemoryStore {
         }
     }
 
-    fn resolve_entity(&self, ident: &Ident) -> Option<&MemoryTuple> {
+    fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&MemoryTuple> {
         let id = self.resolve_ident(ident)?;
         self.entities.get(&id)
     }
 
-    fn must_resolve_entity(&self, ident: &Ident) -> Result<&MemoryTuple, error::EntityNotFound> {
+    fn must_resolve_entity(
+        &self,
+        ident: &IdOrIdent,
+    ) -> Result<&MemoryTuple, error::EntityNotFound> {
         self.resolve_entity(ident)
             .ok_or_else(|| error::EntityNotFound::new(ident.clone()))
     }
@@ -972,7 +975,7 @@ impl MemoryStore {
         Ok(epoch)
     }
 
-    pub fn entity(&self, id: Ident) -> Result<DataMap, AnyError> {
+    pub fn entity(&self, id: IdOrIdent) -> Result<DataMap, AnyError> {
         self.must_resolve_entity(&id)
             .map_err(AnyError::from)
             .map(|tuple| self.tuple_to_data_map(tuple))

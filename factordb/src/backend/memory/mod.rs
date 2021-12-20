@@ -46,7 +46,7 @@ impl super::Backend for MemoryDb {
         ready(Ok(())).boxed()
     }
 
-    fn entity(&self, id: data::Ident) -> super::BackendFuture<data::DataMap> {
+    fn entity(&self, id: data::IdOrIdent) -> super::BackendFuture<data::DataMap> {
         let res = self.state.read().unwrap().entity(id);
         ready(res).boxed()
     }

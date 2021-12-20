@@ -3,7 +3,7 @@ pub use crate::{
         patch::{Patch, PatchOp},
         value::Value,
         value_type::{ObjectField, ObjectType, ValueType},
-        DataMap, Id, Ident, Timestamp, ValueMap,
+        DataMap, Id, IdOrIdent, Timestamp, ValueMap,
     },
     query::{
         expr::Expr,

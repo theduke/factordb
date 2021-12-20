@@ -1,6 +1,6 @@
 use serde::de::DeserializeOwned;
 
-use crate::data::{value::ValueDeserializeError, DataMap, Id, Ident};
+use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent};
 
 use super::AttrMapExt;
 
@@ -20,7 +20,7 @@ impl Cardinality {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct EntityAttribute {
-    pub attribute: Ident,
+    pub attribute: IdOrIdent,
     pub cardinality: Cardinality,
 }
 
@@ -62,7 +62,7 @@ pub struct EntitySchema {
     #[serde(rename = "factor/entityAttributes")]
     pub attributes: Vec<EntityAttribute>,
     #[serde(rename = "factor/extend")]
-    pub extends: Vec<Ident>,
+    pub extends: Vec<IdOrIdent>,
     /// If a schema is set to strict, additional attributes not specified
     /// by the schema will be rejected.
     #[serde(rename = "factor/isStrict")]
@@ -112,13 +112,13 @@ pub trait EntityDescriptor {
     /// Only exists to not require string allocation and concatenation at
     /// runtime.
     const QUALIFIED_NAME: &'static str;
-    const IDENT: Ident = Ident::new_static(Self::QUALIFIED_NAME);
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
     fn schema() -> EntitySchema;
 }
 
 pub trait EntityContainer {
     fn id(&self) -> Id;
-    fn entity_type(&self) -> Ident;
+    fn entity_type(&self) -> IdOrIdent;
 
     // TODO: remove this once we have a proper custom derive for De/Serialize
     // in the #[derive(Entity)]

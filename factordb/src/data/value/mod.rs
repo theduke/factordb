@@ -1,3 +1,5 @@
+//! This module contains types for representing data stored in a FactorDB.
+
 mod serde_deserialize;
 pub use serde_serialize::{to_value, to_value_map, ValueSerializeError};
 
@@ -13,9 +15,9 @@ use ordered_float::OrderedFloat;
 
 use crate::{data::patch::PatchPathElem, AnyError};
 
-use super::{patch::PatchPath, Id, Ident, ValueMap, ValueType};
+use super::{patch::PatchPath, Id, IdOrIdent, ValueMap, ValueType};
 
-/// Generic value type that can represent all data compatible with the database.
+/// Generic value type that can represent all data stored in a database.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Value {
     Unit,
@@ -199,7 +201,6 @@ impl Value {
                     path: None,
                 }),
             },
-
             ValueType::Float => match self {
                 Value::UInt(x) => {
                     *self = Value::Float((*x as f64).into());
@@ -348,10 +349,10 @@ impl Value {
         }
     }
 
-    pub fn to_ident(&self) -> Option<Ident> {
+    pub fn to_ident(&self) -> Option<IdOrIdent> {
         self.as_id()
-            .map(Ident::from)
-            .or_else(|| self.as_str().map(|s| Ident::Name(s.to_string().into())))
+            .map(IdOrIdent::from)
+            .or_else(|| self.as_str().map(|s| IdOrIdent::Name(s.to_string().into())))
     }
 
     /// Returns `true` if the value is [`Bool`].
@@ -588,11 +589,11 @@ impl From<Id> for Value {
     }
 }
 
-impl From<Ident> for Value {
-    fn from(ident: Ident) -> Self {
+impl From<IdOrIdent> for Value {
+    fn from(ident: IdOrIdent) -> Self {
         match ident {
-            Ident::Id(id) => id.into(),
-            Ident::Name(name) => name.to_string().into(),
+            IdOrIdent::Id(id) => id.into(),
+            IdOrIdent::Name(name) => name.to_string().into(),
         }
     }
 }

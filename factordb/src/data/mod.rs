@@ -1,6 +1,6 @@
 mod id;
 
-pub use id::{Id, Ident};
+pub use id::{Id, IdOrIdent};
 
 mod map;
 pub mod patch;

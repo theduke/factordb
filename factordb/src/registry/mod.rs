@@ -14,7 +14,7 @@ use crate::{
         DbOp, TupleCreate, TupleDelete, TupleIndexInsert, TupleIndexOp, TupleIndexRemove,
         TupleIndexReplace, TupleMerge, TupleOp, TupleReplace,
     },
-    data::{DataMap, Id, IdMap, Ident, Value, ValueType},
+    data::{DataMap, Id, IdMap, IdOrIdent, Value, ValueType},
     error::{self, EntityNotFound},
     query,
     schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality, DbSchema},
@@ -105,7 +105,7 @@ impl Registry {
     }
 
     #[inline]
-    pub fn attr_by_ident(&self, ident: &Ident) -> Option<&RegisteredAttribute> {
+    pub fn attr_by_ident(&self, ident: &IdOrIdent) -> Option<&RegisteredAttribute> {
         self.attrs.get_by_ident(ident)
     }
 
@@ -120,7 +120,7 @@ impl Registry {
     }
 
     #[inline]
-    pub fn entity_by_ident(&self, ident: &Ident) -> Option<&RegisteredEntity> {
+    pub fn entity_by_ident(&self, ident: &IdOrIdent) -> Option<&RegisteredEntity> {
         self.entities.get_by_ident(ident)
     }
 
@@ -167,7 +167,7 @@ impl Registry {
     #[inline]
     pub fn require_attr_by_ident(
         &self,
-        ident: &Ident,
+        ident: &IdOrIdent,
     ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
         self.attrs.must_get_by_ident(ident)
     }

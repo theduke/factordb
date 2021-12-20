@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::data::{Id, Ident, Value, ValueMap, ValueType};
+use crate::data::{Id, IdOrIdent, Value, ValueMap, ValueType};
 
 use super::EntityContainer;
 
@@ -87,7 +87,7 @@ pub trait AttributeDescriptor {
     /// Only exists to not require string allocation and concatenation at
     /// runtime.
     const QUALIFIED_NAME: &'static str;
-    const IDENT: Ident = Ident::new_static(Self::QUALIFIED_NAME);
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
 
     /// The Rust type used to represent this attribute.
     type Type;
@@ -103,9 +103,9 @@ pub trait AttributeDescriptor {
 
 pub trait AttrMapExt {
     fn get_id(&self) -> Option<Id>;
-    fn get_ident(&self) -> Option<Ident>;
+    fn get_ident(&self) -> Option<IdOrIdent>;
 
-    fn get_type(&self) -> Option<Ident>;
+    fn get_type(&self) -> Option<IdOrIdent>;
     fn get_type_name(&self) -> Option<&str>;
 
     fn has_attr<A: AttributeDescriptor>(&self) -> bool;
@@ -133,18 +133,18 @@ impl AttrMapExt for ValueMap<String> {
             .and_then(|v| v.as_id())
     }
 
-    fn get_ident(&self) -> Option<Ident> {
-        self.get_id().map(Ident::from).or_else(|| {
+    fn get_ident(&self) -> Option<IdOrIdent> {
+        self.get_id().map(IdOrIdent::from).or_else(|| {
             self.get_attr::<super::builtin::AttrIdent>()
                 .map(|s| s.into())
         })
     }
 
-    fn get_type(&self) -> Option<Ident> {
+    fn get_type(&self) -> Option<IdOrIdent> {
         self.get(super::builtin::AttrType::QUALIFIED_NAME)
             .and_then(|v| match v {
-                Value::String(name) => Some(Ident::Name(name.to_string().into())),
-                Value::Id(id) => Some(Ident::Id(*id)),
+                Value::String(name) => Some(IdOrIdent::Name(name.to_string().into())),
+                Value::Id(id) => Some(IdOrIdent::Id(*id)),
                 _ => None,
             })
     }

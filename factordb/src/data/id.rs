@@ -81,12 +81,12 @@ pub type CowStr = Cow<'static, str>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(untagged)]
-pub enum Ident {
+pub enum IdOrIdent {
     Id(Id),
     Name(CowStr),
 }
 
-impl Ident {
+impl IdOrIdent {
     pub const fn new_static(value: &'static str) -> Self {
         Self::Name(CowStr::Borrowed(value))
     }
@@ -100,8 +100,8 @@ impl Ident {
 
     pub fn to_string(&self) -> String {
         match self {
-            Ident::Id(id) => id.to_string(),
-            Ident::Name(n) => n.to_string(),
+            IdOrIdent::Id(id) => id.to_string(),
+            IdOrIdent::Name(n) => n.to_string(),
         }
     }
 
@@ -115,8 +115,8 @@ impl Ident {
 
     pub fn as_id(&self) -> Option<Id> {
         match self {
-            Ident::Id(id) => Some(*id),
-            Ident::Name(_) => None,
+            IdOrIdent::Id(id) => Some(*id),
+            IdOrIdent::Name(_) => None,
         }
     }
 
@@ -139,19 +139,19 @@ impl Ident {
     }
 }
 
-impl From<Id> for Ident {
+impl From<Id> for IdOrIdent {
     fn from(id: Id) -> Self {
         Self::Id(id)
     }
 }
 
-impl From<String> for Ident {
+impl From<String> for IdOrIdent {
     fn from(v: String) -> Self {
         Self::Name(CowStr::from(v))
     }
 }
 
-impl<'a> From<&'a str> for Ident {
+impl<'a> From<&'a str> for IdOrIdent {
     fn from(v: &'a str) -> Self {
         Self::Name(Cow::from(v.to_string()))
     }

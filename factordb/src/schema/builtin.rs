@@ -6,7 +6,7 @@
 //! which are statically defined.
 
 use crate::{
-    data::{Id, Ident, ValueType},
+    data::{Id, IdOrIdent, ValueType},
     schema::{
         AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, EntityDescriptor,
         EntitySchema,
@@ -50,7 +50,7 @@ impl AttributeDescriptor for AttrId {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "id";
     const QUALIFIED_NAME: &'static str = "factor/id";
-    type Type = Ident;
+    type Type = IdOrIdent;
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
@@ -116,7 +116,7 @@ impl AttributeDescriptor for AttrType {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "type";
     const QUALIFIED_NAME: &'static str = "factor/type";
-    type Type = Ident;
+    type Type = IdOrIdent;
 
     fn schema() -> AttributeSchema {
         AttributeSchema {
@@ -317,7 +317,7 @@ impl AttributeDescriptor for AttrExtend {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "extend";
     const QUALIFIED_NAME: &'static str = "factor/extend";
-    type Type = Option<Ident>;
+    type Type = Option<IdOrIdent>;
 
     fn schema() -> AttributeSchema {
         AttributeSchema {

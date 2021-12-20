@@ -1,14 +1,14 @@
-use crate::data::Ident;
+use crate::data::IdOrIdent;
 
 // AttributeNotFound
 
 #[derive(Debug)]
 pub struct AttributeNotFound {
-    ident: Ident,
+    ident: IdOrIdent,
 }
 
 impl AttributeNotFound {
-    pub fn new(ident: Ident) -> Self {
+    pub fn new(ident: IdOrIdent) -> Self {
         Self { ident }
     }
 }
@@ -25,11 +25,11 @@ impl std::error::Error for AttributeNotFound {}
 
 #[derive(Debug)]
 pub struct IndexNotFound {
-    ident: Ident,
+    ident: IdOrIdent,
 }
 
 impl IndexNotFound {
-    pub fn new(ident: Ident) -> Self {
+    pub fn new(ident: IdOrIdent) -> Self {
         Self { ident }
     }
 }
@@ -46,11 +46,11 @@ impl std::error::Error for IndexNotFound {}
 
 #[derive(Debug)]
 pub struct EntityNotFound {
-    ident: Ident,
+    ident: IdOrIdent,
 }
 
 impl EntityNotFound {
-    pub fn new(ident: Ident) -> Self {
+    pub fn new(ident: IdOrIdent) -> Self {
         Self { ident }
     }
 }

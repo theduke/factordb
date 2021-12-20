@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::{
-    data::{Id, Ident},
+    data::{Id, IdOrIdent},
     error::{self, EntityNotFound},
     schema, AnyError,
 };
@@ -174,20 +174,20 @@ impl EntityRegistry {
             .ok_or_else(|| error::EntityNotFound::new(name.into()))
     }
 
-    pub fn get_by_ident(&self, ident: &Ident) -> Option<&RegisteredEntity> {
+    pub fn get_by_ident(&self, ident: &IdOrIdent) -> Option<&RegisteredEntity> {
         match ident {
-            Ident::Id(id) => self.get_by_uid(*id),
-            Ident::Name(name) => self.get_by_name(name),
+            IdOrIdent::Id(id) => self.get_by_uid(*id),
+            IdOrIdent::Name(name) => self.get_by_name(name),
         }
     }
 
     pub fn must_get_by_ident(
         &self,
-        ident: &Ident,
+        ident: &IdOrIdent,
     ) -> Result<&RegisteredEntity, error::EntityNotFound> {
         match ident {
-            Ident::Id(id) => self.must_get_by_uid(*id),
-            Ident::Name(name) => self.must_get_by_name(name),
+            IdOrIdent::Id(id) => self.must_get_by_uid(*id),
+            IdOrIdent::Name(name) => self.must_get_by_name(name),
         }
     }
 

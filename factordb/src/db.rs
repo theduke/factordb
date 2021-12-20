@@ -4,7 +4,7 @@ use data::DataMap;
 
 use crate::{
     backend::Backend,
-    data::{self, patch::Patch, Id, Ident},
+    data::{self, patch::Patch, Id, IdOrIdent},
     query::{self, mutate::Mutate},
     schema::EntityContainer,
     AnyError,
@@ -40,14 +40,14 @@ impl Db {
 
     pub async fn entity<I>(&self, id: I) -> Result<DataMap, AnyError>
     where
-        I: Into<Ident>,
+        I: Into<IdOrIdent>,
     {
         use query::expr::Expr;
 
         // FIXME: remove this once index persistence logic is implemented.
         match id.into() {
-            Ident::Id(id) => self.backend.entity(id.into()).await,
-            Ident::Name(name) => {
+            IdOrIdent::Id(id) => self.backend.entity(id.into()).await,
+            IdOrIdent::Name(name) => {
                 let sel = query::select::Select::new()
                     .with_limit(1)
                     .with_filter(Expr::eq(

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    data::{DataMap, Id, Ident, Value},
+    data::{DataMap, Id, IdOrIdent, Value},
     AnyError,
 };
 
@@ -22,7 +22,7 @@ pub struct Sort {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Join {
     pub name: String,
-    pub attr: Ident,
+    pub attr: IdOrIdent,
     pub limit: u64,
     pub flatten_relation: bool,
 }

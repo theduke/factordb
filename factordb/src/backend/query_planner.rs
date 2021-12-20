@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    data::{Id, Ident, Value},
+    data::{Id, IdOrIdent, Value},
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
         select::{Order, Select},
@@ -44,7 +44,7 @@ pub enum ResolvedExpr<V = Value> {
     /// Select the value of an attribute.
     Attr(LocalAttributeId),
     /// Resolve the value of an [`Ident`] into an [`Id`].
-    Ident(Ident),
+    Ident(IdOrIdent),
     UnaryOp {
         op: UnaryOp,
         expr: Box<Self>,

@@ -5,7 +5,7 @@ use crate::{
     data::{
         patch::Patch,
         value::{to_value, to_value_map},
-        Id, Ident, Value,
+        Id, IdOrIdent, Value,
     },
     query::{
         expr::Expr,
@@ -29,7 +29,7 @@ enum EntityAttributePatch {
     CardinalityChanged {
         old: Cardinality,
         new: Cardinality,
-        attribute: Ident,
+        attribute: IdOrIdent,
     },
 }
 
