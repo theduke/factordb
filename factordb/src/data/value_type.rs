@@ -15,7 +15,7 @@ pub enum ValueType {
 
     // Containers.
     List(Box<Self>),
-    Map,
+    Map(Box<MapType>),
 
     /// A union of different types.
     Union(Vec<Self>),
@@ -31,6 +31,12 @@ pub enum ValueType {
     Ref,
 
     Const(Value),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MapType {
+    pub key: ValueType,
+    pub value: ValueType,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -57,7 +63,10 @@ impl ValueType {
             | Self::DateTime
             | Self::Ref
             | Self::Url
-            | Self::Map => true,
+            | Self::Map(..) => {
+                // TODO: this is probably not the right thing to do...
+                true
+            }
             Self::Object(_) => false,
             Self::Union(inner) => inner.iter().all(|t| t.is_scalar()),
             Self::Any | Self::Unit | Self::List(_) => false,
