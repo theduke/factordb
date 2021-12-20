@@ -239,7 +239,10 @@ impl Value {
     /// Returns an error if safe coercion is not possible.
     pub fn coerce_mut(&mut self, ty: &ValueType) -> Result<(), AnyError> {
         match (&self, ty) {
-            (Value::Unit, ValueType::Unit) => Ok(()),
+            (Value::Unit, ValueType::Unit) => {
+                *self = Value::Unit;
+                Ok(())
+            }
             (Value::Bool(_), ValueType::Bool) => Ok(()),
             (Value::UInt(_), ValueType::UInt) => Ok(()),
             (Value::UInt(ref x), ValueType::Int) => {
@@ -252,7 +255,7 @@ impl Value {
             }
             (Value::Int(_), ValueType::Int) => Ok(()),
             (Value::Int(ref x), ValueType::UInt) => {
-                if *x > 0 {
+                if *x >= 0 {
                     *self = Value::UInt(*x as u64);
                     Ok(())
                 } else {
@@ -260,6 +263,14 @@ impl Value {
                 }
             }
             (Value::Float(_), ValueType::Float) => Ok(()),
+            (Value::Int(v), ValueType::Float) => {
+                *self = Value::Float(OrderedFloat::from((*v) as f64));
+                Ok(())
+            }
+            (Value::UInt(v), ValueType::Float) => {
+                *self = Value::Float(OrderedFloat::from((*v) as f64));
+                Ok(())
+            }
             (Value::String(_), ValueType::String) => Ok(()),
             (Value::Bytes(_), ValueType::Bytes) => Ok(()),
 

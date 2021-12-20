@@ -32,6 +32,8 @@ const NS_TEST: &'static str = "test";
 
 const ATTR_TEXT: &'static str = "text";
 const ATTR_INT: &'static str = "int";
+const ATTR_UINT: &'static str = "uint";
+const ATTR_FLOAT: &'static str = "float";
 const ENTITY_COMMENT: &'static str = "test/comment";
 
 const ENTITY_FILE: &'static str = "test/File";
@@ -42,6 +44,8 @@ async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
         .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
         .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int))
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_UINT, ValueType::UInt))
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_FLOAT, ValueType::Float))
         .entity_create(EntitySchema {
             id: Id::nil(),
             ident: ENTITY_COMMENT.into(),
@@ -121,6 +125,7 @@ async fn test_db_with_test_schema(db: &Db) {
         [
             test_select,
             test_query_in,
+            test_attr_corcions,
             test_merge_list_attr,
             test_patch,
             test_patch_replace_skip_existing,
@@ -135,6 +140,38 @@ async fn test_db_with_test_schema(db: &Db) {
             test_entity_attr_add_with_default,
             test_entity_attr_change_cardinality_from_required_to_optional,
         ]
+    );
+}
+
+async fn test_attr_corcions(db: &Db) {
+    // int coerces to uint
+    db.create(Id::random(), map!{
+        "test/uint": 10i64,
+    }).await.unwrap();
+
+    // uint coerces to int
+    db.create(Id::random(), map!{
+        "test/int": 10u64,
+    }).await.unwrap();
+
+    // int coerces to float
+    let id = Id::random();
+    db.create(id, map!{
+        "test/float": i64::MAX,
+    }).await.unwrap();
+    assert_eq!(
+        db.entity(id).await.unwrap().get("test/float").unwrap().as_float().unwrap() as i64,
+        i64::MAX,
+    );
+
+    // uint coerces to float
+    let id = Id::random();
+    db.create(id, map!{
+        "test/float": u64::MAX,
+    }).await.unwrap();
+    assert_eq!(
+        db.entity(id).await.unwrap().get("test/float").unwrap().as_float().unwrap() as u64,
+        u64::MAX,
     );
 }
 

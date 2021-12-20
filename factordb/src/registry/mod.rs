@@ -349,7 +349,6 @@ impl Registry {
         match ty {
             ValueType::Unit
             | ValueType::Bool
-            | ValueType::Float
             | ValueType::Map
             | ValueType::Bytes => {
                 let actual_ty = value.value_type();
@@ -399,6 +398,18 @@ impl Registry {
                         return make_err(name, ty, &ValueType::Float);
                     }
                 }
+                other => {
+                    return make_err(name, ty, &other.value_type());
+                }
+            },
+            ValueType::Float => match value {
+                Value::UInt(x) => {
+                    *value = Value::Float((*x as f64).into());
+                },
+                Value::Int(x) => {
+                    *value = Value::Float((*x as f64).into());
+                },
+                Value::Float(_) => {},
                 other => {
                     return make_err(name, ty, &other.value_type());
                 }
