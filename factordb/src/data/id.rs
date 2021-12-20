@@ -7,6 +7,12 @@ use crate::AnyError;
 )]
 pub struct Id(uuid::Uuid);
 
+impl From<uuid::Uuid> for Id {
+    fn from(id: uuid::Uuid) -> Self {
+        Self(id)
+    }
+}
+
 impl std::fmt::Display for Id {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

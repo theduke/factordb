@@ -6,16 +6,16 @@ pub use serde_deserialize::{from_value, from_value_map, ValueDeserializeError};
 
 use std::{
     collections::{BTreeMap, HashMap},
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
 };
 
-use anyhow::anyhow;
 use ordered_float::OrderedFloat;
 
-use crate::AnyError;
+use crate::{data::patch::PatchPathElem, AnyError};
 
-use super::{Id, Ident, ValueMap, ValueType};
+use super::{patch::PatchPath, Id, Ident, ValueMap, ValueType};
 
+/// Generic value type that can represent all data compatible with the database.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Value {
     Unit,
@@ -33,101 +33,310 @@ pub enum Value {
     Id(Id),
 }
 
-impl Value {
-    pub fn value_type(&self) -> ValueType {
-        match self {
-            Value::Unit => ValueType::Unit,
-            Value::Bool(_) => ValueType::Bool,
-            Value::UInt(_) => ValueType::UInt,
-            Value::Int(_) => ValueType::Int,
-            Value::Float(_) => ValueType::Float,
-            Value::String(_) => ValueType::String,
-            Value::Bytes(_) => ValueType::Bytes,
-            Value::List(items) => {
-                let mut types = Vec::new();
-                for item in items {
-                    let ty = item.value_type();
-                    if !types.contains(&ty) {
-                        types.push(ty);
-                    }
-                }
+/// Error for failed value coercions.
+#[derive(Debug)]
+pub struct ValueCoercionError {
+    pub(crate) expected_type: ValueType,
+    pub(crate) actual_type: ValueType,
+    /// Specifies the nested path to the element that failed the coersion.
+    /// This is relevant for nested data structures like lists and maps.
+    pub(crate) path: Option<PatchPath>,
+}
 
-                let inner_ty = if types.len() == 1 {
-                    types.pop().unwrap()
-                } else {
-                    ValueType::Union(types)
-                };
-                ValueType::List(Box::new(inner_ty))
-            }
-            Value::Map(_) => {
-                todo!()
-            }
-            Value::Id(_) => ValueType::Ref,
+impl std::fmt::Display for ValueCoercionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Value coercion failed: expected {:?}, got {:?}",
+            self.expected_type, self.actual_type
+        )?;
+
+        if let Some(p) = &self.path {
+            write!(f, " at {}", p)?;
         }
+
+        Ok(())
+    }
+}
+
+impl std::error::Error for ValueCoercionError {}
+
+impl Value {
+    /// Compute the value type of this value.
+    pub fn value_type(&self) -> ValueType {
+        ValueType::for_value(self)
     }
 
+    /// Build a new [`Value::List`] from an iterator.
     pub fn new_list<V: Into<Self>, I: IntoIterator<Item = V>>(items: I) -> Self {
         Self::List(items.into_iter().map(|v| v.into()).collect())
     }
 
-    /// Coerce this value into the type specified by ValueType.
-    /// Returns an error if safe coercion is not possible.
-    pub fn coerce_mut(&mut self, ty: &ValueType) -> Result<(), AnyError> {
-        match (&self, ty) {
-            (Value::Unit, ValueType::Unit) => {
-                *self = Value::Unit;
-                Ok(())
-            }
-            (Value::Bool(_), ValueType::Bool) => Ok(()),
-            (Value::UInt(_), ValueType::UInt) => Ok(()),
-            (Value::UInt(ref x), ValueType::Int) => {
-                if *x < i64::MAX as u64 {
-                    *self = Value::Int(*x as i64);
+    /// Try to coerce the value into the specified [`ValueType`].
+    /// Returns an error if lossless coercion is not possible.
+    // Takes a `&mut Value` to avoid redundant cloning if the types does not
+    // need to be changed.
+    pub fn coerce_mut(&mut self, ty: &ValueType) -> Result<(), ValueCoercionError> {
+        match ty {
+            ValueType::Unit | ValueType::Bool => {
+                let actual_type = self.value_type();
+                if &actual_type == ty {
                     Ok(())
                 } else {
-                    Err(anyhow!("Invalid int: exceeds i64 range"))
+                    Err(ValueCoercionError {
+                        expected_type: ty.clone(),
+                        actual_type,
+                        path: None,
+                    })
                 }
             }
-            (Value::Int(_), ValueType::Int) => Ok(()),
-            (Value::Int(ref x), ValueType::UInt) => {
-                if *x >= 0 {
-                    *self = Value::UInt(*x as u64);
+            ValueType::Bytes => match self {
+                Self::Bytes(_) => Ok(()),
+                Self::List(items) => {
+                    let items = std::mem::take(items);
+
+                    let bytes = items
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, v)| -> Result<u8, ValueCoercionError> {
+                            match v {
+                                Self::Int(x) => x.try_into().map_err(|_| ValueCoercionError {
+                                    expected_type: ValueType::Bytes,
+                                    actual_type: ValueType::Int,
+                                    path: Some(PatchPath(vec![PatchPathElem::ListIndex(index)])),
+                                }),
+                                Self::UInt(x) => x.try_into().map_err(|_| ValueCoercionError {
+                                    expected_type: ValueType::Bytes,
+                                    actual_type: ValueType::UInt,
+                                    path: Some(PatchPath(vec![PatchPathElem::ListIndex(index)])),
+                                }),
+                                other => Err(ValueCoercionError {
+                                    expected_type: ValueType::Bytes,
+                                    actual_type: other.value_type(),
+                                    path: Some(PatchPath(vec![PatchPathElem::ListIndex(index)])),
+                                }),
+                            }
+                        })
+                        .collect::<Result<Vec<u8>, ValueCoercionError>>()?;
+
+                    *self = Self::Bytes(bytes);
+                    Ok(())
+                }
+                other => Err(ValueCoercionError {
+                    expected_type: ValueType::Bytes,
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
+            ValueType::Map(_t) => {
+                todo!()
+            }
+            ValueType::Int => match self {
+                Value::Int(_) => Ok(()),
+                Value::UInt(x) => {
+                    if let Ok(intval) = (*x).try_into() {
+                        *self = Value::Int(intval);
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::Int,
+                            actual_type: ValueType::Unit,
+                            path: None,
+                        })
+                    }
+                }
+                Value::Float(floatval) => {
+                    // Note: a .try_from() would be nicer, but std doesn't
+                    // have an impl, only num-traits.
+                    if floatval.fract() == 0.0 && **floatval <= (i64::MAX as f64) {
+                        *self = Value::Int((**floatval) as i64);
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::Int,
+                            actual_type: ValueType::Float,
+                            path: None,
+                        })
+                    }
+                }
+                other => Err(ValueCoercionError {
+                    expected_type: ValueType::Int,
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
+            ValueType::UInt => match self {
+                Value::UInt(_) => Ok(()),
+                Value::Int(x) => {
+                    if let Ok(intval) = (*x).try_into() {
+                        *self = Value::Int(intval);
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::Int,
+                            actual_type: ValueType::Unit,
+                            path: None,
+                        })
+                    }
+                }
+                Value::Float(floatval) => {
+                    // Note: a .try_from() would be nicer, but std doesn't
+                    // have an impl, only num-traits.
+                    if floatval.fract() == 0.0 && **floatval <= (u64::MAX as f64) {
+                        *self = Value::Int((**floatval) as i64);
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::Int,
+                            actual_type: ValueType::Float,
+                            path: None,
+                        })
+                    }
+                }
+                other => Err(ValueCoercionError {
+                    expected_type: ValueType::Int,
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
+
+            ValueType::Float => match self {
+                Value::UInt(x) => {
+                    *self = Value::Float((*x as f64).into());
+                    Ok(())
+                }
+                Value::Int(x) => {
+                    *self = Value::Float((*x as f64).into());
+                    Ok(())
+                }
+                Value::Float(_) => Ok(()),
+                other => Err(ValueCoercionError {
+                    expected_type: ValueType::Float,
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
+            ValueType::String => match self {
+                Value::Int(v) => {
+                    *self = Value::String(v.to_string());
+                    Ok(())
+                }
+                Value::UInt(v) => {
+                    *self = Value::String(v.to_string());
+                    Ok(())
+                }
+                Value::Float(v) => {
+                    *self = Value::String(v.to_string());
+                    Ok(())
+                }
+                Value::String(_) => Ok(()),
+                other => Err(ValueCoercionError {
+                    expected_type: ValueType::String,
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
+            ValueType::List(_item_type) => {
+                panic!("Internal error: List is not a valid ValueType for attributes");
+            }
+            ValueType::Any => {
+                // Everything is allowed.
+                Ok(())
+            }
+            ValueType::Union(variants) => {
+                for variant_ty in variants {
+                    if self.coerce_mut(variant_ty).is_ok() {
+                        return Ok(());
+                    }
+                }
+
+                Err(ValueCoercionError {
+                    expected_type: ty.clone(),
+                    actual_type: self.value_type(),
+                    path: None,
+                })
+            }
+            ValueType::Object(_obj) => {
+                // FIXME: coerce objects properly - code below is useless.
+                let actual_ty = self.value_type();
+                if &actual_ty == ty {
                     Ok(())
                 } else {
-                    Err(anyhow!("Invalid uint: negative number"))
+                    Err(ValueCoercionError {
+                        expected_type: ty.clone(),
+                        actual_type: self.value_type(),
+                        path: None,
+                    })
                 }
             }
-            (Value::Float(_), ValueType::Float) => Ok(()),
-            (Value::Int(v), ValueType::Float) => {
-                *self = Value::Float(OrderedFloat::from((*v) as f64));
-                Ok(())
-            }
-            (Value::UInt(v), ValueType::Float) => {
-                *self = Value::Float(OrderedFloat::from((*v) as f64));
-                Ok(())
-            }
-            (Value::String(_), ValueType::String) => Ok(()),
-            (Value::Bytes(_), ValueType::Bytes) => Ok(()),
-
-            (Value::List(_), ValueType::List(item_ty)) => {
-                // This is stupid, but required by the borrow checker.
-                let mut items = match self {
-                    Value::List(inner) => std::mem::take(inner),
-                    _ => unreachable!(),
-                };
-
-                for item in &mut items {
-                    item.coerce_mut(&*&item_ty)?;
+            ValueType::DateTime => {
+                // FIXME: coerce from uint/int and convert to special Self::DateTime variant once
+                // added.
+                if self.is_uint() {
+                    Ok(())
+                } else {
+                    Err(ValueCoercionError {
+                        expected_type: ValueType::DateTime,
+                        actual_type: self.value_type(),
+                        path: None,
+                    })
                 }
-                *self = Value::List(items);
-                Ok(())
             }
-            (Value::Id(_), ValueType::Ref) => Ok(()),
-            (other, _) => Err(anyhow!(
-                "Invalid value: expected {:?} but got {:?}",
-                other.value_type(),
-                ty
-            )),
+            ValueType::Url => {
+                match self {
+                    Value::String(v) => {
+                        if let Err(_err) = url::Url::parse(v) {
+                            // TODO: propagate url parser error message?
+                            Err(ValueCoercionError {
+                                expected_type: ValueType::Url,
+                                actual_type: ValueType::String,
+                                path: None,
+                            })
+                        } else {
+                            Ok(())
+                        }
+                    }
+                    other => Err(ValueCoercionError {
+                        expected_type: ValueType::Url,
+                        actual_type: other.value_type(),
+                        path: None,
+                    }),
+                }
+            }
+            ValueType::Ref => {
+                match self {
+                    Value::String(strval) => {
+                        // TODO: somehow idents?
+                        if let Ok(id) = uuid::Uuid::parse_str(strval) {
+                            *self = Self::Id(id.into());
+                            Ok(())
+                        } else {
+                            Err(ValueCoercionError {
+                                expected_type: ValueType::Ref,
+                                actual_type: ValueType::String,
+                                path: None,
+                            })
+                        }
+                    }
+                    Value::Id(_) => Ok(()),
+                    other => Err(ValueCoercionError {
+                        expected_type: ValueType::Ref,
+                        actual_type: other.value_type(),
+                        path: None,
+                    }),
+                }
+            }
+            ValueType::Const(const_val) => {
+                if self == const_val {
+                    Ok(())
+                } else {
+                    Err(ValueCoercionError {
+                        expected_type: ty.clone(),
+                        actual_type: self.value_type(),
+                        path: None,
+                    })
+                }
+            }
         }
     }
 

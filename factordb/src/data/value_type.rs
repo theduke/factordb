@@ -73,6 +73,46 @@ impl ValueType {
             Self::Const(val) => val.value_type().is_scalar(),
         }
     }
+
+    /// Compute the value type of this value.
+    pub fn for_value(value: &Value) -> Self {
+        match value {
+            Value::Unit => Self::Unit,
+            Value::Bool(_) => Self::Bool,
+            Value::UInt(_) => Self::UInt,
+            Value::Int(_) => Self::Int,
+            Value::Float(_) => Self::Float,
+            Value::String(_) => Self::String,
+            Value::Bytes(_) => Self::Bytes,
+            Value::List(items) => Self::List(Box::new(Self::for_list(items.iter()))),
+            Value::Map(map) => {
+                let key = Self::for_list(map.keys());
+                let value = Self::for_list(map.keys());
+                Self::Map(Box::new(MapType { key, value }))
+            }
+            Value::Id(_) => Self::Ref,
+        }
+    }
+
+    fn for_list<'a, I>(iter: I) -> Self
+    where
+        I: Iterator<Item = &'a Value>,
+    {
+        let mut types = Vec::new();
+        for item in iter {
+            let ty = item.value_type();
+            if !types.contains(&ty) {
+                types.push(ty);
+            }
+        }
+
+        let inner_ty = if types.len() == 1 {
+            types.pop().unwrap()
+        } else {
+            Self::Union(types)
+        };
+        inner_ty
+    }
 }
 
 /// Trait that allows to statically determine the value type of a Rust type.
@@ -110,11 +150,11 @@ impl ValueTypeDescriptor for i64 {
     }
 }
 
-// impl ValueTypeDescriptor for u8 {
-//     fn value_type() -> ValueType {
-//         ValueType::Int
-//     }
-// }
+/* impl ValueTypeDescriptor for u8 {
+    fn value_type() -> ValueType {
+        ValueType::Int
+    }
+} */
 
 impl ValueTypeDescriptor for u16 {
     fn value_type() -> ValueType {

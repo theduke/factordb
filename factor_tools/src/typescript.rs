@@ -410,9 +410,9 @@ fn value_to_ts_type(ty: &ValueType) -> Type {
         // TODO: how to represent byte arrays?
         ValueType::Bytes => Type::Array(Box::new(Type::Number)),
         ValueType::List(inner) => Type::Array(Box::new(value_to_ts_type(inner))),
-        ValueType::Map => Type::Generic {
+        ValueType::Map(ty) => Type::Generic {
             name: "Record".to_string(),
-            args: vec![Type::String, Type::Any],
+            args: vec![value_to_ts_type(&ty.key), value_to_ts_type(&ty.value)],
         },
         ValueType::Union(variants) => {
             let vars = variants.iter().map(value_to_ts_type).collect::<Vec<_>>();
