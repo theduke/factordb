@@ -3,7 +3,6 @@ mod entity_registry;
 mod index_registry;
 
 use fnv::FnvHashSet;
-pub use index_registry::IndexMap;
 
 use std::sync::{Arc, RwLock};
 
@@ -21,6 +20,8 @@ use crate::{
     AnyError,
 };
 
+use self::entity_registry::EntityRegistry;
+
 pub use self::{
     attribute_registry::{LocalAttributeId, RegisteredAttribute},
     entity_registry::{LocalEntityId, RegisteredEntity},
@@ -29,13 +30,15 @@ pub use self::{
 
 const MAX_NAME_LEN: usize = 50;
 
-pub const ATTR_ID_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(1);
-pub const ATTR_TYPE_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(5);
-pub const INDEX_IDENT_LOCAL: LocalIndexId = LocalIndexId::from_u32(2);
+pub const ATTR_ID_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(0);
+pub const ATTR_TYPE_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(4);
+
+pub const INDEX_ENTITY_TYPE_LOCAL: LocalIndexId = LocalIndexId::from_u32(0);
+pub const INDEX_IDENT_LOCAL: LocalIndexId = LocalIndexId::from_u32(1);
 
 #[derive(Clone, Debug)]
 pub struct Registry {
-    entities: entity_registry::EntityRegistry,
+    entities: EntityRegistry,
     attrs: attribute_registry::AttributeRegistry,
     indexes: index_registry::IndexRegistry,
 }
@@ -63,7 +66,6 @@ impl Registry {
                 .collect(),
             entities: self
                 .entities
-                .items
                 .iter()
                 // Skip sentinel
                 .skip(1)
@@ -71,7 +73,6 @@ impl Registry {
                 .collect(),
             indexes: self
                 .indexes
-                .items
                 .iter()
                 // Skip sentinel
                 .skip(1)
@@ -85,7 +86,7 @@ impl Registry {
     /// builtins.
     pub fn reset(&mut self) {
         self.attrs.reset();
-        self.entities.reset();
+        self.entities = EntityRegistry::new();
         self.indexes.reset();
 
         self.add_builtins();
@@ -153,7 +154,7 @@ impl Registry {
     }
 
     pub fn iter_entities(&self) -> impl Iterator<Item = &RegisteredEntity> {
-        self.entities.items.iter().skip(1)
+        self.entities.iter().skip(1)
     }
 
     #[inline]
@@ -199,12 +200,16 @@ impl Registry {
         self.indexes.iter()
     }
 
-    pub fn indexes_for_attribute(
+    pub fn indexes_for_attribute(&self, attribute_id: LocalAttributeId) -> Vec<&RegisteredIndex> {
+        self.indexes.attribute_indexes(attribute_id)
+    }
+
+    pub fn indexes_for_attribute_id(
         &self,
         attribute_id: Id,
     ) -> Result<Vec<&RegisteredIndex>, error::AttributeNotFound> {
         let attr = self.attrs.must_get_by_uid(attribute_id)?;
-        Ok(self.indexes.attribute_indexes(attr.local_id))
+        Ok(self.indexes_for_attribute(attr.local_id))
     }
 
     fn add_builtins(&mut self) {
@@ -231,6 +236,10 @@ impl Registry {
             let local_id = self
                 .register_index(index.clone())
                 .expect("Internal error: could not register builtin index");
+
+            if index.id == schema::builtin::INDEX_ENTITY_TYPE {
+                assert_eq!(local_id, INDEX_ENTITY_TYPE_LOCAL);
+            }
             if index.id == schema::builtin::INDEX_IDENT {
                 assert_eq!(local_id, INDEX_IDENT_LOCAL);
             }

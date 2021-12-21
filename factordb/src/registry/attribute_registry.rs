@@ -3,7 +3,9 @@ use fnv::FnvHashMap;
 
 use crate::{
     data::{Id, IdOrIdent, ValueType},
-    error, schema, AnyError,
+    error, schema,
+    util::stable_map::{StableMap, StableMapKey},
+    AnyError,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -26,31 +28,34 @@ pub struct RegisteredAttribute {
 
 #[derive(Clone, Debug)]
 pub struct AttributeRegistry {
-    pub items: Vec<RegisteredAttribute>,
+    pub items: StableMap<LocalAttributeId, RegisteredAttribute>,
     uids: FnvHashMap<Id, LocalAttributeId>,
     names: FnvHashMap<String, LocalAttributeId>,
 }
 
+impl StableMapKey for LocalAttributeId {
+    #[inline]
+    fn from_index(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    #[inline]
+    fn as_index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 impl AttributeRegistry {
     pub fn new() -> Self {
-        // NOTE: we start ids at 1, so the vec contains a None sentinel for
-        // the 0 id.
-        let sentinel = RegisteredAttribute {
-            local_id: LocalAttributeId(0),
-            schema: schema::AttributeSchema::new("", "", ValueType::Any),
-            is_deleted: true,
-            namespace: String::new(),
-            plain_name: String::new(),
-        };
         Self {
-            items: vec![sentinel],
+            items: StableMap::new(),
             uids: Default::default(),
             names: Default::default(),
         }
     }
 
     pub fn reset(&mut self) {
-        self.items.truncate(1);
+        self.items = StableMap::new();
         self.uids.clear();
         self.names.clear();
     }
@@ -58,34 +63,32 @@ impl AttributeRegistry {
     fn add(&mut self, schema: schema::AttributeSchema) -> Result<LocalAttributeId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
-        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)?;
+        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)
+            .map(|(a, b)| (a.to_string(), b.to_string()))?;
+        let uid = schema.id;
+        let ident = schema.ident.clone();
 
-        let local_id = LocalAttributeId(self.items.len() as u32);
-        let item = RegisteredAttribute {
+        let local_id = self.items.insert_with(move |local_id| RegisteredAttribute {
             local_id,
             namespace: namespace.to_string(),
             plain_name: plain_name.to_string(),
             schema,
             is_deleted: false,
-        };
-        self.uids.insert(item.schema.id, local_id);
-        self.names.insert(item.schema.ident.clone(), local_id);
-        self.items.push(item);
+        });
+
+        self.uids.insert(uid, local_id);
+        self.names.insert(ident, local_id);
         Ok(local_id)
     }
 
     #[inline]
     pub fn get_maybe_deleted(&self, id: LocalAttributeId) -> &RegisteredAttribute {
-        // NOTE: this panics, but this is acceptable because a LocalAttributeId
-        // is always valid.
-        &self.items[id.0 as usize]
+        self.items.get(id)
     }
 
     #[inline]
     pub fn get(&self, id: LocalAttributeId) -> Option<&RegisteredAttribute> {
-        // NOTE: this panics, but this is acceptable because a LocalAttributeId
-        // is always valid.
-        let item = &self.items[id.0 as usize];
+        let item = self.items.get(id);
         if item.is_deleted {
             None
         } else {
@@ -204,7 +207,7 @@ impl AttributeRegistry {
 
     pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
         let local_id = self.must_get_by_uid(id)?.local_id;
-        self.items[local_id.0 as usize].is_deleted = true;
+        self.items.get_mut(local_id).is_deleted = true;
         Ok(())
     }
 }

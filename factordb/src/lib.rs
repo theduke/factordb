@@ -1,5 +1,7 @@
 pub type AnyError = anyhow::Error;
 
+mod util;
+
 pub mod data;
 pub mod error;
 pub mod query;

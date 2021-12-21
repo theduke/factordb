@@ -7,7 +7,7 @@ use crate::{
 
 use super::expr::Expr;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Order {
     Asc,
     Desc,

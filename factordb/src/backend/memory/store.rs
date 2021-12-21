@@ -68,6 +68,7 @@ impl MemoryStore {
                 .cloned()
                 .collect::<Vec<_>>()
         };
+        dbg!(&indexes);
         for index in indexes {
             s.index_create(&index).unwrap();
         }
@@ -265,7 +266,8 @@ impl MemoryStore {
             index::Index::Multi(index::MultiIndex::new())
         };
 
-        self.indexes.create(schema.local_id, index)?;
+        dbg!(self.indexes.len(), &schema);
+        self.indexes.insert(schema.local_id, index)?;
         Ok(())
     }
 
@@ -1088,9 +1090,16 @@ impl MemoryStore {
                 index,
                 value: MemoryValue::from_value_standalone(value),
             },
-            QueryOp::IndexScan { from, until } => QueryOp::IndexScan {
-                from: MemoryValue::from_value_standalone(from),
-                until: MemoryValue::from_value_standalone(until),
+            QueryOp::IndexScan {
+                index,
+                from,
+                until,
+                direction,
+            } => QueryOp::IndexScan {
+                index,
+                direction,
+                from: from.map(MemoryValue::from_value_standalone),
+                until: until.map(MemoryValue::from_value_standalone),
             },
             QueryOp::IndexScanPrefix { prefix } => QueryOp::IndexScanPrefix {
                 prefix: MemoryValue::from_value_standalone(prefix),

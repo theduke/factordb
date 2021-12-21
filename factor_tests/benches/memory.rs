@@ -4,9 +4,8 @@ use criterion::{
 use factor_tests::Todo;
 
 use factordb::{
-    query::{expr::Expr, select::Select},
+    prelude::{Db, Expr, Id, Select},
     schema::{builtin::AttrTitle, AttributeDescriptor},
-    Db, Id,
 };
 
 async fn select_single_with_title_eq(db: &Db) {

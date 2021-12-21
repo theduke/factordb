@@ -6,7 +6,9 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::{
     data::{Id, IdOrIdent},
     error::{self, EntityNotFound},
-    schema, AnyError,
+    schema,
+    util::stable_map::{StableMap, StableMapKey},
+    AnyError,
 };
 
 use super::attribute_registry::AttributeRegistry;
@@ -28,43 +30,34 @@ pub struct RegisteredEntity {
 
 #[derive(Clone, Debug)]
 pub struct EntityRegistry {
-    pub items: Vec<RegisteredEntity>,
+    items: StableMap<LocalEntityId, RegisteredEntity>,
+    /// Lookup table that maps an [`Id`]` to it's [`LocalEntityId`].
+    /// Useful for fast lookups.
     uids: FnvHashMap<Id, LocalEntityId>,
+    /// Lookup table that maps the entity name to it's [`LocalEntityId`].
+    /// Useful for fast lookups.
     names: FnvHashMap<String, LocalEntityId>,
+}
+
+impl StableMapKey for LocalEntityId {
+    #[inline]
+    fn from_index(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    #[inline]
+    fn as_index(self) -> usize {
+        self.0 as usize
+    }
 }
 
 impl EntityRegistry {
     pub fn new() -> Self {
-        // NOTE: we start ids at 1, so the vec contains a None sentinel for
-        // the 0 id.
-        let sentinel = RegisteredEntity {
-            local_id: LocalEntityId(0),
-            schema: crate::schema::EntitySchema {
-                id: Id::nil(),
-                ident: "".to_string(),
-                title: None,
-                description: None,
-                attributes: Vec::new(),
-                extends: Vec::new(),
-                strict: true,
-            },
-            is_deleted: true,
-            namespace: String::new(),
-            plain_name: String::new(),
-            extends: FnvHashSet::default(),
-            nested_children: FnvHashSet::default(),
-        };
         Self {
-            items: vec![sentinel],
+            items: StableMap::new(),
             uids: Default::default(),
             names: Default::default(),
         }
-    }
-
-    pub fn reset(&mut self) {
-        self.items.truncate(1);
-        self.uids.clear();
-        self.names.clear();
     }
 
     fn add_entity_hierarchy(&mut self, parent: LocalEntityId, child_id: Id) {
@@ -82,9 +75,8 @@ impl EntityRegistry {
         assert!(self.items.len() < u32::MAX as usize - 1);
         assert!(!schema.id.is_nil());
 
-        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)?;
-
-        let local_id = LocalEntityId(self.items.len() as u32);
+        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)
+            .map(|(a, b)| (a.to_string(), b.to_string()))?;
 
         let parent_ids = schema
             .extends
@@ -96,7 +88,10 @@ impl EntityRegistry {
             self.add_entity_hierarchy(*parent_id, schema.id);
         }
 
-        let item = RegisteredEntity {
+        let ident = schema.ident.clone();
+        let uid = schema.id;
+
+        let local_id = self.items.insert_with(move |local_id| RegisteredEntity {
             local_id,
             namespace: namespace.to_string(),
             plain_name: plain_name.to_string(),
@@ -104,15 +99,16 @@ impl EntityRegistry {
             is_deleted: false,
             extends: parent_ids,
             nested_children: FnvHashSet::default(),
-        };
+        });
 
-        self.uids.insert(item.schema.id, local_id);
-        if self.names.contains_key(&item.schema.ident) {
-            self.names.remove(&item.schema.ident);
+        self.uids.insert(uid, local_id);
+
+        // TODO: what's going on here? why the .remove()?
+        if self.names.contains_key(&ident) {
+            self.names.remove(&ident);
         } else {
-            self.names.insert(item.schema.ident.clone(), local_id);
+            self.names.insert(ident, local_id);
         }
-        self.items.push(item);
         Ok(local_id)
     }
 
@@ -123,11 +119,8 @@ impl EntityRegistry {
     //     &self.items[id.0 as usize]
     // }
 
-    #[inline]
     pub fn get(&self, id: LocalEntityId) -> Option<&RegisteredEntity> {
-        // NOTE: this panics, but this is acceptable because a LocalEntityId
-        // is always valid.
-        let item = &self.items[id.0 as usize];
+        let item = self.items.get(id);
         if item.is_deleted {
             None
         } else {
@@ -135,11 +128,8 @@ impl EntityRegistry {
         }
     }
 
-    #[inline]
     pub fn get_mut(&mut self, id: LocalEntityId) -> Option<&mut RegisteredEntity> {
-        // NOTE: this panics, but this is acceptable because a LocalEntityId
-        // is always valid.
-        let item = &mut self.items[id.0 as usize];
+        let item = self.items.get_mut(id);
         if item.is_deleted {
             None
         } else {
@@ -191,6 +181,14 @@ impl EntityRegistry {
         }
     }
 
+    pub fn iter(&self) -> std::slice::Iter<RegisteredEntity> {
+        self.items.iter()
+    }
+
+    /* pub fn iter_mut(&mut self) -> std::slice::IterMut<RegisteredEntity> {
+        self.items.iter_mut()
+    } */
+
     /// Register a new entity.
     // NOTE: Only pub(super) because [Registry] might do additional validation.
     pub(super) fn register(
@@ -236,7 +234,7 @@ impl EntityRegistry {
         }
 
         let old_id = self.must_get_by_uid(entity.id)?.local_id;
-        self.items[old_id.0 as usize].schema = entity;
+        self.items.get_mut(old_id).schema = entity;
         Ok(old_id)
     }
 

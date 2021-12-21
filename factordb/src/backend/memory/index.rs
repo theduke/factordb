@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use anyhow::Result;
 
-use crate::data::Id;
+use crate::{data::Id, registry::LocalIndexId, util::stable_map::DerivedStableMap};
 
 use super::memory_data::MemoryValue;
 
@@ -141,8 +141,8 @@ impl Index {
     }
 }
 
-pub(super) type MemoryIndexMap = crate::registry::IndexMap<Index>;
+pub(super) type MemoryIndexMap = DerivedStableMap<LocalIndexId, Index>;
 
 pub(super) fn new_memory_index_map() -> MemoryIndexMap {
-    MemoryIndexMap::new(Index::Unique(UniqueIndex::new()))
+    MemoryIndexMap::new()
 }

@@ -1,7 +1,12 @@
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use crate::{data::Id, error, schema, AnyError};
+use crate::{
+    data::Id,
+    error, schema,
+    util::stable_map::{StableMap, StableMapKey},
+    AnyError,
+};
 
 use super::{attribute_registry::AttributeRegistry, LocalAttributeId};
 
@@ -16,47 +21,6 @@ impl LocalIndexId {
 
 const MAX_INDEX_NAME_LEN: usize = 300;
 
-/// A "map" of values indexed by a [`LocalIndexId`].
-///
-/// The map stores values internally in a [`Vec`], indexed by the numeric id.
-/// Provides very fast lookups and guaranteed access without Option<_>,
-/// assuming the proper length was configured.
-#[derive(Debug)]
-pub struct IndexMap<T> {
-    items: Vec<T>,
-}
-
-impl<T> IndexMap<T> {
-    pub fn new(sentinel: T) -> Self {
-        Self {
-            items: vec![sentinel],
-        }
-    }
-
-    pub fn create(&mut self, id: LocalIndexId, value: T) -> Result<(), AnyError> {
-        if self.items.len() == id.0 as usize {
-            self.items.push(value);
-            Ok(())
-        } else {
-            Err(anyhow!("internal error: IndexMap consistency violated"))
-        }
-    }
-
-    #[inline]
-    pub fn get(&self, index: LocalIndexId) -> &T {
-        &self.items[index.0 as usize]
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, index: LocalIndexId) -> &mut T {
-        &mut self.items[index.0 as usize]
-    }
-
-    pub fn reset(&mut self) {
-        self.items.clear();
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct RegisteredIndex {
     pub local_id: LocalIndexId,
@@ -68,7 +32,7 @@ pub struct RegisteredIndex {
 
 #[derive(Clone, Debug)]
 pub struct IndexRegistry {
-    pub items: Vec<RegisteredIndex>,
+    items: StableMap<LocalIndexId, RegisteredIndex>,
     uids: FnvHashMap<Id, LocalIndexId>,
     names: FnvHashMap<String, LocalIndexId>,
 
@@ -77,19 +41,22 @@ pub struct IndexRegistry {
     attribute_id_map: FnvHashMap<LocalAttributeId, Vec<LocalIndexId>>,
 }
 
+impl StableMapKey for LocalIndexId {
+    #[inline]
+    fn from_index(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    #[inline]
+    fn as_index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 impl IndexRegistry {
     pub fn new() -> Self {
-        // NOTE: we start ids at 1, so the vec contains a None sentinel for
-        // the 0 id.
-        let sentinel = RegisteredIndex {
-            local_id: LocalIndexId(0),
-            schema: schema::IndexSchema::new("", "", Vec::new()),
-            is_deleted: true,
-            namespace: String::new(),
-            plain_name: String::new(),
-        };
         Self {
-            items: vec![sentinel],
+            items: StableMap::new(),
             uids: Default::default(),
             names: Default::default(),
             attribute_id_map: FnvHashMap::default(),
@@ -97,7 +64,7 @@ impl IndexRegistry {
     }
 
     pub fn reset(&mut self) {
-        self.items.truncate(1);
+        self.items = StableMap::new();
         self.uids.clear();
         self.names.clear();
         self.attribute_id_map.clear();
@@ -110,19 +77,21 @@ impl IndexRegistry {
     ) -> Result<LocalIndexId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
-        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)?;
+        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)
+            .map(|(a, b)| (a.to_string(), b.to_string()))?;
 
-        let local_id = LocalIndexId(self.items.len() as u32);
-        let item = RegisteredIndex {
+        let uid = schema.id;
+        let ident = schema.ident.clone();
+
+        let local_id = self.items.insert_with(|local_id| RegisteredIndex {
             local_id,
             namespace: namespace.to_string(),
             plain_name: plain_name.to_string(),
             schema,
             is_deleted: false,
-        };
-        self.uids.insert(item.schema.id, local_id);
-        self.names.insert(item.schema.ident.clone(), local_id);
-        self.items.push(item);
+        });
+        self.uids.insert(uid, local_id);
+        self.names.insert(ident, local_id);
 
         for id in local_attribute_ids {
             self.attribute_id_map.entry(id).or_default().push(local_id);
@@ -142,7 +111,7 @@ impl IndexRegistry {
     pub fn get(&self, id: LocalIndexId) -> Option<&RegisteredIndex> {
         // NOTE: this panics, but this is acceptable because a LocalIndexId
         // is always valid.
-        let item = &self.items[id.0 as usize];
+        let item = self.items.get(id);
         if item.is_deleted {
             None
         } else {
@@ -200,7 +169,7 @@ impl IndexRegistry {
     // }
 
     pub fn iter(&self) -> impl Iterator<Item = &RegisteredIndex> {
-        self.items.iter().skip(1).filter(|x| !x.is_deleted)
+        self.items.iter().filter(|x| !x.is_deleted)
     }
 
     // /// Get all indexes an attribute appears in.
@@ -217,11 +186,7 @@ impl IndexRegistry {
     pub fn attribute_indexes(&self, attr_id: LocalAttributeId) -> Vec<&RegisteredIndex> {
         self.attribute_id_map
             .get(&attr_id)
-            .map(|ids| {
-                ids.into_iter()
-                    .map(|id| &self.items[id.0 as usize])
-                    .collect()
-            })
+            .map(|ids| ids.into_iter().map(|id| self.items.get(*id)).collect())
             .unwrap_or_default()
     }
 
@@ -237,7 +202,7 @@ impl IndexRegistry {
 
     pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
         let local_id = self.must_get_by_uid(id)?.local_id;
-        self.items[local_id.0 as usize].is_deleted = true;
+        self.items.get_mut(local_id).is_deleted = true;
         Ok(())
     }
 
