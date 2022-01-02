@@ -68,7 +68,6 @@ impl MemoryStore {
                 .cloned()
                 .collect::<Vec<_>>()
         };
-        dbg!(&indexes);
         for index in indexes {
             s.index_create(&index).unwrap();
         }
