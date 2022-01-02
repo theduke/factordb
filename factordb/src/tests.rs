@@ -6,6 +6,7 @@ use crate::{
     data::{patch::Patch, Id, Value, ValueType},
     error::{self, UniqueConstraintViolation},
     map,
+    prelude::IdOrIdent,
     query::{
         self,
         expr::Expr,
@@ -126,6 +127,7 @@ async fn test_db_with_test_schema(db: &Db) {
     run_tests!(
         db,
         [
+            test_schema_contains_builtins,
             test_select,
             test_query_in,
             test_attr_corcions,
@@ -210,6 +212,13 @@ async fn test_attr_corcions(db: &Db) {
             .unwrap() as u64,
         u64::MAX,
     );
+}
+
+async fn test_schema_contains_builtins(db: &Db) {
+    db.schema()
+        .unwrap()
+        .resolve_attr(&IdOrIdent::new_static("factor/id"))
+        .unwrap();
 }
 
 async fn test_attribute_create_index(db: &Db) {
