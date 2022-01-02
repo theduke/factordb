@@ -4,7 +4,7 @@ use crate::{
     data::{Id, IdOrIdent, Value},
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
-        select::{Order, Select},
+        select::{self, Order, Select},
     },
     registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL},
     AnyError,
@@ -18,16 +18,39 @@ pub struct Sort<E> {
 
 #[derive(Debug)]
 pub enum QueryOp<V = Value, E = Expr> {
-    SelectEntity { id: Id },
+    SelectEntity {
+        id: Id,
+    },
     Scan,
-    Filter { expr: E },
-    Limit { limit: u64 },
-    Skip { count: u64 },
-    Merge { left: Box<Self>, right: Box<Self> },
-    IndexSelect { index: LocalIndexId, value: V },
-    IndexScan { from: V, until: V },
-    IndexScanPrefix { prefix: V },
-    Sort { sorts: Vec<Sort<E>> },
+    Filter {
+        expr: E,
+    },
+    Limit {
+        limit: u64,
+    },
+    Skip {
+        count: u64,
+    },
+    Merge {
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    IndexSelect {
+        index: LocalIndexId,
+        value: V,
+    },
+    IndexScan {
+        index: LocalIndexId,
+        from: Option<V>,
+        until: Option<V>,
+        direction: Order,
+    },
+    IndexScanPrefix {
+        prefix: V,
+    },
+    Sort {
+        sorts: Vec<Sort<E>>,
+    },
 }
 
 #[derive(Debug)]
@@ -88,18 +111,7 @@ pub fn plan_select(
     };
 
     if !query.sort.is_empty() {
-        ops.push(QueryOp::Sort {
-            sorts: query
-                .sort
-                .into_iter()
-                .map(|s| {
-                    Ok(Sort {
-                        on: resolve_expr(s.on, reg)?,
-                        order: s.order,
-                    })
-                })
-                .collect::<Result<_, anyhow::Error>>()?,
-        })
+        plan_sort(reg, query.sort, &mut ops)?;
     }
     if query.offset > 0 {
         ops.push(QueryOp::Skip {
@@ -111,6 +123,62 @@ pub fn plan_select(
     }
 
     Ok(ops)
+}
+
+fn plan_sort(
+    reg: &Registry,
+    sorts: Vec<select::Sort>,
+    ops: &mut Vec<QueryOp<Value, ResolvedExpr>>,
+) -> Result<(), AnyError> {
+    // Resolve the sorts.
+    let mut sorts = sorts
+        .into_iter()
+        .map(|s| {
+            Ok(Sort {
+                on: resolve_expr(s.on, reg)?,
+                order: s.order,
+            })
+        })
+        .collect::<Result<Vec<_>, anyhow::Error>>()?;
+
+    // Check if we can use an index.
+    // TODO: properly handle multiple sort clauses!
+    // Right now we just look at the first sort clause and sort the others
+    // manually.
+    if let Some(sort) = sorts.first() {
+        if let ResolvedExpr::Attr(attr_id) = &sort.on {
+            // TODO: cleaner handling if index == ID ?
+            // (memory backend is automatically sorted by ID, using the index
+            //  would be extra overhead)
+
+            if *attr_id != ATTR_ID_LOCAL {
+                // TODO: do we need to filter the available indexes?
+                let index_opt = reg
+                    .indexes_for_attribute(*attr_id)
+                    .into_iter()
+                    .find(|_idx| true);
+
+                if let Some(index) = index_opt {
+                    ops.insert(
+                        0,
+                        QueryOp::IndexScan {
+                            index: index.local_id,
+                            from: None,
+                            until: None,
+                            direction: sort.order,
+                        },
+                    );
+                    sorts.remove(0);
+                }
+            }
+        }
+    }
+
+    if sorts.len() > 0 {
+        ops.push(QueryOp::Sort { sorts });
+    }
+
+    Ok(())
 }
 
 pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError> {
@@ -216,4 +284,24 @@ mod tests {
             }
         }
     }
+
+    /* #[test]
+    fn test_query_plan_simple_sort_uses_index() {
+        let reg = Registry::new();
+
+        let ops =
+            plan_select(Select::new().with_sort(AttrIdent::expr(), Order::Asc), &reg).unwrap();
+        match ops.as_slice() {
+            [QueryOp::IndexScan {
+                index: INDEX_IDENT_LOCAL,
+                direction: Order::Asc,
+                from: None,
+                until: None,
+            }] => {
+            }
+            other => {
+                panic!("Expected a single select, got {:?}", other);
+            }
+        }
+    } */
 }
