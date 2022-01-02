@@ -39,6 +39,7 @@ pub struct Select {
     #[serde(default = "HashMap::new")]
     pub variables: HashMap<String, Value>,
     pub limit: u64,
+    #[serde(default)]
     pub offset: u64,
     pub cursor: Option<Id>,
 }

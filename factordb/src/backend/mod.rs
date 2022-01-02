@@ -133,7 +133,13 @@ pub struct SelectOpt {
 }
 
 #[derive(Clone, Debug)]
+pub struct IndexPopulate {
+    pub index_id: Id,
+}
+
+#[derive(Clone, Debug)]
 pub enum DbOp {
     Tuple(TupleOp),
     Select(SelectOpt),
+    IndexPopulate(IndexPopulate),
 }

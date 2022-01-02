@@ -156,23 +156,49 @@ impl AttributeRegistry {
         &mut self,
         attr: schema::AttributeSchema,
     ) -> Result<LocalAttributeId, AnyError> {
-        self.validate_schema(&attr)?;
+        self.validate_schema(&attr, false)?;
         self.add(attr)
     }
 
-    fn validate_schema(&self, attr: &schema::AttributeSchema) -> Result<(), AnyError> {
+    /// Update an existing entity.
+    pub(super) fn update(
+        &mut self,
+        schema: schema::AttributeSchema,
+        validate: bool,
+    ) -> Result<LocalAttributeId, AnyError> {
+        schema
+            .id
+            .verify_non_nil()
+            .context("Attribute can not have a nil id")?;
+        let old_id = self.must_get_by_uid(schema.id)?.local_id;
+
+        if validate {
+            self.validate_schema(&schema, true)?;
+        }
+
+        self.items.get_mut(old_id).schema = schema;
+        Ok(old_id)
+    }
+
+    fn validate_schema(
+        &self,
+        attr: &schema::AttributeSchema,
+        allow_existing: bool,
+    ) -> Result<(), AnyError> {
         attr.id
             .verify_non_nil()
             .context("Attribute can not have a nil Id")?;
 
-        if let Some(_old) = self.get_by_uid(attr.id) {
-            return Err(anyhow!("Attribute id already exists: '{}'", attr.id));
+        if !allow_existing {
+            if let Some(_old) = self.get_by_uid(attr.id) {
+                return Err(anyhow!("Attribute id already exists: '{}'", attr.id));
+            }
+            if let Some(_old) = self.get_by_name(&attr.ident) {
+                return Err(anyhow!("Attribute ident already exists: '{}'", attr.ident));
+            }
         }
 
         crate::schema::validate_namespaced_ident(&attr.ident)?;
-        if let Some(_old) = self.get_by_name(&attr.ident) {
-            return Err(anyhow!("Attribute ident already exists: '{}'", attr.ident));
-        }
 
         if attr.ident.len() > super::MAX_NAME_LEN {
             return Err(anyhow!(

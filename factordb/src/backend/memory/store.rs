@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::{
     backend::{
@@ -266,7 +266,6 @@ impl MemoryStore {
             index::Index::Multi(index::MultiIndex::new())
         };
 
-        dbg!(self.indexes.len(), &schema);
         self.indexes.insert(schema.local_id, index)?;
         Ok(())
     }
@@ -276,6 +275,7 @@ impl MemoryStore {
         // is not actually removed, but just it's data is cleared to free up
         // memory.
         self.indexes.get_mut(schema.local_id).clear();
+
         Ok(())
     }
 
@@ -284,6 +284,7 @@ impl MemoryStore {
         id: Id,
         op: TupleIndexInsert,
         reverts: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         let value = self.interner.intern_value(op.value);
 
@@ -295,7 +296,6 @@ impl MemoryStore {
                     idx.insert_unchecked(value.clone(), id);
                 } else {
                     idx.insert_unique(value.clone(), id).map_err(|_| {
-                        let reg = self.registry.read().unwrap();
                         let index = reg
                             .index_by_local_id(index_id)
                             .expect("Invalid local index id");
@@ -328,8 +328,8 @@ impl MemoryStore {
         id: Id,
         op: TupleIndexReplace,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
-        let reg = self.registry.read().unwrap();
         let value = self.interner.intern_value(op.value);
         let old_value = self.interner.intern_value(op.old_value);
 
@@ -411,10 +411,11 @@ impl MemoryStore {
         tuple_id: Id,
         op: TupleIndexOp,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         match op {
-            TupleIndexOp::Insert(op) => self.tuple_index_insert(tuple_id, op, revert),
-            TupleIndexOp::Replace(op) => self.tuple_index_replace(tuple_id, op, revert),
+            TupleIndexOp::Insert(op) => self.tuple_index_insert(tuple_id, op, revert, reg),
+            TupleIndexOp::Replace(op) => self.tuple_index_replace(tuple_id, op, revert, reg),
             TupleIndexOp::Remove(op) => self.tuple_index_remove(tuple_id, op, revert),
         }
     }
@@ -423,13 +424,14 @@ impl MemoryStore {
         &mut self,
         create: backend::TupleCreate,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         if self.entities.contains_key(&create.id) {
             return Err(anyhow!("Entity id already exists: '{}'", create.id));
         }
 
         for op in create.index_ops {
-            self.tuple_index_insert(create.id, op, revert)?;
+            self.tuple_index_insert(create.id, op, revert, reg)?;
         }
 
         let map = self.intern_data_map(create.data)?;
@@ -442,9 +444,10 @@ impl MemoryStore {
         &mut self,
         replace: backend::TupleReplace,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         for op in replace.index_ops {
-            self.apply_tuple_index_op(replace.id, op, revert)?;
+            self.apply_tuple_index_op(replace.id, op, revert, reg)?;
         }
 
         let old = self.entities.remove(&replace.id);
@@ -461,9 +464,10 @@ impl MemoryStore {
         &mut self,
         mut update: backend::TupleMerge,
         revert: &mut RevertList,
+        reg: &Registry,
     ) -> Result<(), AnyError> {
         for op in std::mem::take(&mut update.index_ops) {
-            self.apply_tuple_index_op(update.id, op, revert)?;
+            self.apply_tuple_index_op(update.id, op, revert, reg)?;
         }
 
         let old = self
@@ -662,13 +666,13 @@ impl MemoryStore {
             match op {
                 DbOp::Tuple(tuple) => match tuple {
                     TupleOp::Create(create) => {
-                        self.tuple_create(create, revert)?;
+                        self.tuple_create(create, revert, reg)?;
                     }
                     TupleOp::Replace(repl) => {
-                        self.tuple_replace(repl, revert)?;
+                        self.tuple_replace(repl, revert, reg)?;
                     }
                     TupleOp::Merge(update) => {
-                        self.tuple_merge(update, revert)?;
+                        self.tuple_merge(update, revert, reg)?;
                     }
                     TupleOp::RemoveAttrs(remove) => {
                         self.tuple_remove_attrs(remove, revert)?;
@@ -695,7 +699,50 @@ impl MemoryStore {
                         self.tuple_select_patch(&sel.selector, &patch.patch, revert, reg)?;
                     }
                 },
+                DbOp::IndexPopulate(pop) => {
+                    let index = reg.require_index_by_id(pop.index_id)?;
+                    self.index_populate(&reg, index, revert)?;
+                }
             }
+        }
+
+        Ok(())
+    }
+
+    fn index_populate(
+        &mut self,
+        reg: &Registry,
+        index: &RegisteredIndex,
+        revert: &mut RevertList,
+    ) -> Result<(), AnyError> {
+        let attrs = index
+            .schema
+            .attributes
+            .iter()
+            .map(|id| reg.require_attr_by_id(*id).map(|a| a.local_id))
+            .collect::<Result<Vec<_>, _>>()?;
+        if attrs.len() != 1 {
+            // TODO: Implement multi-attribute indexes
+            bail!("Multi-attribute indexes not supported yet");
+        }
+        let attr_id = attrs[0];
+
+        // FIXME: prevent accumulating all ops in memory.
+        // Indexes should be behind a separate lock!
+        let mut ops = Vec::new();
+        for (entity_id, data) in &self.entities {
+            if let Some(value) = data.0.get(&attr_id) {
+                let op = TupleIndexOp::Insert(TupleIndexInsert {
+                    index: index.local_id,
+                    value: value.into(),
+                    unique: index.schema.unique,
+                });
+                ops.push((*entity_id, op));
+            }
+        }
+
+        for (tuple_id, op) in ops {
+            self.apply_tuple_index_op(tuple_id, op, revert, reg)?;
         }
 
         Ok(())
@@ -952,6 +999,7 @@ impl MemoryStore {
                 query::migrate::SchemaAction::EntityDelete(_) => {}
                 query::migrate::SchemaAction::EntityAttributeAdd(_) => {}
                 query::migrate::SchemaAction::EntityAttributeChangeCardinality(_) => {}
+                query::migrate::SchemaAction::AttributeCreateIndex(_) => {}
             }
         }
 

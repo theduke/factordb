@@ -9,7 +9,10 @@ use crate::{
     query::{
         self,
         expr::Expr,
-        migrate::{EntityAttributeAdd, EntityAttributeChangeCardinality, Migration, SchemaAction},
+        migrate::{
+            AttributeCreateIndex, EntityAttributeAdd, EntityAttributeChangeCardinality, Migration,
+            SchemaAction,
+        },
         select::Select,
     },
     schema::{
@@ -139,6 +142,8 @@ async fn test_db_with_test_schema(db: &Db) {
             test_entity_delete_not_found,
             test_entity_attr_add_with_default,
             test_entity_attr_change_cardinality_from_required_to_optional,
+            test_attribute_create_index,
+            test_attribute_create_unique_index_fails_with_duplicate_values,
         ]
     );
 }
@@ -205,6 +210,126 @@ async fn test_attr_corcions(db: &Db) {
             .unwrap() as u64,
         u64::MAX,
     );
+}
+
+async fn test_attribute_create_index(db: &Db) {
+    let attr_name = "test/add_schema".to_string();
+    db.migrate(Migration::new().attr_create(AttributeSchema {
+        id: Id::nil(),
+        ident: attr_name.clone(),
+        title: None,
+        description: None,
+        value_type: ValueType::Int,
+        unique: false,
+        index: false,
+        strict: true,
+    }))
+    .await
+    .unwrap();
+
+    let id1 = Id::random();
+    db.create(
+        id1,
+        map! {
+            "test/add_schema": 22,
+        },
+    )
+    .await
+    .unwrap();
+    let id2 = Id::random();
+    db.create(
+        id2,
+        map! {
+            "test/add_schema": 23,
+        },
+    )
+    .await
+    .unwrap();
+
+    db.migrate(
+        Migration::new().action(SchemaAction::AttributeCreateIndex(AttributeCreateIndex {
+            attribute: attr_name.clone(),
+            unique: true,
+        })),
+    )
+    .await
+    .unwrap();
+
+    let schema = db.schema().unwrap();
+    let attr = schema
+        .attributes
+        .iter()
+        .find(|a| a.ident == attr_name)
+        .unwrap();
+    assert_eq!(attr.unique, true);
+
+    schema
+        .indexes
+        .iter()
+        .find(|idx| idx.attributes == vec![attr.id])
+        .unwrap();
+}
+
+async fn test_attribute_create_unique_index_fails_with_duplicate_values(db: &Db) {
+    let attr_name = "test/add_index_unique_fails".to_string();
+    db.migrate(Migration::new().attr_create(AttributeSchema {
+        id: Id::nil(),
+        ident: attr_name.clone(),
+        title: None,
+        description: None,
+        value_type: ValueType::Int,
+        unique: false,
+        index: false,
+        strict: true,
+    }))
+    .await
+    .unwrap();
+
+    let id1 = Id::random();
+    db.create(
+        id1,
+        map! {
+            "test/add_index_unique_fails": 22,
+        },
+    )
+    .await
+    .unwrap();
+    let id2 = Id::random();
+    db.create(
+        id2,
+        map! {
+            "test/add_index_unique_fails": 22,
+        },
+    )
+    .await
+    .unwrap();
+
+    let err = db
+        .migrate(Migration::new().action(SchemaAction::AttributeCreateIndex(
+            AttributeCreateIndex {
+                attribute: attr_name.clone(),
+                unique: true,
+            },
+        )))
+        .await
+        .expect_err("Expected migration to faild due to unique index constraints");
+
+    assert!(err.is::<UniqueConstraintViolation>());
+
+    let schema = db.schema().unwrap();
+    let attr = schema
+        .attributes
+        .iter()
+        .find(|a| a.ident == attr_name)
+        .unwrap();
+    assert_eq!(attr.index, false);
+    assert_eq!(attr.unique, false);
+
+    let index = schema
+        .indexes
+        .iter()
+        .find(|idx| idx.attributes == vec![attr.id]);
+    assert!(index.is_none());
 }
 
 async fn test_entity_delete_not_found(db: &Db) {

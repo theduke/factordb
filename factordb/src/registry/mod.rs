@@ -166,6 +166,14 @@ impl Registry {
     }
 
     #[inline]
+    pub fn require_attr_by_id(
+        &self,
+        id: Id,
+    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+        self.attrs.must_get_by_uid(id)
+    }
+
+    #[inline]
     pub fn require_attr_by_ident(
         &self,
         ident: &IdOrIdent,
@@ -294,6 +302,15 @@ impl Registry {
         attr: schema::AttributeSchema,
     ) -> Result<LocalAttributeId, AnyError> {
         self.attrs.register(attr)
+    }
+
+    pub fn attribute_update(
+        &mut self,
+        schema: schema::AttributeSchema,
+        validate: bool,
+    ) -> Result<(), AnyError> {
+        self.attrs.update(schema, validate)?;
+        Ok(())
     }
 
     pub fn remove_attribute(&mut self, id: Id) -> Result<(), AnyError> {

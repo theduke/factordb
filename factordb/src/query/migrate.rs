@@ -34,6 +34,12 @@ pub struct AttributeUpsert {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AttributeCreateIndex {
+    pub attribute: String,
+    pub unique: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeDelete {
     pub name: String,
 }
@@ -67,6 +73,7 @@ pub struct IndexDelete {
 pub enum SchemaAction {
     AttributeCreate(AttributeCreate),
     AttributeUpsert(AttributeUpsert),
+    AttributeCreateIndex(AttributeCreateIndex),
     AttributeDelete(AttributeDelete),
     EntityCreate(EntityCreate),
     EntityAttributeAdd(EntityAttributeAdd),

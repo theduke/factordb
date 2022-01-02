@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail};
 
 use crate::{
-    backend::{DbOp, SelectOpt, TupleOp, TuplePatch},
+    backend::{DbOp, IndexPopulate, SelectOpt, TupleOp, TuplePatch},
     data::{
         patch::Patch,
         value::{to_value, to_value_map},
@@ -9,7 +9,7 @@ use crate::{
     },
     query::{
         expr::Expr,
-        migrate::{self, Migration, SchemaAction},
+        migrate::{self, IndexCreate, Migration, SchemaAction},
     },
     registry::Registry,
     schema::{
@@ -201,6 +201,39 @@ fn build_attribute_upsert(
             }
         }
     }
+}
+
+fn build_attribute_create_index(
+    reg: &mut Registry,
+    spec: migrate::AttributeCreateIndex,
+    is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let attr = reg.require_attr_by_name(&spec.attribute)?;
+    let namespace = attr.schema.parse_namespace()?;
+    if namespace == super::builtin::NS_FACTOR && !is_internal {
+        return Err(anyhow!("Invalid namespace: factor/ is reserved"));
+    }
+
+    if attr.schema.index && attr.schema.unique {
+        bail!("Attribute '{}' already has an index", spec.attribute);
+    }
+
+    let mut schema = attr.schema.clone();
+    schema.index = true;
+    schema.unique = spec.unique;
+
+    let index = build_attribute_index(&schema);
+    reg.register_index(index.clone())?;
+    reg.attribute_update(schema, true)?;
+    let mut action = ResolvedAction::new(SchemaAction::IndexCreate(IndexCreate {
+        schema: index.clone(),
+    }));
+
+    action
+        .ops
+        .push(DbOp::IndexPopulate(IndexPopulate { index_id: index.id }));
+
+    Ok(vec![action])
 }
 
 fn build_attribute_delete(
@@ -537,6 +570,9 @@ fn build_action(
     match action {
         SchemaAction::AttributeCreate(create) => build_attribute_create(reg, create, is_internal),
         SchemaAction::AttributeUpsert(upsert) => build_attribute_upsert(reg, upsert, is_internal),
+        SchemaAction::AttributeCreateIndex(spec) => {
+            build_attribute_create_index(reg, spec, is_internal)
+        }
         SchemaAction::AttributeDelete(del) => build_attribute_delete(reg, del),
         SchemaAction::EntityCreate(create) => build_entity_create(reg, create, is_internal),
         SchemaAction::EntityAttributeAdd(add) => build_entity_attribute_add(reg, add, is_internal),
