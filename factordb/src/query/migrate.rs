@@ -98,9 +98,9 @@ impl Migration {
         }
     }
 
-    pub fn with_name(name: String) -> Self {
+    pub fn with_name(name: impl Into<String>) -> Self {
         Self {
-            name: Some(name),
+            name: Some(name.into()),
             actions: Vec::new(),
         }
     }
