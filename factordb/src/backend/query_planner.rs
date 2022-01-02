@@ -131,7 +131,7 @@ fn plan_sort(
     ops: &mut Vec<QueryOp<Value, ResolvedExpr>>,
 ) -> Result<(), AnyError> {
     // Resolve the sorts.
-    let mut sorts = sorts
+    let sorts = sorts
         .into_iter()
         .map(|s| {
             Ok(Sort {
@@ -141,38 +141,39 @@ fn plan_sort(
         })
         .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
+    // TODO:  commented out because it wouldn't work correctly yet.
     // Check if we can use an index.
     // TODO: properly handle multiple sort clauses!
     // Right now we just look at the first sort clause and sort the others
     // manually.
-    if let Some(sort) = sorts.first() {
-        if let ResolvedExpr::Attr(attr_id) = &sort.on {
-            // TODO: cleaner handling if index == ID ?
-            // (memory backend is automatically sorted by ID, using the index
-            //  would be extra overhead)
+    // if let Some(sort) = sorts.first() {
+    //     if let ResolvedExpr::Attr(attr_id) = &sort.on {
+    //         // TODO: cleaner handling of index == ID ?
+    //         // (memory backend is automatically sorted by ID, using the index
+    //         //  would be extra overhead)
 
-            if *attr_id != ATTR_ID_LOCAL {
-                // TODO: do we need to filter the available indexes?
-                let index_opt = reg
-                    .indexes_for_attribute(*attr_id)
-                    .into_iter()
-                    .find(|_idx| true);
+    //         if *attr_id != ATTR_ID_LOCAL {
+    //             // TODO: do we need to filter the available indexes?
+    //             let index_opt = reg
+    //                 .indexes_for_attribute(*attr_id)
+    //                 .into_iter()
+    //                 .find(|_idx| true);
 
-                if let Some(index) = index_opt {
-                    ops.insert(
-                        0,
-                        QueryOp::IndexScan {
-                            index: index.local_id,
-                            from: None,
-                            until: None,
-                            direction: sort.order,
-                        },
-                    );
-                    sorts.remove(0);
-                }
-            }
-        }
-    }
+    //             if let Some(index) = index_opt {
+    //                 ops.insert(
+    //                     0,
+    //                     QueryOp::IndexScan {
+    //                         index: index.local_id,
+    //                         from: None,
+    //                         until: None,
+    //                         direction: sort.order,
+    //                     },
+    //                 );
+    //                 sorts.remove(0);
+    //             }
+    //         }
+    //     }
+    // }
 
     if sorts.len() > 0 {
         ops.push(QueryOp::Sort { sorts });
