@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::{anyhow, bail};
 
 use crate::{
@@ -7,6 +9,7 @@ use crate::{
         value::{to_value, to_value_map},
         Id, IdOrIdent, Value,
     },
+    prelude::ValueType,
     query::{
         expr::Expr,
         migrate::{self, IndexCreate, Migration, SchemaAction},
@@ -199,6 +202,43 @@ fn build_attribute_upsert(
             } else {
                 Ok(vec![])
             }
+        }
+    }
+}
+
+fn build_attribute_change_type(
+    reg: &mut Registry,
+    action: migrate::AttributeChangeType,
+    _is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let attr = reg.require_attr_by_name(&action.attribute)?;
+
+    match (&attr.schema.value_type, &action.new_type) {
+        // TODO: allow additional conversions.
+        (ValueType::Union(old_values), ValueType::Union(new_values)) => {
+            let old_set: HashSet<_> = old_values.iter().collect();
+            let new_set: HashSet<_> = new_values.iter().collect();
+
+            if !old_set.is_subset(&new_set) {
+                bail!("Invalid attribute '{}' change: can't remove values from a union type, only new variants can be added", attr.schema.ident);
+            }
+
+            let mut new_schema = attr.schema.clone();
+            new_schema.value_type = action.new_type.clone();
+            reg.attribute_update(new_schema, true)?;
+
+            Ok(vec![ResolvedAction {
+                action: SchemaAction::AttributeChangeType(action),
+                ops: Vec::new(),
+            }])
+        }
+        (old, new) => {
+            bail!(
+                "Changing the type of attribute '{}' from '{:?}' to '{:?}' is not supported",
+                attr.schema.ident,
+                old,
+                new
+            );
         }
     }
 }
@@ -570,6 +610,7 @@ fn build_action(
     match action {
         SchemaAction::AttributeCreate(create) => build_attribute_create(reg, create, is_internal),
         SchemaAction::AttributeUpsert(upsert) => build_attribute_upsert(reg, upsert, is_internal),
+        SchemaAction::AttributeChangeType(a) => build_attribute_change_type(reg, a, is_internal),
         SchemaAction::AttributeCreateIndex(spec) => {
             build_attribute_create_index(reg, spec, is_internal)
         }

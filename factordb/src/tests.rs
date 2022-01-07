@@ -341,6 +341,68 @@ async fn test_attribute_create_unique_index_fails_with_duplicate_values(db: &Db)
     assert!(index.is_none());
 }
 
+async fn test_attr_union_add_variant(db: &Db) {
+    let attr_name = "test/union_change_type".to_string();
+    // Create union attribute.
+    db.migrate(Migration::new().attr_create(AttributeSchema {
+        id: Id::nil(),
+        ident: attr_name.clone(),
+        title: None,
+        description: None,
+        value_type: ValueType::Union(vec![
+            ValueType::Const("a".into()),
+            ValueType::Const("b".into()),
+        ]),
+        unique: false,
+        index: false,
+        strict: false,
+    }))
+    .await
+    .unwrap();
+
+    // Insert with valid value.
+    db.create(
+        Id::random(),
+        map! {
+            "test/union_change_type": "a",
+        },
+    )
+    .await
+    .unwrap();
+
+    // Test insert fails with invalid value.
+    db.create(
+        Id::random(),
+        map! {
+            "test/union_change_type": "c",
+        },
+    )
+    .await
+    .expect_err("Expected insert to fail due to unsupported union value");
+
+    // Add union variant.
+    db.migrate(Migration::new().attr_change_type(
+        &attr_name,
+        ValueType::Union(vec![
+            ValueType::Const("a".into()),
+            ValueType::Const("b".into()),
+            ValueType::Const("c".into()),
+        ]),
+    ))
+    .await
+    .unwrap();
+
+    // Test that insert works now.
+    db.create(
+        Id::random(),
+        map! {
+            "test/union_change_type": "c",
+        },
+    )
+    .await
+    .unwrap();
+}
+
 async fn test_entity_delete_not_found(db: &Db) {
     let id = Id::random();
     db.create(id, map! {"factor/title": "title"}).await.unwrap();

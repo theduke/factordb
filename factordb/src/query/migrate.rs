@@ -1,5 +1,6 @@
 use crate::{
     data::Value,
+    prelude::ValueType,
     schema::{self, Cardinality, IndexSchema},
 };
 
@@ -31,6 +32,12 @@ pub struct EntityAttributeChangeCardinality {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeUpsert {
     pub schema: schema::AttributeSchema,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AttributeChangeType {
+    pub attribute: String,
+    pub new_type: ValueType,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -73,6 +80,7 @@ pub struct IndexDelete {
 pub enum SchemaAction {
     AttributeCreate(AttributeCreate),
     AttributeUpsert(AttributeUpsert),
+    AttributeChangeType(AttributeChangeType),
     AttributeCreateIndex(AttributeCreateIndex),
     AttributeDelete(AttributeDelete),
     EntityCreate(EntityCreate),
@@ -122,6 +130,15 @@ impl Migration {
         self.actions
             .push(SchemaAction::AttributeUpsert(AttributeUpsert {
                 schema: attr,
+            }));
+        self
+    }
+
+    pub fn attr_change_type(mut self, attribute: impl Into<String>, new_type: ValueType) -> Self {
+        self.actions
+            .push(SchemaAction::AttributeChangeType(AttributeChangeType {
+                attribute: attribute.into(),
+                new_type,
             }));
         self
     }
