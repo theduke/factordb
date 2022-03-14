@@ -2,7 +2,7 @@ pub use crate::{
     data::{
         patch::{Patch, PatchOp},
         value::Value,
-        value_type::{ObjectField, ObjectType, ValueType},
+        value_type::{ObjectField, ObjectType, ValueType, ValueTypeDescriptor},
         DataMap, Id, IdOrIdent, Timestamp, ValueMap,
     },
     query::{
