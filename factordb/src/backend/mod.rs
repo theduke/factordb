@@ -43,6 +43,12 @@ pub trait Backend {
     }
 
     fn migrations(&self) -> BackendFuture<Vec<Migration>>;
+
+    /// The current memory usage in bytes.
+    fn memory_usage(&self) -> BackendFuture<Option<u64>>;
+
+    /// The full database size in the backing storage.
+    fn storage_usage(&self) -> BackendFuture<Option<u64>>;
 }
 
 #[derive(Clone, Debug)]

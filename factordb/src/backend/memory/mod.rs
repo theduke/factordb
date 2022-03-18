@@ -70,6 +70,14 @@ impl super::Backend for MemoryDb {
         // TODO: keep track of migrations!?
         ready(Ok(Vec::new())).boxed()
     }
+
+    fn memory_usage(&self) -> BackendFuture<Option<u64>> {
+        ready(Ok(None)).boxed()
+    }
+
+    fn storage_usage(&self) -> BackendFuture<Option<u64>> {
+        ready(Ok(None)).boxed()
+    }
 }
 
 #[cfg(test)]

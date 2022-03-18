@@ -344,6 +344,19 @@ impl Backend for LogDb {
         let s = self.clone();
         async move { Ok(s.state.mutable.lock().await.migrations.clone()) }.boxed()
     }
+
+    fn memory_usage(&self) -> BackendFuture<Option<u64>> {
+        ready(Ok(None)).boxed()
+    }
+
+    fn storage_usage(&self) -> BackendFuture<Option<u64>> {
+        let s = self.clone();
+        async move  {
+            let mut m = s.state.mutable.lock().await;
+            let size = m.store.size_log().await?;
+            Ok(size)
+        }.boxed()
+    }
 }
 
 /// Defines a storage backend used by a [LogStore].
@@ -366,6 +379,14 @@ pub trait LogStore {
 
     /// Delete all events.
     fn clear(&mut self) -> BoxFuture<'static, Result<(), AnyError>>;
+
+    /// Get the full size of the log in bytes.
+    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
+
+    /// Get the full size of log entries.
+    /// This differs from [`Self::size_log`] since it does not include log 
+    /// overhead or redundant/overwritten data.
+    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
 }
 
 /// De/serialier for a [LogStore].

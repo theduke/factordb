@@ -67,4 +67,12 @@ impl super::LogStore for MemoryLogStore {
         self.events.clear();
         ready(Ok(())).boxed()
     }
+
+    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>> {
+        ready(Ok(None)).boxed()
+    }
+
+    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>> {
+        ready(Ok(None)).boxed()
+    }
 }
