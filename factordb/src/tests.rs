@@ -146,6 +146,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_entity_attr_change_cardinality_from_required_to_optional,
             test_attribute_create_index,
             test_attribute_create_unique_index_fails_with_duplicate_values,
+            test_attr_union_add_variant,
         ]
     );
 }
