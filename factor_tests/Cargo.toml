@@ -13,9 +13,9 @@ harness = false
 criterion = { version = "0.3.5", features = ["async_futures"] }
 
 factordb = { path = "../factordb" }
-futures = "0.3.17"
-rand = "0.8.4"
-serde = { version = "1.0.130", features = ["derive"] }
+futures = "0.3.21"
+rand = "0.8.5"
+serde = { version = "1.0.136", features = ["derive"] }
 uuid = "0.8.2"
 
 [dev-dependencies]

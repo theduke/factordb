@@ -163,13 +163,6 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
 fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
     let e = match expr {
         SqlExpr::Identifier(ident) => Expr::Attr(ident.value.into()),
-        SqlExpr::Wildcard => {
-            // TODO: implement.
-            bail!("wildcards not supported")
-        }
-        SqlExpr::QualifiedWildcard(_) => {
-            bail!("wildcards not supported")
-        }
         SqlExpr::CompoundIdentifier(_) => {
             bail!("compound identifier not implemented yet")
         }
@@ -261,6 +254,9 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
         SqlExpr::Nested(e) => build_expr(*e)?,
         SqlExpr::Value(v) => {
             let value = match v {
+                SqlValue::Placeholder(_) => {
+                    bail!("Placeholder is not supported");
+                }
                 SqlValue::Number(num, _) => {
                     if let Ok(v) = num.parse::<i64>() {
                         if v >= 0 {
@@ -319,6 +315,18 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
         }
         SqlExpr::Rollup(_) => {
             bail!("ROLLUP is not supported");
+        }
+        SqlExpr::Tuple(_) => {
+            bail!("ROW/TUPLE is not supported");
+        }
+        SqlExpr::ArrayIndex { .. } => {
+            bail!("Array Index is not supported");
+        }
+        SqlExpr::Array(_) => {
+            bail!("Array Index is not supported");
+        }
+        SqlExpr::InUnnest { .. } => {
+            bail!("UNNEST is not supported");
         }
     };
 
