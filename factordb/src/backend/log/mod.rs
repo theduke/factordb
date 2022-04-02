@@ -2,7 +2,10 @@
 //! See [LogDb] for details.
 
 pub mod convert_json;
-pub mod log_memory;
+pub mod store_memory;
+
+#[cfg(feature = "log_fs")]
+pub mod store_file;
 
 mod event;
 pub use event::LogEvent;
@@ -351,11 +354,12 @@ impl Backend for LogDb {
 
     fn storage_usage(&self) -> BackendFuture<Option<u64>> {
         let s = self.clone();
-        async move  {
+        async move {
             let mut m = s.state.mutable.lock().await;
             let size = m.store.size_log().await?;
             Ok(size)
-        }.boxed()
+        }
+        .boxed()
     }
 }
 
@@ -363,11 +367,11 @@ impl Backend for LogDb {
 pub trait LogStore {
     /// Iterate over the event log.
     /// use until: EventId::MAX to read until the end.
-    fn iter_events(
-        &self,
+    fn iter_events<'a>(
+        &'a self,
         from: EventId,
         until: EventId,
-    ) -> BoxFuture<Result<BoxStream<Result<LogEvent, AnyError>>, AnyError>>;
+    ) -> BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, AnyError>>, AnyError>>;
 
     /// Read a single event.
     fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>>;
@@ -375,24 +379,24 @@ pub trait LogStore {
     /// Write an event to the log.
     /// Returns the event id.
     /// Note that this required mutable access
-    fn write_event(&mut self, event: LogEvent) -> BoxFuture<Result<(), AnyError>>;
+    fn write_event<'a>(&'a mut self, event: LogEvent) -> BoxFuture<'a, Result<(), AnyError>>;
 
     /// Delete all events.
-    fn clear(&mut self) -> BoxFuture<'static, Result<(), AnyError>>;
+    fn clear<'a>(&'a mut self) -> BoxFuture<'a, Result<(), AnyError>>;
 
     /// Get the full size of the log in bytes.
     fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
 
     /// Get the full size of log entries.
-    /// This differs from [`Self::size_log`] since it does not include log 
+    /// This differs from [`Self::size_log`] since it does not include log
     /// overhead or redundant/overwritten data.
     fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
 }
 
 /// De/serialier for a [LogStore].
-pub trait LogConverter: Clone {
+pub trait LogConverter: Clone + Send + Sync {
     fn serialize(&self, event: &LogEvent) -> Result<Vec<u8>, AnyError>;
-    fn deserialize(&self, data: Vec<u8>) -> Result<LogEvent, AnyError>;
+    fn deserialize(&self, data: &[u8]) -> Result<LogEvent, AnyError>;
 }
 
 #[cfg(test)]
@@ -404,7 +408,7 @@ mod tests {
     #[test]
     fn test_log_backend_with_memory_store() {
         let log = futures::executor::block_on(async {
-            LogDb::open(log_memory::MemoryLogStore::new())
+            LogDb::open(store_memory::MemoryLogStore::new())
                 .await
                 .unwrap()
         });
@@ -415,7 +419,7 @@ mod tests {
     fn test_log_backend_with_memory_store_restore() {
         // Test that restores work.
         futures::executor::block_on(async {
-            let log = LogDb::open(log_memory::MemoryLogStore::new())
+            let log = LogDb::open(store_memory::MemoryLogStore::new())
                 .await
                 .unwrap();
             let db = crate::Db::new(log.clone());
@@ -459,7 +463,7 @@ mod tests {
     #[test]
     fn test_log_backend_with_memory_store_export() {
         futures::executor::block_on(async {
-            let log = LogDb::open(log_memory::MemoryLogStore::new())
+            let log = LogDb::open(store_memory::MemoryLogStore::new())
                 .await
                 .unwrap();
             let db = crate::Db::new(log.clone());

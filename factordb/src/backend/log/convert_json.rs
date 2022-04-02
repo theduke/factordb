@@ -8,7 +8,7 @@ impl super::LogConverter for JsonConverter {
         serde_json::to_vec(event).map_err(Into::into)
     }
 
-    fn deserialize(&self, data: Vec<u8>) -> Result<super::LogEvent, AnyError> {
+    fn deserialize(&self, data: &[u8]) -> Result<super::LogEvent, AnyError> {
         serde_json::from_slice(&data).map_err(Into::into)
     }
 }
