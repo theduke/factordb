@@ -2,7 +2,7 @@ use factordb::{data::ValueType, query::migrate::Migration, schema::AttributeSche
 
 async fn custom() {
     let backend = factordb::backend::log::LogDb::open(
-        factordb::backend::log::log_memory::MemoryLogStore::new(),
+        factordb::backend::log::store_memory::MemoryLogStore::new(),
     )
     .await
     .unwrap();
