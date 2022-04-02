@@ -12,7 +12,7 @@ pub use crate::{
         select::{Item, Order, Page, Select, Sort},
     },
     schema::{
-        builtin::{AttrIdent, AttrType, AttrId},
+        builtin::{AttrId, AttrIdent, AttrType},
         AttrMapExt, AttributeDescriptor, AttributeSchema, Cardinality, DbSchema, EntityAttribute,
         EntityContainer, EntityDescriptor, EntitySchema,
     },

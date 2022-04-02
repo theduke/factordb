@@ -83,7 +83,7 @@ where
 }
 
 // TODO: Figure out how to represent this better.
-// Currently not a great abstraction because it can lead to panics. 
+// Currently not a great abstraction because it can lead to panics.
 pub struct DerivedStableMap<K, V>(StableMap<K, V>);
 
 impl<K, V> DerivedStableMap<K, V>
