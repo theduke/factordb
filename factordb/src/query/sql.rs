@@ -217,6 +217,7 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
                 sqlparser::ast::BinaryOperator::NotEq => BinaryOp::Neq,
                 sqlparser::ast::BinaryOperator::And => BinaryOp::And,
                 sqlparser::ast::BinaryOperator::Or => BinaryOp::Or,
+                sqlparser::ast::BinaryOperator::Like => BinaryOp::Contains,
                 other => {
                     bail!("Comparison operator {} not supported", other);
                 }
