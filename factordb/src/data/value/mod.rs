@@ -598,6 +598,37 @@ impl From<IdOrIdent> for Value {
     }
 }
 
+impl TryFrom<Value> for u64 {
+    type Error = ValueCoercionError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::UInt(x) => Ok(x),
+            Value::Int(x) if x >= 0 => Ok(x as u64),
+            _ => Err(ValueCoercionError {
+                expected_type: ValueType::UInt,
+                actual_type: value.value_type(),
+                path: None,
+            }),
+        }
+    }
+}
+
+impl TryFrom<Value> for bool {
+    type Error = ValueCoercionError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(x) => Ok(x),
+            _ => Err(ValueCoercionError {
+                expected_type: ValueType::Bool,
+                actual_type: value.value_type(),
+                path: None,
+            }),
+        }
+    }
+}
+
 impl TryFrom<Value> for Id {
     type Error = AnyError;
 
