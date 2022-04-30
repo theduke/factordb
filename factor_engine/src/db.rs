@@ -60,6 +60,10 @@ impl Engine {
         self.backend.migrations().await
     }
 
+    pub async fn storage_usage(&self) -> Result<Option<u64>, anyhow::Error> {
+        self.backend.storage_usage().await
+    }
+
     pub async fn purge_all_data(&self) -> Result<(), AnyError> {
         self.backend.purge_all_data().await
     }
@@ -91,6 +95,10 @@ impl factordb::db::DbClient for Engine {
 
     fn migrations(&self) -> DbFuture<'_, Vec<Migration>> {
         Box::pin(async { self.migrations().await })
+    }
+
+    fn storage_usage(&self) -> DbFuture<'_, Option<u64>> {
+        Box::pin(async { self.storage_usage().await })
     }
 
     fn purge_all_data(&self) -> DbFuture<'_, ()> {
