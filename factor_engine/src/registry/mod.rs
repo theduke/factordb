@@ -8,16 +8,17 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, Context};
 
-use crate::{
-    backend::{
-        DbOp, TupleCreate, TupleDelete, TupleIndexInsert, TupleIndexOp, TupleIndexRemove,
-        TupleIndexReplace, TupleMerge, TupleOp, TupleReplace,
-    },
+use factordb::{
     data::{DataMap, Id, IdMap, IdOrIdent, Value, ValueType},
     error::{self, EntityNotFound},
     query,
     schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality, DbSchema},
     AnyError,
+};
+
+use crate::backend::{
+    DbOp, TupleCreate, TupleDelete, TupleIndexInsert, TupleIndexOp, TupleIndexRemove,
+    TupleIndexReplace, TupleMerge, TupleOp, TupleReplace,
 };
 
 use self::entity_registry::EntityRegistry;

@@ -1,14 +1,10 @@
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use crate::{
-    data::Id,
-    error, schema,
-    util::stable_map::{StableMap, StableMapKey},
-    AnyError,
-};
+use factordb::{data::Id, error, schema, AnyError};
 
 use super::{attribute_registry::AttributeRegistry, LocalAttributeId};
+use crate::util::stable_map::{StableMap, StableMapKey};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct LocalIndexId(u32);
@@ -48,7 +44,7 @@ impl StableMapKey for LocalIndexId {
     }
 
     #[inline]
-    fn as_index(self) -> usize {
+    fn as_index(&self) -> usize {
         self.0 as usize
     }
 }
@@ -77,7 +73,7 @@ impl IndexRegistry {
     ) -> Result<LocalIndexId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
-        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)
+        let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
             .map(|(a, b)| (a.to_string(), b.to_string()))?;
 
         let uid = schema.id;
@@ -223,7 +219,7 @@ impl IndexRegistry {
             return Err(anyhow!("Index id already exists: '{}'", index.id));
         }
 
-        crate::schema::validate_namespaced_ident(&index.ident)?;
+        schema::validate_namespaced_ident(&index.ident)?;
         if let Some(_old) = self.get_by_name(&index.ident) {
             return Err(anyhow!("Index ident already exists: '{}'", index.ident));
         }

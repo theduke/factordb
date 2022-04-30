@@ -1,43 +1,40 @@
 use std::sync::Arc;
 
-use data::DataMap;
-
 use crate::{
-    backend::Backend,
-    data::{self, patch::Patch, Id, IdOrIdent},
-    query::{self, mutate::Mutate},
+    data::{patch::Patch, DataMap, Id, IdOrIdent},
+    query::{
+        self,
+        mutate::{Batch, Mutate},
+    },
     schema::EntityContainer,
     AnyError,
 };
 
 #[derive(Clone)]
 pub struct Db {
-    backend: Arc<dyn Backend + Send + Sync + 'static>,
+    client: Arc<dyn DbClient + Send + Sync + 'static>,
 }
 
 impl Db {
-    pub fn new(backend: impl Backend + Sync + Send + 'static) -> Self {
+    pub fn new<D>(client: D) -> Self
+    where
+        D: DbClient + Sync + Send + 'static,
+    {
         Self {
-            backend: Arc::new(backend),
+            client: Arc::new(client),
         }
     }
 
-    pub fn backend(&self) -> &Arc<dyn Backend + Send + Sync + 'static> {
-        &self.backend
+    pub fn client(&self) -> &Arc<dyn DbClient + Send + Sync + 'static> {
+        &self.client
     }
 
-    pub fn schema(&self) -> Result<crate::schema::DbSchema, AnyError> {
-        let reg = {
-            self.backend()
-                .registry()
-                .read()
-                .map_err(|_| AnyError::msg("Could not retrieve registry"))?
-                .clone()
-        };
-
-        Ok(reg.build_schema())
+    /// Retrieve the full database schema.
+    pub async fn schema(&self) -> Result<crate::schema::DbSchema, AnyError> {
+        self.client.schema().await
     }
 
+    /// Select a single entity by its id or ident.
     pub async fn entity<I>(&self, id: I) -> Result<DataMap, AnyError>
     where
         I: Into<IdOrIdent>,
@@ -46,7 +43,11 @@ impl Db {
 
         // FIXME: remove this once index persistence logic is implemented.
         match id.into() {
-            IdOrIdent::Id(id) => self.backend.entity(id.into()).await,
+            IdOrIdent::Id(id) => {
+                self.client.entity(id.into()).await?.ok_or_else(|| {
+                    anyhow::Error::from(crate::error::EntityNotFound::new(id.into()))
+                })
+            }
             IdOrIdent::Name(name) => {
                 let sel = query::select::Select::new()
                     .with_limit(1)
@@ -63,21 +64,22 @@ impl Db {
         }
     }
 
+    /// Query entities.
     pub async fn select(
         &self,
         query: query::select::Select,
     ) -> Result<query::select::Page<query::select::Item>, AnyError> {
-        self.backend.select(query).await
+        self.client.select(query).await
+    }
+
+    // Mutate.
+
+    pub async fn batch(&self, batch: Batch) -> Result<(), AnyError> {
+        self.client.batch(batch).await
     }
 
     pub async fn create(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
-        self.batch(query::mutate::Batch {
-            actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
-                id,
-                data,
-            })],
-        })
-        .await
+        self.batch(Mutate::create(id, data).into()).await
     }
 
     pub async fn create_entity<E: EntityContainer + serde::Serialize>(
@@ -105,15 +107,27 @@ impl Db {
         self.batch(Mutate::delete(id).into()).await
     }
 
-    pub async fn batch(&self, batch: query::mutate::Batch) -> Result<(), AnyError> {
-        self.backend.apply_batch(batch).await
-    }
-
+    /// Run a migration.
     pub async fn migrate(&self, migration: query::migrate::Migration) -> Result<(), AnyError> {
-        self.backend.migrate(migration).await
+        self.client.migrate(migration).await
     }
 
+    /// Delete all data.
     pub async fn purge_all_data(&self) -> Result<(), AnyError> {
-        self.backend.purge_all_data().await
+        self.client.purge_all_data().await
     }
+}
+
+pub type DbFuture<'a, T> = futures::future::BoxFuture<'a, Result<T, anyhow::Error>>;
+
+pub trait DbClient {
+    fn schema(&self) -> DbFuture<'_, crate::schema::DbSchema>;
+    fn entity(&self, id: IdOrIdent) -> DbFuture<'_, Option<DataMap>>;
+    fn select(
+        &self,
+        query: query::select::Select,
+    ) -> DbFuture<'_, query::select::Page<query::select::Item>>;
+    fn batch(&self, batch: Batch) -> DbFuture<'_, ()>;
+    fn migrate(&self, migration: query::migrate::Migration) -> DbFuture<'_, ()>;
+    fn purge_all_data(&self) -> DbFuture<'_, ()>;
 }

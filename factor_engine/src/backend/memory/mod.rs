@@ -5,7 +5,7 @@ pub mod store;
 
 use futures::{future::ready, FutureExt};
 
-use crate::{
+use factordb::{
     data,
     query::{self, select::Item},
 };
@@ -46,8 +46,8 @@ impl super::Backend for MemoryDb {
         ready(Ok(())).boxed()
     }
 
-    fn entity(&self, id: data::IdOrIdent) -> super::BackendFuture<data::DataMap> {
-        let res = self.state.read().unwrap().entity(id);
+    fn entity(&self, id: data::IdOrIdent) -> super::BackendFuture<Option<data::DataMap>> {
+        let res = self.state.read().unwrap().entity_opt(id);
         ready(res).boxed()
     }
 

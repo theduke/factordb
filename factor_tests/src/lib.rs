@@ -1,7 +1,8 @@
 use factordb::{
+    db::Db,
     prelude::{AttributeDescriptor, DataMap, EntityDescriptor, Expr, Id, Migration, Select},
     schema::builtin::{AttrDescription, AttrTitle},
-    AnyError, Attribute, Db, Entity,
+    AnyError, Attribute, Entity,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +53,7 @@ pub async fn select_single_todo_with_title_eq(db: &Db, title: String) -> Result<
     Ok(page.items.remove(0).data)
 }
 
-pub async fn apply_schema(db: &factordb::Db) -> Result<(), AnyError> {
+pub async fn apply_schema(db: &Db) -> Result<(), AnyError> {
     let mig = Migration::new()
         .attr_upsert(AttrTodoDone::schema())
         .entity_upsert(Todo::schema());

@@ -3,11 +3,12 @@ use std::collections::HashSet;
 use fnv::FnvHashMap;
 use ordered_float::OrderedFloat;
 
-use crate::{
+use factordb::{
     data::{Id, Value},
     query::expr,
-    registry::{LocalAttributeId, ATTR_ID_LOCAL},
 };
+
+use crate::registry::{LocalAttributeId, ATTR_ID_LOCAL};
 
 // SharedStr
 

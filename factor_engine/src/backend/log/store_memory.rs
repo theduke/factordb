@@ -4,7 +4,7 @@ use futures::{
     FutureExt, StreamExt,
 };
 
-use crate::AnyError;
+use factordb::AnyError;
 
 use super::{EventId, LogEvent};
 

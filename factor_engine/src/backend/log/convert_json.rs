@@ -1,4 +1,4 @@
-use crate::AnyError;
+use factordb::AnyError;
 
 #[derive(Clone, Copy, Debug)]
 pub struct JsonConverter;

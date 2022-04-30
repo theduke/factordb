@@ -307,6 +307,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
+name = "factor_engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "factordb",
+ "fnv",
+ "futures",
+ "ordered-float",
+ "regex",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "typescript-type-def",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "factor_macros"
 version = "0.1.0"
 dependencies = [
@@ -324,6 +346,7 @@ name = "factor_tests"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "factor_engine",
  "factordb",
  "futures",
  "rand",
@@ -350,12 +373,10 @@ dependencies = [
  "fnv",
  "futures",
  "ordered-float",
- "regex",
  "serde",
  "serde_json",
  "sqlparser",
  "tokio",
- "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "typescript-type-def",

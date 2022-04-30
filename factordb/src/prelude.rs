@@ -5,6 +5,7 @@ pub use crate::{
         value_type::{ObjectField, ObjectType, ValueType, ValueTypeDescriptor},
         DataMap, Id, IdOrIdent, Timestamp, ValueMap,
     },
+    db::Db,
     query::{
         expr::Expr,
         migrate::Migration,
@@ -16,7 +17,6 @@ pub use crate::{
         AttrMapExt, AttributeDescriptor, AttributeSchema, Cardinality, DbSchema, EntityAttribute,
         EntityContainer, EntityDescriptor, EntitySchema,
     },
-    Db,
 };
 
 pub use factor_macros::{Attribute, Entity};

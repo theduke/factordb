@@ -131,10 +131,41 @@ pub struct Batch {
 }
 
 impl Batch {
+    pub fn new() -> Self {
+        Self {
+            actions: Vec::new(),
+        }
+    }
+
     pub fn with_action(action: impl Into<Mutate>) -> Self {
         Self {
             actions: vec![action.into()],
         }
+    }
+
+    pub fn and_create(mut self, create: Create) -> Self {
+        self.actions.push(Mutate::Create(create));
+        self
+    }
+
+    pub fn and_replace(mut self, replace: Replace) -> Self {
+        self.actions.push(Mutate::Replace(replace));
+        self
+    }
+
+    pub fn and_merge(mut self, merge: Merge) -> Self {
+        self.actions.push(Mutate::Merge(merge));
+        self
+    }
+
+    pub fn and_patch(mut self, patch: EntityPatch) -> Self {
+        self.actions.push(Mutate::Patch(patch));
+        self
+    }
+
+    pub fn and_delete(mut self, delete: Delete) -> Self {
+        self.actions.push(Mutate::Delete(delete));
+        self
     }
 }
 

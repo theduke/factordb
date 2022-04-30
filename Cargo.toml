@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "factordb",
+    "factor_engine",
     "factor_macros",
     "factor_tools",
     "factor_tests",

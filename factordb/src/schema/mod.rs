@@ -11,8 +11,6 @@ pub use self::entity::{
 mod index;
 pub use self::index::IndexSchema;
 
-pub mod logic;
-
 use crate::data::IdOrIdent;
 
 pub fn validate_namespace_name(value: &str) -> Result<(), crate::AnyError> {

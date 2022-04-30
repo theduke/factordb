@@ -1,12 +1,20 @@
 [package]
-name = "factordb"
+name = "factor_engine"
 version = "0.1.0"
-authors = ["Christoph Herzog <chris@theduke.at>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["memory", "log", "log_fs"]
+memory = []
+log = ["memory"]
+log_fs = ["tokio", "tokio-stream"]
+
+
 [dependencies]
+factordb = { version = "0.1.0", path = "../factordb" }
+
 anyhow = { version = "1.0.56", features = ["backtrace"] }
 chrono = { version = "0.4.19", features = ["serde"] }
 fnv = "1.0.7"
@@ -16,11 +24,11 @@ serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 tracing = "0.1.32"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-factor_macros = { version = "0.1", path = "../factor_macros" }
+
 url = { version = "2.2.2", features = ["serde"] }
 typescript-type-def = "0.4.1"
 sqlparser = "0.15.0"
 
-[dev-dependencies]
-tracing-subscriber = { version = "0.3.10", features = ["fmt"] }
-tokio = { version = "1.17.0", features = ["full"] }
+tokio = { version = "1.17.0", optional = true, features = ["fs", "sync", "io-util"] }
+tokio-stream = { version = "0.1.8", optional = true, features = ["io-util"] }
+regex = "1.5.5"

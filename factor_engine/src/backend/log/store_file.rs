@@ -7,7 +7,7 @@ use futures::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use crate::AnyError;
+use factordb::AnyError;
 
 use super::{EventId, LogConverter, LogEvent};
 

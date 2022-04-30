@@ -2,7 +2,9 @@ use std::collections::{BTreeMap, HashSet};
 
 use anyhow::Result;
 
-use crate::{data::Id, registry::LocalIndexId, util::stable_map::DerivedStableMap};
+use factordb::data::Id;
+
+use crate::{registry::LocalIndexId, util::stable_map::DerivedStableMap};
 
 use super::memory_data::MemoryValue;
 

@@ -1,9 +1,5 @@
 use std::marker::PhantomData;
 
-use anyhow::bail;
-
-use crate::AnyError;
-
 /// A map implementation where the key is a simple numeric index into a vector.
 ///
 /// Allows for very fast lookups that can not fail.
@@ -16,7 +12,7 @@ pub struct StableMap<K, V> {
 
 pub trait StableMapKey {
     fn from_index(index: usize) -> Self;
-    fn as_index(self) -> usize;
+    fn as_index(&self) -> usize;
 }
 
 impl<K, V> StableMap<K, V>
@@ -130,12 +126,27 @@ where
         self.0.iter_mut()
     } */
 
-    // TODO: use custom error type.
-    pub fn insert(&mut self, key: K, value: V) -> Result<(), AnyError> {
-        if self.0.len() != key.as_index() {
-            bail!("DerivedStableMap consistency violated");
+    pub fn insert(&mut self, value: V) -> K {
+        let key = K::from_index(self.0.values.len());
+        self.0.values.push(value);
+        key
+    }
+
+    /// Append a new item.
+    /// The key must be the correct index key for the next item, as it would be
+    /// returned by [`Self::insert`].
+    ///
+    /// WARNING: panics if the key is not correct.
+    ///
+    pub fn append_checked(&mut self, key: K, value: V) -> K {
+        if key.as_index() != self.0.values.len() {
+            panic!(
+                "Invalid stable map append: expected index key {}, but got {}",
+                self.0.values.len(),
+                key.as_index()
+            );
         }
         self.0.values.push(value);
-        Ok(())
+        key
     }
 }

@@ -6,10 +6,10 @@ pub mod memory;
 #[cfg(feature = "log")]
 pub mod log;
 
-use crate::{
+use crate::registry::{LocalIndexId, SharedRegistry};
+use factordb::{
     data::{patch::Patch, DataMap, Id, IdOrIdent, Value},
     query::{self, expr::Expr, migrate::Migration, select::Item},
-    registry::{LocalIndexId, SharedRegistry},
     schema, AnyError,
 };
 
@@ -30,7 +30,7 @@ pub trait Dao: Send + 'static {
 pub trait Backend {
     fn registry(&self) -> &SharedRegistry;
 
-    fn entity(&self, id: IdOrIdent) -> BackendFuture<DataMap>;
+    fn entity(&self, id: IdOrIdent) -> BackendFuture<Option<DataMap>>;
     fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<Item>>;
 
     fn apply_batch(&self, batch: query::mutate::Batch) -> BackendFuture<()>;

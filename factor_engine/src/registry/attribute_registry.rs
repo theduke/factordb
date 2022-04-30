@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use crate::{
+use factordb::{
     data::{Id, IdOrIdent, ValueType},
-    error, schema,
-    util::stable_map::{StableMap, StableMapKey},
-    AnyError,
+    error, schema, AnyError,
 };
+
+use crate::util::stable_map::{StableMap, StableMapKey};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct LocalAttributeId(u32);
@@ -40,7 +40,7 @@ impl StableMapKey for LocalAttributeId {
     }
 
     #[inline]
-    fn as_index(self) -> usize {
+    fn as_index(&self) -> usize {
         self.0 as usize
     }
 }
@@ -63,7 +63,7 @@ impl AttributeRegistry {
     fn add(&mut self, schema: schema::AttributeSchema) -> Result<LocalAttributeId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
-        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)
+        let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
             .map(|(a, b)| (a.to_string(), b.to_string()))?;
         let uid = schema.id;
         let ident = schema.ident.clone();
@@ -198,7 +198,7 @@ impl AttributeRegistry {
             }
         }
 
-        crate::schema::validate_namespaced_ident(&attr.ident)?;
+        schema::validate_namespaced_ident(&attr.ident)?;
 
         if attr.ident.len() > super::MAX_NAME_LEN {
             return Err(anyhow!(

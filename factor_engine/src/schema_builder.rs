@@ -4,6 +4,9 @@ use anyhow::{anyhow, bail};
 
 use crate::{
     backend::{DbOp, IndexPopulate, SelectOpt, TupleOp, TuplePatch},
+    registry::Registry,
+};
+use factordb::{
     data::{
         patch::Patch,
         value::{to_value, to_value_map},
@@ -14,15 +17,13 @@ use crate::{
         expr::Expr,
         migrate::{self, IndexCreate, Migration, SchemaAction},
     },
-    registry::Registry,
     schema::{
         builtin::{self, NS_FACTOR},
-        AttrMapExt,
+        AttrMapExt, AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute,
+        IndexSchema,
     },
     AnyError,
 };
-
-use super::{AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, IndexSchema};
 
 // TODO: remove allow
 #[allow(dead_code)]
@@ -108,7 +109,7 @@ fn build_attribute_create(
     is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let namespace = create.schema.parse_namespace()?;
-    if namespace == super::builtin::NS_FACTOR && !is_internal {
+    if namespace == builtin::NS_FACTOR && !is_internal {
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
     }
 
@@ -122,7 +123,7 @@ fn build_attribute_create(
     reg.register_attribute(schema.clone())?;
 
     let index_actions = if schema.index || schema.unique {
-        let index = crate::query::migrate::IndexCreate {
+        let index = migrate::IndexCreate {
             schema: build_attribute_index(&schema),
         };
         build_index_create(reg, index)?
@@ -147,7 +148,7 @@ fn build_attribute_upsert(
     is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let namespace = upsert.schema.parse_namespace()?;
-    if namespace == super::builtin::NS_FACTOR && !is_internal {
+    if namespace == builtin::NS_FACTOR && !is_internal {
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
     }
 
@@ -192,7 +193,7 @@ fn build_attribute_upsert(
                         Ok(vec![])
                     }
                     None => {
-                        let index = crate::query::migrate::IndexCreate {
+                        let index = migrate::IndexCreate {
                             schema: index_schema,
                         };
                         let action = build_index_create(reg, index)?;
@@ -250,7 +251,7 @@ fn build_attribute_create_index(
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let attr = reg.require_attr_by_name(&spec.attribute)?;
     let namespace = attr.schema.parse_namespace()?;
-    if namespace == super::builtin::NS_FACTOR && !is_internal {
+    if namespace == builtin::NS_FACTOR && !is_internal {
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
     }
 
@@ -282,7 +283,7 @@ fn build_attribute_delete(
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let attr = reg.require_attr_by_name(&del.name)?.clone();
 
-    if attr.namespace == super::builtin::NS_FACTOR {
+    if attr.namespace == builtin::NS_FACTOR {
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
     }
 
@@ -301,7 +302,7 @@ fn build_attribute_delete(
     }
 
     let op = DbOp::Select(SelectOpt {
-        selector: crate::query::expr::Expr::literal(true),
+        selector: Expr::literal(true),
         op: TupleOp::RemoveAttrs(crate::backend::TupleRemoveAttrs {
             id: attr.schema.id,
             attrs: vec![attr.schema.id],
@@ -324,7 +325,7 @@ fn build_entity_create(
     is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let namespace = create.schema.parse_namespace()?;
-    if !is_internal && namespace == super::builtin::NS_FACTOR {
+    if !is_internal && namespace == builtin::NS_FACTOR {
         return Err(anyhow!(
             "Invalid entity ident: the factor/ namespace is reserved"
         ));
@@ -453,7 +454,7 @@ fn build_entity_upsert(
     is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
     let namespace = upsert.schema.parse_namespace()?;
-    if !is_internal && namespace == super::builtin::NS_FACTOR {
+    if !is_internal && namespace == builtin::NS_FACTOR {
         bail!("Invalid entity ident: the factor/ namespace is reserved");
     }
 

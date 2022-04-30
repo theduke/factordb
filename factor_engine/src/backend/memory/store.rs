@@ -2,14 +2,10 @@ use std::borrow::Cow;
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use crate::{
-    backend::{
-        self,
-        query_planner::{self, QueryOp, ResolvedExpr, Sort},
-        DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
-    },
+use factordb::{
     data::{patch::Patch, DataMap, Id, IdOrIdent, Value, ValueMap},
     error::{self, EntityNotFound},
+    prelude::Batch,
     query::{
         self,
         expr::Expr,
@@ -17,8 +13,16 @@ use crate::{
         mutate::EntityPatch,
         select::{Item, Order, Page},
     },
+    AnyError,
+};
+
+use crate::{
+    backend::{
+        self,
+        query_planner::{self, QueryOp, ResolvedExpr, Sort},
+        DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
+    },
     registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
-    schema, AnyError,
 };
 
 use super::{
@@ -265,7 +269,7 @@ impl MemoryStore {
             index::Index::Multi(index::MultiIndex::new())
         };
 
-        self.indexes.insert(schema.local_id, index)?;
+        self.indexes.append_checked(schema.local_id, index);
         Ok(())
     }
 
@@ -858,7 +862,7 @@ impl MemoryStore {
         Ok(revert)
     }
 
-    pub fn apply_batch(&mut self, batch: crate::query::mutate::Batch) -> Result<(), AnyError> {
+    pub fn apply_batch(&mut self, batch: Batch) -> Result<(), AnyError> {
         let shared_reg = self.registry().clone();
         let reg = shared_reg.read().unwrap();
         self.apply_batch_impl(batch, &reg)?;
@@ -876,10 +880,7 @@ impl MemoryStore {
     /// undoing the change.
     /// The returned [RevertEpoch] can be passed to [Self::revert_changes] to
     /// apply the revert.
-    pub fn apply_batch_revertable(
-        &mut self,
-        batch: crate::query::mutate::Batch,
-    ) -> Result<RevertEpoch, AnyError> {
+    pub fn apply_batch_revertable(&mut self, batch: Batch) -> Result<RevertEpoch, AnyError> {
         let shared_reg = self.registry().clone();
         let reg = shared_reg.read().unwrap();
         let ops = self.apply_batch_impl(batch, &reg)?;
@@ -973,7 +974,7 @@ impl MemoryStore {
 
     fn migrate_impl(&mut self, mig: Migration, is_internal: bool) -> Result<RevertList, AnyError> {
         let mut reg = self.registry.read().unwrap().clone();
-        let (mig, ops) = schema::logic::build_migration(&mut reg, mig, is_internal)?;
+        let (mig, ops) = crate::schema_builder::build_migration(&mut reg, mig, is_internal)?;
 
         for action in mig.actions {
             match action {
@@ -1029,6 +1030,13 @@ impl MemoryStore {
         self.must_resolve_entity(&id)
             .map_err(AnyError::from)
             .map(|tuple| self.tuple_to_data_map(tuple))
+    }
+
+    pub fn entity_opt(&self, id: IdOrIdent) -> Result<Option<DataMap>, AnyError> {
+        let opt = self
+            .resolve_entity(&id)
+            .map(|tuple| self.tuple_to_data_map(tuple));
+        Ok(opt)
     }
 
     fn apply_sort<'a>(items: &mut Vec<Cow<'a, MemoryTuple>>, sorts: &[Sort<MemoryExpr>]) {
@@ -1481,7 +1489,7 @@ type RevertList = Vec<RevertOp>;
 
 #[cfg(test)]
 mod tests {
-    use crate::query::expr::BinaryOp;
+    use factordb::query::expr::BinaryOp;
 
     use super::*;
 

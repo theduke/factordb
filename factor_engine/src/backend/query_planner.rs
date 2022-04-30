@@ -2,15 +2,16 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 
-use crate::{
+use factordb::{
     data::{Id, IdOrIdent, Value},
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
         select::{self, Order, Select},
     },
-    registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL},
     AnyError,
 };
+
+use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL};
 
 #[derive(Debug)]
 pub struct Sort<E> {
@@ -281,7 +282,7 @@ fn pass_simplify_entity_id_eq(expr: ResolvedExpr) -> (ResolvedExpr, bool) {
 
 #[cfg(test)]
 mod tests {
-    use crate::schema::{builtin::AttrId, AttributeDescriptor};
+    use factordb::schema::{builtin::AttrId, AttributeDescriptor};
 
     use super::*;
 

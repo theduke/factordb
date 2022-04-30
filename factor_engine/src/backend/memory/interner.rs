@@ -1,4 +1,4 @@
-use crate::data::Value;
+use factordb::data::Value;
 
 use super::memory_data::{MemoryValue, SharedStr};
 

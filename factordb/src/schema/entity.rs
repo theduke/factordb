@@ -77,7 +77,7 @@ pub struct EntitySchema {
 }
 
 impl EntitySchema {
-    pub(crate) fn attribute(&self, name: &str) -> Option<&EntityAttribute> {
+    pub fn attribute(&self, name: &str) -> Option<&EntityAttribute> {
         self.attributes
             .iter()
             .find(|a| a.attribute.as_name() == Some(name))

@@ -1,9 +1,9 @@
-use factordb::{backend::memory::MemoryDb, Db};
+use factor_engine::{backend::memory::MemoryDb, Engine};
 
 use factor_tests::{apply_schema, select_single_todo_with_title_eq, Todo};
 
 async fn bench_select_single() {
-    let db = Db::new(MemoryDb::new());
+    let db = Engine::new(MemoryDb::new()).into_client();
     apply_schema(&db).await.unwrap();
 
     for index in 0..10_000 {

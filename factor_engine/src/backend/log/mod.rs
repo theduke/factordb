@@ -8,23 +8,24 @@ pub mod store_memory;
 pub mod store_file;
 
 mod event;
+use anyhow::Context;
 pub use event::LogEvent;
 
 use std::sync::{Arc, RwLock};
 
-use anyhow::Context;
 use futures::{
     future::{ready, BoxFuture},
     stream::BoxStream,
     FutureExt, StreamExt,
 };
-use query::mutate::Batch;
 
-use crate::{
+use factordb::{
     data,
-    query::{self, select::Item},
-    registry, schema, AnyError,
+    query::{self, mutate::Batch, select::Item},
+    AnyError,
 };
+
+use crate::registry;
 
 use self::event::LogOp;
 
@@ -256,7 +257,8 @@ impl LogDb {
         // This is important to not spam the log with migrations when UPSERTS
         // happen.
         let mut reg = self.state.registry.read().unwrap().clone();
-        let (mig, ops) = schema::logic::build_migration(&mut reg, migration.clone(), is_internal)?;
+        let (mig, ops) =
+            crate::schema_builder::build_migration(&mut reg, migration.clone(), is_internal)?;
 
         if ops.is_empty() && mig.actions.is_empty() {
             return Ok(());
@@ -304,8 +306,8 @@ impl Backend for LogDb {
         &self.state.registry
     }
 
-    fn entity(&self, id: data::IdOrIdent) -> BackendFuture<data::DataMap> {
-        let res = self.state.mem.read().unwrap().entity(id);
+    fn entity(&self, id: data::IdOrIdent) -> BackendFuture<Option<data::DataMap>> {
+        let res = self.state.mem.read().unwrap().entity_opt(id);
         ready(res).boxed()
     }
 
@@ -401,7 +403,10 @@ pub trait LogConverter: Clone + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use crate::{data::Id, schema};
+
+    use factordb::{map, prelude::Id, schema};
+
+    use crate::Engine;
 
     use super::*;
 
@@ -422,7 +427,7 @@ mod tests {
             let log = LogDb::open(store_memory::MemoryLogStore::new())
                 .await
                 .unwrap();
-            let db = crate::Db::new(log.clone());
+            let db = crate::Engine::new(log.clone()).into_client();
 
             let mig = query::migrate::Migration {
                 name: None,
@@ -431,7 +436,7 @@ mod tests {
                         schema: schema::AttributeSchema::new(
                             "test",
                             "text",
-                            crate::data::ValueType::String,
+                            data::ValueType::String,
                         ),
                     },
                 )],
@@ -441,7 +446,7 @@ mod tests {
             let id = Id::random();
             db.create(
                 id,
-                crate::map! {
+                map! {
                     "test/text": "hello",
                 },
             )
@@ -466,10 +471,10 @@ mod tests {
             let log = LogDb::open(store_memory::MemoryLogStore::new())
                 .await
                 .unwrap();
-            let db = crate::Db::new(log.clone());
+            let db = Engine::new(log.clone()).into_client();
 
             let id = Id::random();
-            let data = crate::map! {
+            let data = map! {
                 "factor/title": "y",
             };
             db.create(id, data.clone()).await.unwrap();

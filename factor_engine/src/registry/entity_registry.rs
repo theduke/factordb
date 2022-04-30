@@ -3,12 +3,11 @@ use std::collections::{HashMap, HashSet};
 use anyhow::{anyhow, Context};
 use fnv::{FnvHashMap, FnvHashSet};
 
-use crate::{
+use crate::util::stable_map::{StableMap, StableMapKey};
+use factordb::{
     data::{Id, IdOrIdent},
     error::{self, EntityNotFound},
-    schema,
-    util::stable_map::{StableMap, StableMapKey},
-    AnyError,
+    schema, AnyError,
 };
 
 use super::attribute_registry::AttributeRegistry;
@@ -19,7 +18,7 @@ pub struct LocalEntityId(u32);
 #[derive(Clone, Debug)]
 pub struct RegisteredEntity {
     pub local_id: LocalEntityId,
-    pub schema: crate::schema::EntitySchema,
+    pub schema: schema::EntitySchema,
     pub is_deleted: bool,
     pub namespace: String,
     pub plain_name: String,
@@ -46,7 +45,7 @@ impl StableMapKey for LocalEntityId {
     }
 
     #[inline]
-    fn as_index(self) -> usize {
+    fn as_index(&self) -> usize {
         self.0 as usize
     }
 }
@@ -71,11 +70,11 @@ impl EntityRegistry {
         }
     }
 
-    fn add(&mut self, schema: crate::schema::EntitySchema) -> Result<LocalEntityId, AnyError> {
+    fn add(&mut self, schema: schema::EntitySchema) -> Result<LocalEntityId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
         assert!(!schema.id.is_nil());
 
-        let (namespace, plain_name) = crate::schema::validate_namespaced_ident(&schema.ident)
+        let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
             .map(|(a, b)| (a.to_string(), b.to_string()))?;
 
         let parent_ids = schema
@@ -244,7 +243,7 @@ impl EntityRegistry {
         attrs: &AttributeRegistry,
         is_new: bool,
     ) -> Result<(), AnyError> {
-        crate::schema::validate_namespaced_ident(&entity.ident)?;
+        schema::validate_namespaced_ident(&entity.ident)?;
 
         if is_new {
             if self.get_by_name(&entity.ident).is_some() {

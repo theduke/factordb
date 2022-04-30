@@ -1,4 +1,4 @@
-use crate::query::{migrate::Migration, mutate::Batch};
+use factordb::query::{migrate::Migration, mutate::Batch};
 
 /// A event persisted in the log.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

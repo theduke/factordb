@@ -1,12 +1,12 @@
 use futures::{future::BoxFuture, FutureExt};
 use schema::AttributeSchema;
 
-use crate::{
-    backend::Backend,
+use crate::{backend::Backend, Engine};
+use factordb::{
     data::{patch::Patch, Id, Value, ValueType},
     error::{self, UniqueConstraintViolation},
     map,
-    prelude::IdOrIdent,
+    prelude::{Db, IdOrIdent, Order},
     query::{
         self,
         expr::Expr,
@@ -21,14 +21,14 @@ use crate::{
         builtin::{AttrId, AttrTitle},
         AttrMapExt, AttributeDescriptor, EntityAttribute, EntitySchema,
     },
-    Db,
 };
 
 pub fn test_backend<F>(b: impl Backend + Send + Sync + 'static, spawner: F)
 where
     F: Fn(BoxFuture<()>),
 {
-    let db = Db::new(b);
+    let engine = Engine::new(b);
+    let db = Db::new(engine);
     spawner(test_db(db).boxed());
 }
 
@@ -152,7 +152,7 @@ async fn test_db_with_test_schema(db: &Db) {
     );
 }
 
-async fn test_attr_corcions(db: &Db) {
+async fn test_attr_corcions(db: &factordb::prelude::Db) {
     // int coerces to uint
     db.create(
         Id::random(),
@@ -218,6 +218,7 @@ async fn test_attr_corcions(db: &Db) {
 
 async fn test_schema_contains_builtins(db: &Db) {
     db.schema()
+        .await
         .unwrap()
         .resolve_attr(&IdOrIdent::new_static("factor/id"))
         .unwrap();
@@ -266,7 +267,7 @@ async fn test_attribute_create_index(db: &Db) {
     .await
     .unwrap();
 
-    let schema = db.schema().unwrap();
+    let schema = db.schema().await.unwrap();
     let attr = schema
         .attributes
         .iter()
@@ -327,7 +328,7 @@ async fn test_attribute_create_unique_index_fails_with_duplicate_values(db: &Db)
 
     assert!(err.is::<UniqueConstraintViolation>());
 
-    let schema = db.schema().unwrap();
+    let schema = db.schema().await.unwrap();
     let attr = schema
         .attributes
         .iter()
@@ -476,7 +477,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
             entity: ty.into(),
             attribute: "test/int".into(),
             cardinality: schema::Cardinality::Required,
-            default_value: Some(42.into()),
+            default_value: Some(42u64.into()),
         })),
     )
     .await
@@ -484,6 +485,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
 
     // Ensure that the attribute was added to the schema.
     db.schema()
+        .await
         .unwrap()
         .resolve_entity(&ty.into())
         .unwrap()
@@ -900,7 +902,7 @@ async fn test_query_regex(db: &Db) {
         .select(
             Select::new()
                 .with_filter(filter)
-                .with_sort(Expr::ident("test/text"), crate::prelude::Order::Asc),
+                .with_sort(Expr::ident("test/text"), Order::Asc),
         )
         .await
         .unwrap()
