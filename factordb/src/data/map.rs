@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use super::Value;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct ValueMap<K>(pub BTreeMap<K, Value>);
 
 impl<K: Ord> Default for ValueMap<K> {

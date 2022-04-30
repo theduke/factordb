@@ -5,6 +5,8 @@ use crate::AnyError;
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Id(uuid::Uuid);
 
 impl From<uuid::Uuid> for Id {

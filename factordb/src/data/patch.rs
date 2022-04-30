@@ -9,6 +9,8 @@ use super::DataMap;
 use super::Value;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Patch(pub Vec<PatchOp>);
 
 impl Patch {
@@ -81,6 +83,8 @@ impl Patch {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum PatchOp {
     Add {
         path: PatchPath,
@@ -115,6 +119,8 @@ impl PatchOp {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct PatchPath(pub Vec<PatchPathElem>);
 
 impl From<String> for PatchPath {
@@ -163,6 +169,8 @@ where
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum PatchPathElem {
     Key(String),
     ListIndex(usize),

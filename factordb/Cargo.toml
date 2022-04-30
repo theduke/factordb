@@ -6,6 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+ts = ["ts-rs"]
+
 [dependencies]
 anyhow = { version = "1.0.56", features = ["backtrace"] }
 chrono = { version = "0.4.19", features = ["serde"] }
@@ -20,6 +23,7 @@ factor_macros = { version = "0.1", path = "../factor_macros" }
 url = { version = "2.2.2", features = ["serde"] }
 typescript-type-def = "0.4.1"
 sqlparser = "0.15.0"
+ts-rs = { version = "6.1.2", features = ["uuid-impl"], optional = true }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.10", features = ["fmt"] }

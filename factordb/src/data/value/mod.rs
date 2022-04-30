@@ -19,13 +19,15 @@ use super::{patch::PatchPath, Id, IdOrIdent, ValueMap, ValueType};
 
 /// Generic value type that can represent all data stored in a database.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum Value {
     Unit,
 
     Bool(bool),
     UInt(u64),
     Int(i64),
-    Float(OrderedFloat<f64>),
+    Float(#[cfg_attr(feature = "ts", ts(type = "float"))] OrderedFloat<f64>),
     String(String),
     Bytes(Vec<u8>),
 

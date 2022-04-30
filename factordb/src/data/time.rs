@@ -3,6 +3,8 @@ use chrono::TimeZone;
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Timestamp(u64);
 
 impl Timestamp {

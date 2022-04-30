@@ -4,6 +4,8 @@ use crate::{
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum BinaryOp {
     And,
     Or,
@@ -19,11 +21,15 @@ pub enum BinaryOp {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum UnaryOp {
     Not,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum Expr {
     /// Match entities that either match the given entity type or inherit from
     /// it.
@@ -31,9 +37,9 @@ pub enum Expr {
     Literal(Value),
     List(Vec<Self>),
     /// Select the value of an attribute.
-    Attr(IdOrIdent),
+    Attr(#[cfg_attr(feature = "ts", ts(type = "string"))] IdOrIdent),
     /// Resolve the value of an [`Ident`] into an [`Id`].
-    Ident(IdOrIdent),
+    Ident(#[cfg_attr(feature = "ts", ts(type = "string"))] IdOrIdent),
     Variable(String),
     UnaryOp {
         op: UnaryOp,

@@ -8,20 +8,27 @@ use crate::{
 use super::expr::Expr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub enum Order {
     Asc,
     Desc,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Sort {
     pub on: Expr,
     pub order: Order,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Join {
     pub name: String,
+    #[cfg_attr(feature = "ts", ts(type = "string"))]
     pub attr: IdOrIdent,
     pub limit: u64,
     pub flatten_relation: bool,
@@ -30,6 +37,8 @@ pub struct Join {
 pub type Cursor = Id;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Select {
     pub filter: Option<Expr>,
     #[serde(default = "Vec::new")]
@@ -91,12 +100,16 @@ impl Select {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct JoinItem<T> {
     pub name: String,
     pub items: Vec<Item<T>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Item<T = DataMap> {
     pub data: T,
     #[serde(default = "Vec::new")]
