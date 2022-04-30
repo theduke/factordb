@@ -3,7 +3,7 @@ use std::sync::Arc;
 use data::DataMap;
 
 use crate::backend::Backend;
-use factordb::{data, prelude::IdOrIdent, query, schema, AnyError};
+use factordb::{data, prelude::{IdOrIdent, Migration}, query, schema, AnyError, db::DbFuture};
 
 #[derive(Clone)]
 pub struct Engine {
@@ -56,36 +56,44 @@ impl Engine {
         self.backend.migrate(migration).await
     }
 
+    pub async fn migrations(&self) -> Result<Vec<Migration>, AnyError> {
+        self.backend.migrations().await
+    }
+
     pub async fn purge_all_data(&self) -> Result<(), AnyError> {
         self.backend.purge_all_data().await
     }
 }
 
 impl factordb::db::DbClient for Engine {
-    fn schema(&self) -> factordb::db::DbFuture<'_, factordb::schema::DbSchema> {
+    fn schema(&self) -> DbFuture<'_, factordb::schema::DbSchema> {
         Box::pin(futures::future::ready(self.schema()))
     }
 
-    fn entity(&self, id: IdOrIdent) -> factordb::db::DbFuture<'_, Option<DataMap>> {
+    fn entity(&self, id: IdOrIdent) -> DbFuture<'_, Option<DataMap>> {
         Box::pin(async { self.entity(id).await })
     }
 
     fn select(
         &self,
         query: query::select::Select,
-    ) -> factordb::db::DbFuture<'_, query::select::Page<query::select::Item>> {
+    ) -> DbFuture<'_, query::select::Page<query::select::Item>> {
         Box::pin(async { self.select(query).await })
     }
 
-    fn batch(&self, batch: factordb::prelude::Batch) -> factordb::db::DbFuture<'_, ()> {
+    fn batch(&self, batch: factordb::prelude::Batch) -> DbFuture<'_, ()> {
         Box::pin(async { self.batch(batch).await })
     }
 
-    fn migrate(&self, migration: query::migrate::Migration) -> factordb::db::DbFuture<'_, ()> {
+    fn migrate(&self, migration: query::migrate::Migration) -> DbFuture<'_, ()> {
         Box::pin(async { self.migrate(migration).await })
     }
 
-    fn purge_all_data(&self) -> factordb::db::DbFuture<'_, ()> {
+    fn migrations(&self) -> DbFuture<'_, Vec<Migration>> {
+        Box::pin(async { self.migrations().await })
+    }
+
+    fn purge_all_data(&self) -> DbFuture<'_, ()> {
         Box::pin(async { self.purge_all_data().await })
     }
 }

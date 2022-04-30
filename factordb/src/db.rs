@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, any::Any};
 
 use crate::{
     data::{patch::Patch, DataMap, Id, IdOrIdent},
@@ -7,7 +7,7 @@ use crate::{
         mutate::{Batch, Mutate},
     },
     schema::EntityContainer,
-    AnyError,
+    AnyError, prelude::Migration,
 };
 
 #[derive(Clone)]
@@ -112,6 +112,10 @@ impl Db {
         self.client.migrate(migration).await
     }
 
+    pub async fn migrations(&self) -> Result<Vec<Migration>, AnyError> {
+        self.client.migrations().await
+    }
+
     /// Delete all data.
     pub async fn purge_all_data(&self) -> Result<(), AnyError> {
         self.client.purge_all_data().await
@@ -129,5 +133,6 @@ pub trait DbClient {
     ) -> DbFuture<'_, query::select::Page<query::select::Item>>;
     fn batch(&self, batch: Batch) -> DbFuture<'_, ()>;
     fn migrate(&self, migration: query::migrate::Migration) -> DbFuture<'_, ()>;
+    fn migrations(&self) -> DbFuture<'_, Vec<Migration>>;
     fn purge_all_data(&self) -> DbFuture<'_, ()>;
 }
