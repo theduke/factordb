@@ -7,8 +7,5 @@ pub use self::db::Engine;
 
 pub mod util;
 
-#[cfg(feature = "tests")]
-pub mod tests;
-
-#[cfg_attr(not(feature = "tests"), cfg(test))]
+#[cfg(test)]
 pub mod tests;
