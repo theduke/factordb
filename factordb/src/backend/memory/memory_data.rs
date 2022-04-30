@@ -204,6 +204,7 @@ impl std::ops::DerefMut for MemoryTuple {
 
 #[derive(Debug)]
 pub(super) enum MemoryExpr {
+    Regex(regex::Regex),
     Literal(MemoryValue),
     List(Vec<Self>),
     /// Select the value of an attribute.

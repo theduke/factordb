@@ -130,6 +130,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_schema_contains_builtins,
             test_select,
             test_query_in,
+            test_query_regex,
             test_attr_corcions,
             test_merge_list_attr,
             test_patch,
@@ -862,6 +863,49 @@ async fn test_query_in(db: &Db) {
         .unwrap()
         .take_data();
     assert!(items.is_empty());
+}
+
+async fn test_query_regex(db: &Db) {
+    let id1 = Id::random();
+    let mut data1 = map! {
+        "test/text": "alpha 1",
+    };
+    db.create(id1, data1.clone()).await.unwrap();
+    data1.insert("factor/id".into(), id1.into());
+
+    let id2 = Id::random();
+    let mut data2 = map! {
+        "test/text": "ALPHA 223",
+    };
+    db.create(id2, data2.clone()).await.unwrap();
+    data2.insert("factor/id".into(), id2.into());
+
+    let id3 = Id::random();
+    let mut data3 = map! {
+        "test/text": "alpha",
+    };
+    db.create(id3, data3.clone()).await.unwrap();
+    data3.insert("factor/id".into(), id3.into());
+
+    let filter = Expr::regex_match(Expr::ident("test/text"), "alpha \\d+");
+    let items = db
+        .select(Select::new().with_filter(filter))
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, vec![data1.clone()]);
+
+    let filter = Expr::regex_match(Expr::ident("test/text"), "(?i)alpha \\d+");
+    let items = db
+        .select(
+            Select::new()
+                .with_filter(filter)
+                .with_sort(Expr::ident("test/text"), crate::prelude::Order::Asc),
+        )
+        .await
+        .unwrap()
+        .take_data();
+    assert_eq!(items, vec![data2, data1]);
 }
 
 async fn test_query_contains_with_two_lists(db: &Db) {

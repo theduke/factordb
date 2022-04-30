@@ -30,6 +30,7 @@ sqlparser = "0.15.0"
 
 tokio = { version = "1.17.0", optional = true, features = ["fs", "sync", "io-util"] }
 tokio-stream = { version = "0.1.8", optional = true, features = ["io-util"] }
+regex = "1.5.5"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.10", features = ["fmt"] }

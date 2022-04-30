@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use anyhow::Context;
+
 use crate::{
     data::{Id, IdOrIdent, Value},
     query::{
@@ -63,6 +65,7 @@ pub struct BinaryExpr<V> {
 #[derive(Debug)]
 pub enum ResolvedExpr<V = Value> {
     Literal(V),
+    Regex(regex::Regex),
     List(Vec<Self>),
     /// Select the value of an attribute.
     Attr(LocalAttributeId),
@@ -202,6 +205,21 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
             expr: Box::new(resolve_expr(*expr, reg)?),
         }),
         // TODO: normalize BinaryOp::In into ResolvedExpr::InLiteral if possible.
+        Expr::BinaryOp {
+            left,
+            op: BinaryOp::RegexMatch,
+            right,
+        } => {
+            let raw = right.as_literal().and_then(|v| v.as_str()).ok_or_else(|| {
+                anyhow::anyhow!("Invalid binary expr RegexMatch: right operand must be a string")
+            })?;
+            let re = regex::Regex::new(raw).context("Invalid regular expression")?;
+            Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
+                left: resolve_expr(*left, reg)?,
+                op: BinaryOp::RegexMatch,
+                right: ResolvedExpr::Regex(re),
+            })))
+        }
         Expr::BinaryOp { left, op, right } => Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
             left: resolve_expr(*left, reg)?,
             op,

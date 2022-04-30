@@ -1263,6 +1263,7 @@ impl MemoryStore {
                     items,
                 })
             }
+            E::Regex(e) => Ok(MemoryExpr::Regex(e)),
         }
     }
 
@@ -1314,6 +1315,28 @@ impl MemoryStore {
                         Self::eval_expr(entity, right)
                     }
                 }
+                query::expr::BinaryOp::RegexMatch => {
+                    let left = Self::eval_expr(entity, left);
+
+                    let re = if let MemoryExpr::Regex(re) = &**right {
+                        re
+                    } else {
+                        #[cfg(debug_assertions)]
+                        panic!("invalid regex match query: right operand must be a regex");
+
+                        #[cfg(not(debug_assertions))]
+                        return Cow::Owned(MemoryValue::Unit);
+                    };
+                    let value = if let MemoryValue::String(s) = &*left {
+                        s
+                    } else {
+                        return Cow::Owned(MemoryValue::Bool(false));
+                    };
+
+                    let is_match = re.is_match(value.as_ref());
+
+                    Cow::Owned(MemoryValue::Bool(is_match))
+                }
                 other => {
                     let left = Self::eval_expr(entity, left);
                     let right = Self::eval_expr(entity, right);
@@ -1348,8 +1371,8 @@ impl MemoryStore {
                                 _other => false,
                             }
                         }
-                        // Covered above.
-                        BinaryOp::And | query::expr::BinaryOp::Or => {
+                        BinaryOp::And | BinaryOp::Or | BinaryOp::RegexMatch => {
+                            // Covered above in separate matches.
                             unreachable!()
                         }
                     };
@@ -1369,6 +1392,7 @@ impl MemoryStore {
                 let value = Self::eval_expr(entity, value);
                 Cow::Owned(MemoryValue::Bool(items.contains(&*value)))
             }
+            E::Regex(_) => Cow::Owned(MemoryValue::Unit),
         }
     }
 

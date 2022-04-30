@@ -15,6 +15,7 @@ pub enum BinaryOp {
     Lte,
     In,
     Contains,
+    RegexMatch,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -51,6 +52,14 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub fn as_literal(&self) -> Option<&Value> {
+        if let Self::Literal(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
     pub fn boxed(self) -> Box<Self> {
         Box::new(self)
     }
@@ -107,6 +116,18 @@ impl Expr {
             op,
             right: Box::new(right.into()),
         }
+    }
+
+    pub fn regex_match<I1, I2>(left: I1, regex: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<String>,
+    {
+        Self::binary(
+            left,
+            BinaryOp::RegexMatch,
+            Expr::Literal(Value::String(regex.into())),
+        )
     }
 
     pub fn in_<I1, I2>(left: I1, right: I2) -> Self
