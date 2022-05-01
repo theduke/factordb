@@ -3,7 +3,12 @@ use std::sync::Arc;
 use data::DataMap;
 
 use crate::backend::Backend;
-use factordb::{data, prelude::{IdOrIdent, Migration}, query, schema, AnyError, db::DbFuture};
+use factordb::{
+    data,
+    db::DbFuture,
+    prelude::{IdOrIdent, Migration},
+    query, schema, AnyError,
+};
 
 #[derive(Clone)]
 pub struct Engine {
