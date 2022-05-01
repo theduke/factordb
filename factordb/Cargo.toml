@@ -27,7 +27,7 @@ sqlparser = "0.15.0"
 # FIXME: use normal crate once https://github.com/GREsau/schemars/pull/141 is merged upstream.
 schemars = { version = "0.8.8", features = ["chrono", "uuid", "url", "ordered-float"], optional = true, git = "https://github.com/theduke/schemars", branch = "ordered-float" }
 # FIXME: use normal crate once https://github.com/Aleph-Alpha/ts-rs/pull/97 is merged upstream.
-ts-rs = { version = "6.1.2", features = ["chrono-impl", "uuid-impl", "ordered-float-impl"], optional = true, git = "https://github.com/theduke/ts-rs", branch = "ordered-float" }
+ts-rs = { version = "6.1.2", features = ["chrono-impl", "uuid-impl", "ordered-float-impl"], optional = true, git = "https://github.com/theduke/ts-rs", branch = "theduke" }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.10", features = ["fmt"] }
