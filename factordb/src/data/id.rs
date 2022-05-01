@@ -101,6 +101,10 @@ impl ts_rs::TS for IdOrIdent {
         "string".to_string()
     }
 
+    fn decl() -> String {
+        "type IdOrIdent = Id | string;".to_string()
+    }
+
     fn inline() -> String {
         "string".to_string()
     }
