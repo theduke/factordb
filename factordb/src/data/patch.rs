@@ -10,6 +10,8 @@ use super::Value;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Patch(pub Vec<PatchOp>);
 
 impl Patch {
@@ -83,6 +85,8 @@ impl Patch {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum PatchOp {
     Add {
         path: PatchPath,
@@ -118,6 +122,8 @@ impl PatchOp {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct PatchPath(pub Vec<PatchPathElem>);
 
 impl From<String> for PatchPath {
@@ -167,6 +173,8 @@ where
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum PatchPathElem {
     Key(String),
     ListIndex(usize),

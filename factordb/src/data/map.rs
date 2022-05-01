@@ -5,6 +5,30 @@ use super::Value;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ValueMap<K>(pub BTreeMap<K, Value>);
 
+#[cfg(feature = "typescript-schema")]
+impl<K: 'static> ts_rs::TS for ValueMap<K> {
+    fn name() -> String {
+        "Record<string, any>".to_string()
+    }
+
+    fn name_with_type_args(args: Vec<String>) -> String {
+        assert!(args.is_empty(), "called name_with_type_args on primitive");
+        "Record<string, any>".to_string()
+    }
+
+    fn inline() -> String {
+        "Record<string, any>".to_string()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        vec![]
+    }
+
+    fn transparent() -> bool {
+        false
+    }
+}
+
 #[cfg(feature = "jsonschema")]
 impl<K> schemars::JsonSchema for ValueMap<K> {
     fn is_referenceable() -> bool {

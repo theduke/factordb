@@ -4,6 +4,8 @@ use chrono::TimeZone;
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Timestamp(u64);
 
 impl Timestamp {

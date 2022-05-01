@@ -2,6 +2,8 @@ use super::Value;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum ValueType {
     Any,
 
@@ -36,6 +38,8 @@ pub enum ValueType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct MapType {
     pub key: ValueType,
     pub value: ValueType,
@@ -43,6 +47,8 @@ pub struct MapType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct ObjectType {
     pub name: Option<String>,
     pub fields: Vec<ObjectField>,
@@ -50,6 +56,8 @@ pub struct ObjectType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct ObjectField {
     pub name: String,
     pub value_type: ValueType,

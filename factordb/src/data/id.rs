@@ -6,6 +6,8 @@ use crate::AnyError;
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Id(uuid::Uuid);
 
 impl From<uuid::Uuid> for Id {
@@ -86,6 +88,28 @@ pub type CowStr = Cow<'static, str>;
 pub enum IdOrIdent {
     Id(Id),
     Name(CowStr),
+}
+
+#[cfg(feature = "typescript-schema")]
+impl ts_rs::TS for IdOrIdent {
+    fn name() -> String {
+        "IdOrIdent".to_string()
+    }
+
+    fn name_with_type_args(args: Vec<String>) -> String {
+        assert!(args.is_empty(), "called name_with_type_args on primitive");
+        "string".to_string()
+    }
+
+    fn inline() -> String {
+        "string".to_string()
+    }
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        vec![]
+    }
+    fn transparent() -> bool {
+        false
+    }
 }
 
 impl IdOrIdent {

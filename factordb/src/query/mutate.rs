@@ -5,6 +5,8 @@ use crate::{
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Create {
     pub id: Id,
     pub data: DataMap,
@@ -12,6 +14,8 @@ pub struct Create {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Replace {
     pub id: Id,
     pub data: DataMap,
@@ -19,6 +23,8 @@ pub struct Replace {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Merge {
     pub id: Id,
     pub data: DataMap,
@@ -36,6 +42,8 @@ impl Merge {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct EntityPatch {
     pub id: Id,
     pub patch: Patch,
@@ -43,6 +51,8 @@ pub struct EntityPatch {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Remove {
     pub id: Id,
     pub data: DataMap,
@@ -60,12 +70,16 @@ impl Remove {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Delete {
     pub id: Id,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum Mutate {
     Create(Create),
     Replace(Replace),
@@ -134,6 +148,8 @@ impl From<Delete> for Mutate {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Batch {
     pub actions: Vec<Mutate>,
 }

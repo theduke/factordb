@@ -6,6 +6,8 @@ use super::AttrMapExt;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum Cardinality {
     Optional,
     Required,
@@ -21,6 +23,8 @@ impl Cardinality {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct EntityAttribute {
     pub attribute: IdOrIdent,
     pub cardinality: Cardinality,
@@ -53,6 +57,8 @@ impl From<Id> for EntityAttribute {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct EntitySchema {
     #[serde(rename = "factor/id")]
     pub id: Id,

@@ -2,6 +2,8 @@ use crate::data::Id;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct IndexSchema {
     #[serde(rename = "factor/id")]
     pub id: Id,

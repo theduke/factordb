@@ -20,6 +20,8 @@ use super::{patch::PatchPath, Id, IdOrIdent, ValueMap, ValueType};
 /// Generic value type that can represent all data stored in a database.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum Value {
     Unit,
 
