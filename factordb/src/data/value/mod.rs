@@ -20,8 +20,6 @@ use super::{patch::PatchPath, Id, IdOrIdent, ValueMap, ValueType};
 /// Generic value type that can represent all data stored in a database.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
-#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum Value {
     Unit,
 
@@ -36,6 +34,37 @@ pub enum Value {
     Map(ValueMap<Value>),
 
     Id(Id),
+}
+
+#[cfg(feature = "typescript-schema")]
+impl ts_rs::TS for Value {
+    const EXPORT_TO: Option<&'static str> = Some("bindings/value.ts");
+
+    fn name() -> String {
+        "Value".to_string()
+    }
+
+    fn decl() -> String {
+        "type Value = null | boolean | number | string | Value[] | { [property: string]: Value };"
+            .to_string()
+    }
+
+    fn name_with_type_args(args: Vec<String>) -> String {
+        assert!(args.is_empty(), "called name_with_type_args on primitive");
+        "Value".to_string()
+    }
+
+    fn inline() -> String {
+        "Value".to_string()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        vec![]
+    }
+
+    fn transparent() -> bool {
+        false
+    }
 }
 
 /// Error for failed value coercions.
