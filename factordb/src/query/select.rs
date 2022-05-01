@@ -164,6 +164,8 @@ impl<T> Item<T> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(export))]
 pub struct Page<T> {
     pub items: Vec<T>,
     pub next_cursor: Option<Cursor>,
