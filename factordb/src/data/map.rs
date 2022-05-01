@@ -3,8 +3,27 @@ use std::collections::BTreeMap;
 use super::Value;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ValueMap<K>(pub BTreeMap<K, Value>);
+
+#[cfg(feature = "jsonschema")]
+impl<K> schemars::JsonSchema for ValueMap<K> {
+    fn is_referenceable() -> bool {
+        false
+    }
+
+    fn schema_name() -> String {
+        "float".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::Object.into()),
+            format: Some("object".to_owned()),
+            ..Default::default()
+        }
+        .into()
+    }
+}
 
 impl<K: Ord> Default for ValueMap<K> {
     fn default() -> Self {

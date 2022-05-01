@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 pub enum BinaryOp {
     And,
     Or,
@@ -20,13 +20,13 @@ pub enum BinaryOp {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 pub enum UnaryOp {
     Not,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 pub enum Expr {
     /// Match entities that either match the given entity type or inherit from
     /// it.

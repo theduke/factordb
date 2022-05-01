@@ -5,7 +5,7 @@ use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent};
 use super::AttrMapExt;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 pub enum Cardinality {
     Optional,
     Required,
@@ -20,7 +20,7 @@ impl Cardinality {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 pub struct EntityAttribute {
     pub attribute: IdOrIdent,
     pub cardinality: Cardinality,
@@ -52,7 +52,7 @@ impl From<Id> for EntityAttribute {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 pub struct EntitySchema {
     #[serde(rename = "factor/id")]
     pub id: Id,
