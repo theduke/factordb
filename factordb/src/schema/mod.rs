@@ -58,8 +58,7 @@ pub enum SchemaItem {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct DbSchema {
     // FIXME: make these private and provide accessors.
     // They should no tbe pub because of the sentinel 0 id.

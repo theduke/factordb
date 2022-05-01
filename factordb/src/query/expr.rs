@@ -4,8 +4,7 @@ use crate::{
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum BinaryOp {
     And,
     Or,
@@ -21,15 +20,13 @@ pub enum BinaryOp {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum UnaryOp {
     Not,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum Expr {
     /// Match entities that either match the given entity type or inherit from
     /// it.
@@ -37,9 +34,9 @@ pub enum Expr {
     Literal(Value),
     List(Vec<Self>),
     /// Select the value of an attribute.
-    Attr(#[cfg_attr(feature = "ts", ts(type = "string"))] IdOrIdent),
+    Attr(IdOrIdent),
     /// Resolve the value of an [`Ident`] into an [`Id`].
-    Ident(#[cfg_attr(feature = "ts", ts(type = "string"))] IdOrIdent),
+    Ident(IdOrIdent),
     Variable(String),
     UnaryOp {
         op: UnaryOp,

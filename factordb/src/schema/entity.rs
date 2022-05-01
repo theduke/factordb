@@ -5,8 +5,7 @@ use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent};
 use super::AttrMapExt;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum Cardinality {
     Optional,
     Required,
@@ -21,10 +20,8 @@ impl Cardinality {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct EntityAttribute {
-    #[cfg_attr(feature = "ts", ts(type = "string"))]
     pub attribute: IdOrIdent,
     pub cardinality: Cardinality,
 }
@@ -55,8 +52,7 @@ impl From<Id> for EntityAttribute {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct EntitySchema {
     #[serde(rename = "factor/id")]
     pub id: Id,
@@ -69,7 +65,6 @@ pub struct EntitySchema {
     #[serde(rename = "factor/entityAttributes")]
     pub attributes: Vec<EntityAttribute>,
     #[serde(rename = "factor/extend")]
-    #[cfg_attr(feature = "ts", ts(type = "string[]"))]
     pub extends: Vec<IdOrIdent>,
     /// If a schema is set to strict, additional attributes not specified
     /// by the schema will be rejected.

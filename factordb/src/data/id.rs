@@ -5,8 +5,7 @@ use crate::AnyError;
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
-#[cfg_attr(feature = "ts", ts(export))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Id(uuid::Uuid);
 
 impl From<uuid::Uuid> for Id {
@@ -83,6 +82,7 @@ pub type CowStr = Cow<'static, str>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[serde(untagged)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum IdOrIdent {
     Id(Id),
     Name(CowStr),
