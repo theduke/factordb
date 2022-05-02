@@ -22,7 +22,6 @@ tracing = "0.1.32"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 factor_macros = { version = "0.1", path = "../factor_macros" }
 url = { version = "2.2.2", features = ["serde"] }
-typescript-type-def = "0.4.1"
 sqlparser = "0.16.0"
 # FIXME: use normal crate once https://github.com/GREsau/schemars/pull/141 is merged upstream.
 schemars = { version = "0.8.8", features = ["chrono", "uuid", "url", "ordered-float"], optional = true, git = "https://github.com/theduke/schemars", branch = "ordered-float" }
