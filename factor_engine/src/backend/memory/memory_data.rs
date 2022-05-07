@@ -69,14 +69,6 @@ pub(super) enum MemoryValue {
 }
 
 impl MemoryValue {
-    // #[inline]
-    // pub fn is_bool(&self) -> bool {
-    //     match self {
-    //         Self::Bool(_) => true,
-    //         _ => false,
-    //     }
-    // }
-
     pub fn is_true(&self) -> bool {
         match self {
             Self::Bool(b) => *b,
@@ -139,14 +131,6 @@ impl MemoryValue {
             Value::Id(v) => Self::Id(v),
         }
     }
-
-    // pub fn as_id_ref(&self) -> Option<&Id> {
-    //     if let Self::Id(id) = self {
-    //         Some(id)
-    //     } else {
-    //         None
-    //     }
-    // }
 
     pub(super) fn as_id(&self) -> Option<Id> {
         if let Self::Id(v) = self {
