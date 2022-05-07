@@ -1,13 +1,14 @@
 use factordb::{data::ValueType, query::migrate::Migration, schema::AttributeSchema};
 
 async fn custom() {
-    let backend = factordb::backend::log::LogDb::open(
-        factordb::backend::log::store_memory::MemoryLogStore::new(),
+    let backend = factor_engine::backend::log::LogDb::open(
+        factor_engine::backend::log::store_memory::MemoryLogStore::new(),
     )
     .await
     .unwrap();
+    let engine = factor_engine::Engine::new(backend);
     // let backend = factordb::backend::memory::MemoryDb::new();
-    let db = factordb::Db::new(backend);
+    let db = factordb::db::Db::new(engine);
 
     db.migrate(
         Migration::new().attr_create(

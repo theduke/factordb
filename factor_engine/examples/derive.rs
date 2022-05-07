@@ -30,7 +30,9 @@ struct Todo {
 }
 
 async fn run() -> Result<(), AnyError> {
-    let db = factordb::Db::new(factordb::backend::memory::MemoryDb::new());
+    let backend = factor_engine::backend::memory::MemoryDb::new();
+    let engine = factor_engine::Engine::new(backend);
+    let db = factordb::db::Db::new(engine);
 
     // Run a migration with **upserts**. This can be re-run at will.
     let migration = factordb::query::migrate::Migration::new()
