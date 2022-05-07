@@ -5,7 +5,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use factordb::{
     data::{patch::Patch, DataMap, Id, IdOrIdent, Value, ValueMap},
     error::{self, EntityNotFound},
-    prelude::Batch,
+    prelude::{Batch, Select},
     query::{
         self,
         expr::Expr,
@@ -19,7 +19,7 @@ use factordb::{
 use crate::{
     backend::{
         self,
-        query_planner::{self, QueryOp, ResolvedExpr, Sort},
+        query_planner::{self, QueryPlan, ResolvedExpr, Sort},
         DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
     },
     registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
@@ -580,10 +580,12 @@ impl MemoryStore {
         revert: &mut RevertList,
         reg: &Registry,
     ) -> Result<(), AnyError> {
-        let raw_ops = query_planner::plan_select_expr(expr.clone(), reg)?;
-        let ops = self.build_query_ops(raw_ops, reg)?;
+        // TODO: should there be a helper function to plan a scna directly?
+        let select = Select::new().with_filter(expr.clone());
+        let raw_ops = query_planner::plan_select(select, reg)?;
+        let plan = self.build_query_plan(raw_ops, reg)?;
         let ids: Vec<Id> = self
-            .run_query_ops(ops)
+            .run_query(plan)
             .filter_map(|tuple| tuple.get_id())
             .collect();
 
@@ -1083,84 +1085,153 @@ impl MemoryStore {
         }
     }
 
-    fn run_query_op<'a>(
+    fn run_query<'a>(
         &'a self,
-        input: impl Iterator<Item = Cow<'a, MemoryTuple>> + 'a,
-        op: query_planner::QueryOp<MemoryValue, MemoryExpr>,
+        op: query_planner::QueryPlan<MemoryValue, MemoryExpr>,
     ) -> TupleIter<'_> {
         match op {
-            QueryOp::SelectEntity { id } => {
+            QueryPlan::EmptyRelation => Box::new(Vec::new().into_iter()),
+            QueryPlan::SelectEntity { id } => {
                 if let Some(entity) = self.entities.get(&id) {
                     Box::new(vec![Cow::Borrowed(entity)].into_iter())
                 } else {
-                    Box::new(vec![].into_iter())
+                    Box::new(Vec::new().into_iter())
                 }
             }
-            QueryOp::Scan => Box::new(self.entities.values().map(Cow::Borrowed)),
-            QueryOp::Filter { expr } => {
-                Box::new(input.filter(move |tuple| Self::entity_filter(tuple, &expr)))
+            QueryPlan::Scan { filter } => {
+                if let Some(filter) = filter {
+                    let out = self
+                        .entities
+                        .values()
+                        .map(Cow::Borrowed)
+                        .filter(move |tuple| Self::entity_filter(tuple, &filter));
+                    Box::new(out)
+                } else {
+                    Box::new(self.entities.values().map(Cow::Borrowed))
+                }
             }
-            QueryOp::Limit { limit } => Box::new(input.take(limit as usize)),
-            QueryOp::Merge { left, right } => {
-                let left_iter = self.run_query_op(vec![].into_iter(), *left);
-                let right_iter = self.run_query_op(vec![].into_iter(), *right);
-                Box::new(left_iter.chain(right_iter))
+            QueryPlan::Filter { expr, input } => {
+                let input = self.run_query(*input);
+                let out = input.filter(move |tuple| Self::entity_filter(tuple, &expr));
+                Box::new(out)
             }
-            QueryOp::IndexSelect { .. } => {
-                todo!()
+            QueryPlan::Limit { limit, input } => {
+                let input = self.run_query(*input);
+                let out = input.take(limit as usize);
+                Box::new(out)
             }
-            QueryOp::IndexScan { .. } => todo!(),
-            QueryOp::IndexScanPrefix { .. } => todo!(),
-            QueryOp::Sort { sorts } => {
-                let mut items: Vec<_> = input.collect();
-                Self::apply_sort(&mut items, &sorts);
-                Box::new(items.into_iter())
+            QueryPlan::Merge { left, right } => {
+                let left = self.run_query(*left);
+                let right = self.run_query(*right);
+                let out = left.chain(right);
+                Box::new(out)
             }
-            QueryOp::Skip { count } => Box::new(input.skip(count as usize)),
-        }
-    }
-
-    fn run_query_ops<'a>(
-        &'a self,
-        ops: Vec<query_planner::QueryOp<MemoryValue, MemoryExpr>>,
-    ) -> TupleIter<'a> {
-        let mut iter: TupleIter<'_> = Box::new(vec![].into_iter());
-
-        for op in ops {
-            iter = self.run_query_op(iter, op);
-        }
-
-        iter
-    }
-
-    fn build_query_op(
-        &self,
-        op: QueryOp<Value, ResolvedExpr>,
-        reg: &Registry,
-    ) -> Result<QueryOp<MemoryValue, MemoryExpr>, AnyError> {
-        let op = match op {
-            QueryOp::SelectEntity { id } => QueryOp::SelectEntity { id },
-            QueryOp::Scan => QueryOp::Scan,
-            QueryOp::Merge { .. } => todo!(),
-            QueryOp::IndexSelect { index, value } => QueryOp::IndexSelect {
-                index,
-                value: MemoryValue::from_value_standalone(value),
-            },
-            QueryOp::IndexScan {
+            QueryPlan::IndexScan {
                 index,
                 from,
                 until,
                 direction,
-            } => QueryOp::IndexScan {
+            } => {
+                let iter = match self.indexes.get(index) {
+                    index::Index::Unique(index) => index.range(from, until, direction),
+                    index::Index::Multi(index) => index.range(from, until, direction),
+                };
+
+                let out = iter
+                    .map(|id| self.entities.get(&id).map(Cow::Borrowed))
+                    .flatten();
+                Box::new(out)
+            }
+            QueryPlan::IndexScanPrefix {
                 index,
+                prefix,
                 direction,
+            } => {
+                let iter = match self.indexes.get(index) {
+                    index::Index::Unique(index) => index.range_prefix(prefix, direction),
+                    index::Index::Multi(index) => index.range_prefix(prefix, direction),
+                };
+
+                let out = iter
+                    .map(|id| self.entities.get(&id).map(Cow::Borrowed))
+                    .flatten();
+                Box::new(out)
+            }
+            QueryPlan::Sort { sorts, input } => {
+                let input = self.run_query(*input);
+                let mut items: Vec<_> = input.collect();
+                Self::apply_sort(&mut items, &sorts);
+                Box::new(items.into_iter())
+            }
+            QueryPlan::Skip { count, input } => {
+                let input = self.run_query(*input);
+                let out = input.skip(count as usize);
+                Box::new(out)
+            }
+            QueryPlan::IndexSelect { index, value } => match self.indexes.get(index) {
+                index::Index::Unique(index) => {
+                    let out = index
+                        .get(&value)
+                        .and_then(|id| self.entities.get(&id))
+                        .map(Cow::Borrowed)
+                        .into_iter();
+                    Box::new(out)
+                }
+                index::Index::Multi(index) => {
+                    let out = index
+                        .get(&value)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|id| self.entities.get(&id))
+                        .map(Cow::Borrowed)
+                        .into_iter();
+                    Box::new(out)
+                }
+            },
+        }
+    }
+
+    fn build_query_plan(
+        &self,
+        plan: QueryPlan<Value, ResolvedExpr>,
+        reg: &Registry,
+    ) -> Result<QueryPlan<MemoryValue, MemoryExpr>, AnyError> {
+        let plan = match plan {
+            QueryPlan::EmptyRelation => QueryPlan::EmptyRelation,
+            QueryPlan::SelectEntity { id } => QueryPlan::SelectEntity { id },
+            QueryPlan::Scan { filter } => QueryPlan::Scan {
+                filter: filter
+                    .map(|expr| self.build_memory_expr(expr, reg))
+                    .transpose()?,
+            },
+            QueryPlan::Merge { left, right } => {
+                let left = Box::new(self.build_query_plan(*left, reg)?);
+                let right = Box::new(self.build_query_plan(*right, reg)?);
+
+                QueryPlan::Merge { left, right }
+            }
+            QueryPlan::IndexScan {
+                index,
+                from,
+                until,
+                direction,
+            } => QueryPlan::IndexScan {
+                index,
                 from: from.map(MemoryValue::from_value_standalone),
                 until: until.map(MemoryValue::from_value_standalone),
+                direction,
             },
-            QueryOp::IndexScanPrefix { prefix } => QueryOp::IndexScanPrefix {
+            QueryPlan::IndexScanPrefix {
+                index,
+                prefix,
+                direction,
+            } => QueryPlan::IndexScanPrefix {
+                index,
                 prefix: MemoryValue::from_value_standalone(prefix),
+                direction,
             },
-            QueryOp::Sort { sorts } => QueryOp::Sort {
+            QueryPlan::Sort { sorts, input } => QueryPlan::Sort {
+                input: Box::new(self.build_query_plan(*input, reg)?),
                 sorts: sorts
                     .into_iter()
                     .map(|s| -> Result<Sort<MemoryExpr>, AnyError> {
@@ -1171,23 +1242,24 @@ impl MemoryStore {
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             },
-            QueryOp::Filter { expr } => QueryOp::Filter {
+            QueryPlan::Filter { expr, input } => QueryPlan::Filter {
                 expr: self.build_memory_expr(expr, reg)?,
+                input: Box::new(self.build_query_plan(*input, reg)?),
             },
-            QueryOp::Limit { limit } => QueryOp::Limit { limit },
-            QueryOp::Skip { count } => QueryOp::Skip { count },
+            QueryPlan::Limit { limit, input } => QueryPlan::Limit {
+                limit,
+                input: Box::new(self.build_query_plan(*input, reg)?),
+            },
+            QueryPlan::Skip { count, input } => QueryPlan::Skip {
+                count,
+                input: Box::new(self.build_query_plan(*input, reg)?),
+            },
+            QueryPlan::IndexSelect { index, value } => QueryPlan::IndexSelect {
+                index,
+                value: MemoryValue::from_value_standalone(value),
+            },
         };
-        Ok(op)
-    }
-
-    fn build_query_ops(
-        &self,
-        ops: Vec<QueryOp<Value, ResolvedExpr>>,
-        reg: &Registry,
-    ) -> Result<Vec<QueryOp<MemoryValue, MemoryExpr>>, AnyError> {
-        ops.into_iter()
-            .map(|op| self.build_query_op(op, &reg))
-            .collect::<Result<Vec<_>, _>>()
+        Ok(plan)
     }
 
     pub fn select(
@@ -1198,11 +1270,11 @@ impl MemoryStore {
 
         let reg = self.registry().read().unwrap();
 
-        let raw_ops = query_planner::plan_select(query, &reg)?;
-        let mem_ops = self.build_query_ops(raw_ops, &reg)?;
+        let raw_plan = query_planner::plan_select(query, &reg)?;
+        let mem_plan = self.build_query_plan(raw_plan, &reg)?;
 
         let items = self
-            .run_query_ops(mem_ops)
+            .run_query(mem_plan)
             .map(|tuple| {
                 Ok(Item {
                     data: self.tuple_to_data_map(tuple.as_ref()),

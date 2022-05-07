@@ -13,26 +13,37 @@ use factordb::{
 
 use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Sort<E> {
     pub on: E,
     pub order: Order,
 }
 
-#[derive(Debug)]
-pub enum QueryOp<V = Value, E = Expr> {
+#[derive(Clone, Debug)]
+pub enum QueryPlan<V = Value, E = Expr> {
+    /// Empty set of tuples.
+    /// Useful for optimization passes.
+    EmptyRelation,
     SelectEntity {
         id: Id,
     },
-    Scan,
+    Scan {
+        filter: Option<E>,
+    },
     Filter {
         expr: E,
+
+        input: Box<Self>,
     },
     Limit {
         limit: u64,
+
+        input: Box<Self>,
     },
     Skip {
         count: u64,
+
+        input: Box<Self>,
     },
     Merge {
         left: Box<Self>,
@@ -49,21 +60,62 @@ pub enum QueryOp<V = Value, E = Expr> {
         direction: Order,
     },
     IndexScanPrefix {
+        index: LocalIndexId,
+        direction: Order,
         prefix: V,
     },
     Sort {
         sorts: Vec<Sort<E>>,
+
+        input: Box<Self>,
     },
 }
 
-#[derive(Debug)]
+impl<V: Clone, E: Clone> QueryPlan<V, E> {
+    fn map_recurse(&self, f: fn(&Self) -> Option<Self>) -> Self {
+        if let Some(new) = f(self) {
+            new
+        } else {
+            match self {
+                Self::EmptyRelation => Self::EmptyRelation,
+                Self::SelectEntity { .. } => self.clone(),
+                Self::Scan { .. } => self.clone(),
+                Self::Filter { expr, input } => Self::Filter {
+                    expr: expr.clone(),
+                    input: Box::new(input.map_recurse(f)),
+                },
+                Self::Limit { limit, input } => Self::Limit {
+                    limit: *limit,
+                    input: Box::new(input.map_recurse(f)),
+                },
+                Self::Skip { count, input } => Self::Skip {
+                    count: *count,
+                    input: Box::new(input.map_recurse(f)),
+                },
+                Self::Merge { left, right } => Self::Merge {
+                    left: Box::new(left.map_recurse(f)),
+                    right: Box::new(right.map_recurse(f)),
+                },
+                Self::IndexSelect { .. } => self.clone(),
+                Self::IndexScan { .. } => self.clone(),
+                Self::IndexScanPrefix { .. } => self.clone(),
+                Self::Sort { sorts, input } => Self::Sort {
+                    sorts: sorts.clone(),
+                    input: Box::new(input.map_recurse(f)),
+                },
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct BinaryExpr<V> {
     pub left: ResolvedExpr<V>,
     pub op: BinaryOp,
     pub right: ResolvedExpr<V>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ResolvedExpr<V = Value> {
     Literal(V),
     Regex(regex::Regex),
@@ -88,54 +140,64 @@ pub enum ResolvedExpr<V = Value> {
         then: Box<Self>,
         or: Box<Self>,
     },
-    Op(Box<QueryOp<V, ResolvedExpr<V>>>),
-}
-
-pub fn plan_select_expr(
-    expr: Expr,
-    reg: &Registry,
-) -> Result<Vec<QueryOp<Value, ResolvedExpr>>, AnyError> {
-    let resolved = resolve_expr(expr, reg)?;
-    let optimized = build_select_expr(resolved);
-
-    match optimized {
-        ResolvedExpr::Op(op) => Ok(vec![*op]),
-        other => Ok(vec![QueryOp::Scan, QueryOp::Filter { expr: other }]),
-    }
+    Op(Box<QueryPlan<V, ResolvedExpr<V>>>),
 }
 
 pub fn plan_select(
     query: Select,
     reg: &Registry,
-) -> Result<Vec<QueryOp<Value, ResolvedExpr>>, AnyError> {
-    let mut ops = if let Some(filter) = query.filter {
-        plan_select_expr(filter, reg)?
+) -> Result<QueryPlan<Value, ResolvedExpr>, AnyError> {
+    let filter = query.filter.map(|e| resolve_expr(e, reg)).transpose()?;
+    let plan = Box::new(QueryPlan::<Value, ResolvedExpr>::Scan { filter });
+
+    let plan = if !query.sort.is_empty() {
+        let sorts = plan_sort(reg, query.sort)?;
+        Box::new(QueryPlan::Sort { sorts, input: plan })
     } else {
-        vec![QueryOp::Scan]
+        plan
     };
 
-    if !query.sort.is_empty() {
-        plan_sort(reg, query.sort, &mut ops)?;
-    }
-    if query.offset > 0 {
-        ops.push(QueryOp::Skip {
+    let plan = if query.offset > 0 {
+        Box::new(QueryPlan::Skip {
             count: query.offset,
-        });
-    }
-    if query.limit > 0 {
-        ops.push(QueryOp::Limit { limit: query.limit });
-    }
+            input: plan,
+        })
+    } else {
+        plan
+    };
 
-    Ok(ops)
+    let plan = if query.limit > 0 {
+        Box::new(QueryPlan::Limit {
+            limit: query.limit,
+            input: plan,
+        })
+    } else {
+        plan
+    };
+
+    // run optimizers.
+
+    let optimizers: Vec<&dyn Optimizer> = vec![&OptimizeEntitySelect];
+
+    let plan = optimizers.iter().try_fold(
+        *plan,
+        |plan, opt| -> Result<QueryPlan<Value, ResolvedExpr>, anyhow::Error> {
+            if let Some(new) = opt.optimize(&plan)? {
+                Ok(new)
+            } else {
+                Ok(plan)
+            }
+        },
+    )?;
+
+    Ok(plan)
 }
 
 fn plan_sort(
     reg: &Registry,
     sorts: Vec<select::Sort>,
-    ops: &mut Vec<QueryOp<Value, ResolvedExpr>>,
-) -> Result<(), AnyError> {
-    // Resolve the sorts.
-    let sorts = sorts
+) -> Result<Vec<Sort<ResolvedExpr>>, AnyError> {
+    sorts
         .into_iter()
         .map(|s| {
             Ok(Sort {
@@ -143,47 +205,7 @@ fn plan_sort(
                 order: s.order,
             })
         })
-        .collect::<Result<Vec<_>, anyhow::Error>>()?;
-
-    // TODO:  commented out because it wouldn't work correctly yet.
-    // Check if we can use an index.
-    // TODO: properly handle multiple sort clauses!
-    // Right now we just look at the first sort clause and sort the others
-    // manually.
-    // if let Some(sort) = sorts.first() {
-    //     if let ResolvedExpr::Attr(attr_id) = &sort.on {
-    //         // TODO: cleaner handling of index == ID ?
-    //         // (memory backend is automatically sorted by ID, using the index
-    //         //  would be extra overhead)
-
-    //         if *attr_id != ATTR_ID_LOCAL {
-    //             // TODO: do we need to filter the available indexes?
-    //             let index_opt = reg
-    //                 .indexes_for_attribute(*attr_id)
-    //                 .into_iter()
-    //                 .find(|_idx| true);
-
-    //             if let Some(index) = index_opt {
-    //                 ops.insert(
-    //                     0,
-    //                     QueryOp::IndexScan {
-    //                         index: index.local_id,
-    //                         from: None,
-    //                         until: None,
-    //                         direction: sort.order,
-    //                     },
-    //                 );
-    //                 sorts.remove(0);
-    //             }
-    //         }
-    //     }
-    // }
-
-    if sorts.len() > 0 {
-        ops.push(QueryOp::Sort { sorts });
-    }
-
-    Ok(())
+        .collect::<Result<Vec<_>, anyhow::Error>>()
 }
 
 pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError> {
@@ -251,32 +273,49 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
     }
 }
 
-fn build_select_expr(expr: ResolvedExpr) -> ResolvedExpr {
-    let (expr, _changed) = pass_simplify_entity_id_eq(expr);
-    expr
+trait Optimizer {
+    fn optimize(
+        &self,
+        plan: &QueryPlan<Value, ResolvedExpr>,
+    ) -> Result<Option<QueryPlan<Value, ResolvedExpr>>, anyhow::Error>;
 }
 
-/// Turn a BinaryExpr comparing a single literal Id into a direct entity select.
-fn pass_simplify_entity_id_eq(expr: ResolvedExpr) -> (ResolvedExpr, bool) {
+struct OptimizeEntitySelect;
+
+impl Optimizer for OptimizeEntitySelect {
+    fn optimize(
+        &self,
+        plan: &QueryPlan<Value, ResolvedExpr>,
+    ) -> Result<Option<QueryPlan<Value, ResolvedExpr>>, anyhow::Error> {
+        let new = plan.map_recurse(|plan| match plan {
+            QueryPlan::Scan { filter } => {
+                if let Some(id) = filter.as_ref().and_then(expr_is_entity_id_eq) {
+                    Some(QueryPlan::SelectEntity { id })
+                } else {
+                    None
+                }
+            }
+            // TODO: handle higher level filter also?
+            // QueryPlan::Filter { expr, input } => todo!(),
+            _ => None,
+        });
+
+        Ok(Some(new))
+    }
+}
+
+fn expr_is_entity_id_eq(expr: &ResolvedExpr) -> Option<Id> {
     match expr {
         ResolvedExpr::BinaryOp(binary) if binary.op == BinaryOp::Eq => {
-            match (binary.left, binary.right) {
+            match (&binary.left, &binary.right) {
                 (ResolvedExpr::Attr(ATTR_ID_LOCAL), ResolvedExpr::Literal(Value::Id(id)))
-                | (ResolvedExpr::Literal(Value::Id(id)), ResolvedExpr::Attr(ATTR_ID_LOCAL)) => (
-                    ResolvedExpr::Op(Box::new(QueryOp::SelectEntity { id })),
-                    true,
-                ),
-                (left, right) => (
-                    ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
-                        left,
-                        op: binary.op,
-                        right,
-                    })),
-                    false,
-                ),
+                | (ResolvedExpr::Literal(Value::Id(id)), ResolvedExpr::Attr(ATTR_ID_LOCAL)) => {
+                    Some(*id)
+                }
+                _ => None,
             }
         }
-        other => (other, false),
+        _ => None,
     }
 }
 
@@ -290,18 +329,15 @@ mod tests {
     fn test_query_plan_efficient_single_entity_select() {
         let id = Id::random();
         let reg = Registry::new();
-        let ops = plan_select(
+        let plan = plan_select(
             Select::new().with_filter(Expr::eq(AttrId::expr(), id)),
             &reg,
         )
         .unwrap();
-        match ops.as_slice() {
-            [QueryOp::SelectEntity { id: x }] => {
-                assert_eq!(*x, id);
-            }
-            other => {
-                panic!("Expected a single select, got {:?}", other);
-            }
+
+        match plan {
+            QueryPlan::SelectEntity { id: id2 } if id == id2 => {}
+            other => panic!("expected SelectEntity, got {other:?}"),
         }
     }
 
