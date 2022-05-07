@@ -14,12 +14,6 @@ use factordb::{
 use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL};
 
 #[derive(Clone, Debug)]
-pub struct Sort<E> {
-    pub on: E,
-    pub order: Order,
-}
-
-#[derive(Clone, Debug)]
 pub enum QueryPlan<V = Value, E = Expr> {
     /// Empty set of tuples.
     /// Useful for optimization passes.
@@ -72,6 +66,8 @@ pub enum QueryPlan<V = Value, E = Expr> {
 }
 
 impl<V: Clone, E: Clone> QueryPlan<V, E> {
+    /// Recursive map a [`QueryPlan`], allowing the provided mapper function to
+    /// optionally return a modified nested plan.
     fn map_recurse(&self, f: fn(&Self) -> Option<Self>) -> Self {
         if let Some(new) = f(self) {
             new
@@ -106,6 +102,12 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
             }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Sort<E> {
+    pub on: E,
+    pub order: Order,
 }
 
 #[derive(Clone, Debug)]

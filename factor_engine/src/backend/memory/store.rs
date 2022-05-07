@@ -17,11 +17,8 @@ use factordb::{
 };
 
 use crate::{
-    backend::{
-        self,
-        query_planner::{self, QueryPlan, ResolvedExpr, Sort},
-        DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace,
-    },
+    backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
+    plan::{self, QueryPlan, ResolvedExpr, Sort},
     registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
 };
 
@@ -582,7 +579,7 @@ impl MemoryStore {
     ) -> Result<(), AnyError> {
         // TODO: should there be a helper function to plan a scna directly?
         let select = Select::new().with_filter(expr.clone());
-        let raw_ops = query_planner::plan_select(select, reg)?;
+        let raw_ops = plan::plan_select(select, reg)?;
         let plan = self.build_query_plan(raw_ops, reg)?;
         let ids: Vec<Id> = self
             .run_query(plan)
@@ -695,7 +692,7 @@ impl MemoryStore {
                     TupleOp::Replace(_) => todo!(),
                     TupleOp::Merge(_) => todo!(),
                     TupleOp::RemoveAttrs(remove) => {
-                        let resolved = query_planner::resolve_expr(sel.selector, reg)?;
+                        let resolved = plan::resolve_expr(sel.selector, reg)?;
                         let expr = self.build_memory_expr(resolved, reg)?;
                         self.tuple_select_remove(&expr, &remove, revert, reg)?;
                     }
@@ -1085,10 +1082,7 @@ impl MemoryStore {
         }
     }
 
-    fn run_query<'a>(
-        &'a self,
-        op: query_planner::QueryPlan<MemoryValue, MemoryExpr>,
-    ) -> TupleIter<'_> {
+    fn run_query<'a>(&'a self, op: plan::QueryPlan<MemoryValue, MemoryExpr>) -> TupleIter<'_> {
         match op {
             QueryPlan::EmptyRelation => Box::new(Vec::new().into_iter()),
             QueryPlan::SelectEntity { id } => {
@@ -1270,7 +1264,7 @@ impl MemoryStore {
 
         let reg = self.registry().read().unwrap();
 
-        let raw_plan = query_planner::plan_select(query, &reg)?;
+        let raw_plan = plan::plan_select(query, &reg)?;
         let mem_plan = self.build_query_plan(raw_plan, &reg)?;
 
         let items = self
