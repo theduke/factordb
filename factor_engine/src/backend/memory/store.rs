@@ -1320,13 +1320,6 @@ impl MemoryStore {
                 then: Box::new(self.build_memory_expr(*then, reg)?),
                 or: Box::new(self.build_memory_expr(*or, reg)?),
             }),
-            E::Op(_) => {
-                #[cfg(debug_assertions)]
-                panic!("Invalid ResolvedExpr");
-
-                #[cfg(not(debug_assertions))]
-                Err(anyhow!("Internal error: Invalid resolved expr"))
-            }
             E::InLiteral { value, items } => {
                 let items = items
                     .into_iter()
