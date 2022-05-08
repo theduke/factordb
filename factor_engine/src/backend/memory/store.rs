@@ -1265,6 +1265,7 @@ impl MemoryStore {
         let reg = self.registry().read().unwrap();
 
         let raw_plan = plan::plan_select(query, &reg)?;
+        tracing::debug!(plan=?raw_plan, "executing select");
         let mem_plan = self.build_query_plan(raw_plan, &reg)?;
 
         let items = self
