@@ -1262,11 +1262,15 @@ impl MemoryStore {
     ) -> Result<query::select::Page<Item>, AnyError> {
         // TODO: query validation and planning
 
+        let span = tracing::debug_span!("executing select");
+        let _guard = span.enter();
+
         let reg = self.registry().read().unwrap();
 
+        tracing::trace!(?query, "building query");
         let raw_plan = plan::plan_select(query, &reg)?;
-        tracing::debug!(plan=?raw_plan, "executing select");
         let mem_plan = self.build_query_plan(raw_plan, &reg)?;
+        tracing::debug!(query_plan=?mem_plan, "executing plan");
 
         let items = self
             .run_query(mem_plan)
@@ -1277,6 +1281,8 @@ impl MemoryStore {
                 })
             })
             .collect::<Result<Vec<Item>, anyhow::Error>>()?;
+
+        tracing::trace!(item_count=%items.len() ,"select complete");
 
         Ok(Page {
             next_cursor: None,
