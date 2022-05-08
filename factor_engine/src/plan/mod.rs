@@ -122,37 +122,48 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
 
     /// Recursive map a [`QueryPlan`], allowing the provided mapper function to
     /// optionally return a modified nested plan.
-    pub fn map_recurse(&self, f: fn(&Self) -> Option<Self>) -> Self {
+    pub fn map_recurse<F: Fn(&Self) -> Option<Self>>(&self, f: F) -> Option<Self> {
         if let Some(new) = f(self) {
-            new
+            Some(new)
         } else {
             match self {
-                Self::EmptyRelation => Self::EmptyRelation,
-                Self::SelectEntity { .. } => self.clone(),
-                Self::Scan { .. } => self.clone(),
-                Self::Filter { expr, input } => Self::Filter {
+                Self::EmptyRelation => None,
+                Self::SelectEntity { .. } => None,
+                Self::Scan { .. } => None,
+                Self::Filter { expr, input } => Some(Self::Filter {
                     expr: expr.clone(),
-                    input: Box::new(input.map_recurse(f)),
-                },
-                Self::Limit { limit, input } => Self::Limit {
+                    input: Box::new(input.map_recurse(f)?),
+                }),
+                Self::Limit { limit, input } => Some(Self::Limit {
                     limit: *limit,
-                    input: Box::new(input.map_recurse(f)),
-                },
-                Self::Skip { count, input } => Self::Skip {
+                    input: Box::new(input.map_recurse(f)?),
+                }),
+                Self::Skip { count, input } => Some(Self::Skip {
                     count: *count,
-                    input: Box::new(input.map_recurse(f)),
-                },
-                Self::Merge { left, right } => Self::Merge {
-                    left: Box::new(left.map_recurse(f)),
-                    right: Box::new(right.map_recurse(f)),
-                },
-                Self::IndexSelect { .. } => self.clone(),
-                Self::IndexScan { .. } => self.clone(),
-                Self::IndexScanPrefix { .. } => self.clone(),
-                Self::Sort { sorts, input } => Self::Sort {
+                    input: Box::new(input.map_recurse(f)?),
+                }),
+                Self::Merge { left, right } => {
+                    if let Some(x) = f(&left) {
+                        Some(Self::Merge {
+                            left: Box::new(x),
+                            right: right.clone(),
+                        })
+                    } else if let Some(x) = f(right) {
+                        Some(Self::Merge {
+                            left: left.clone(),
+                            right: Box::new(x),
+                        })
+                    } else {
+                        None
+                    }
+                }
+                Self::IndexSelect { .. } => None,
+                Self::IndexScan { .. } => None,
+                Self::IndexScanPrefix { .. } => None,
+                Self::Sort { sorts, input } => Some(Self::Sort {
                     sorts: sorts.clone(),
-                    input: Box::new(input.map_recurse(f)),
-                },
+                    input: Box::new(input.map_recurse(f)?),
+                }),
             }
         }
     }

@@ -79,7 +79,7 @@ impl PlanOptimizer for OptimizeEntitySelect {
         _reg: &Registry,
         plan: &QueryPlan<Value, ResolvedExpr>,
     ) -> Option<QueryPlan<Value, ResolvedExpr>> {
-        let new = plan.map_recurse(|plan| match plan {
+        plan.map_recurse(|plan| match plan {
             QueryPlan::Scan { filter } => {
                 let id = filter.as_ref().and_then(expr_is_entity_id_eq)?;
                 Some(QueryPlan::SelectEntity { id })
@@ -87,9 +87,7 @@ impl PlanOptimizer for OptimizeEntitySelect {
             // TODO: handle higher level filter also?
             // QueryPlan::Filter { expr, input } => todo!(),
             _ => None,
-        });
-
-        Some(new)
+        })
     }
 }
 
@@ -179,9 +177,8 @@ fn expr_is_index_select_literal(expr: &ResolvedExpr) -> bool {
 
 pub struct FilterWithIndex;
 
-impl PlanOptimizer for FilterWithIndex {
-    fn optimize(
-        &self,
+impl FilterWithIndex {
+    fn optimize_inner(
         reg: &Registry,
         plan: &QueryPlan<Value, ResolvedExpr>,
     ) -> Option<QueryPlan<Value, ResolvedExpr>> {
@@ -247,6 +244,16 @@ impl PlanOptimizer for FilterWithIndex {
     }
 }
 
+impl PlanOptimizer for FilterWithIndex {
+    fn optimize(
+        &self,
+        reg: &Registry,
+        plan: &QueryPlan<Value, ResolvedExpr>,
+    ) -> Option<QueryPlan<Value, ResolvedExpr>> {
+        plan.map_recurse(move |q| Self::optimize_inner(reg, q))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use factordb::prelude::{AttrType, AttributeDescriptor, Expr, Select};
@@ -268,6 +275,29 @@ mod tests {
         let expected = QueryPlan::IndexSelect {
             index: index.local_id,
             value: Value::from("sometype"),
+        };
+
+        assert_eq!(plan, expected);
+    }
+
+    #[test]
+    fn test_optimize_query_use_index_attr_eq_with_limit() {
+        let reg = Registry::new();
+        let select = Select::new()
+            .with_filter(Expr::eq(AttrType::expr(), "sometype"))
+            .with_limit(10);
+        let plan = super::super::plan_select(select, &reg).unwrap();
+
+        let indexes = reg.indexes_for_attribute(ATTR_TYPE_LOCAL);
+        assert_eq!(indexes.len(), 1);
+        let index = &indexes[0];
+
+        let expected = QueryPlan::Limit {
+            limit: 10,
+            input: Box::new(QueryPlan::IndexSelect {
+                index: index.local_id,
+                value: Value::from("sometype"),
+            }),
         };
 
         assert_eq!(plan, expected);
