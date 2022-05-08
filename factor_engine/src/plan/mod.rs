@@ -1,3 +1,6 @@
+mod expr_optimize;
+mod optimizers;
+
 use std::collections::HashSet;
 
 use anyhow::Context;
@@ -11,9 +14,11 @@ use factordb::{
     AnyError,
 };
 
-use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_ID_LOCAL, ATTR_TYPE_LOCAL};
+use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_TYPE_LOCAL};
 
-#[derive(Clone, Debug)]
+use self::optimizers::FalliblePlanOptimizer;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QueryPlan<V = Value, E = Expr> {
     /// Empty set of tuples.
     /// Useful for optimization passes.
@@ -65,10 +70,59 @@ pub enum QueryPlan<V = Value, E = Expr> {
     },
 }
 
+pub enum RecursionResult<T> {
+    Some(T),
+    None,
+    Abort,
+}
+
 impl<V: Clone, E: Clone> QueryPlan<V, E> {
     /// Recursive map a [`QueryPlan`], allowing the provided mapper function to
     /// optionally return a modified nested plan.
-    fn map_recurse(&self, f: fn(&Self) -> Option<Self>) -> Self {
+    pub fn map_recurse_abortable(&self, f: fn(&Self) -> RecursionResult<Self>) -> Self {
+        match f(self) {
+            RecursionResult::Some(v) => {
+                return v;
+            }
+            RecursionResult::Abort => {
+                return self.clone();
+            }
+            RecursionResult::None => {}
+        }
+
+        match self {
+            Self::EmptyRelation => Self::EmptyRelation,
+            Self::SelectEntity { .. } => self.clone(),
+            Self::Scan { .. } => self.clone(),
+            Self::Filter { expr, input } => Self::Filter {
+                expr: expr.clone(),
+                input: Box::new(input.map_recurse_abortable(f)),
+            },
+            Self::Limit { limit, input } => Self::Limit {
+                limit: *limit,
+                input: Box::new(input.map_recurse_abortable(f)),
+            },
+            Self::Skip { count, input } => Self::Skip {
+                count: *count,
+                input: Box::new(input.map_recurse_abortable(f)),
+            },
+            Self::Merge { left, right } => Self::Merge {
+                left: Box::new(left.map_recurse_abortable(f)),
+                right: Box::new(right.map_recurse_abortable(f)),
+            },
+            Self::IndexSelect { .. } => self.clone(),
+            Self::IndexScan { .. } => self.clone(),
+            Self::IndexScanPrefix { .. } => self.clone(),
+            Self::Sort { sorts, input } => Self::Sort {
+                sorts: sorts.clone(),
+                input: Box::new(input.map_recurse_abortable(f)),
+            },
+        }
+    }
+
+    /// Recursive map a [`QueryPlan`], allowing the provided mapper function to
+    /// optionally return a modified nested plan.
+    pub fn map_recurse(&self, f: fn(&Self) -> Option<Self>) -> Self {
         if let Some(new) = f(self) {
             new
         } else {
@@ -104,7 +158,7 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Sort<E> {
     pub on: E,
     pub order: Order,
@@ -115,6 +169,12 @@ pub struct BinaryExpr<V> {
     pub left: ResolvedExpr<V>,
     pub op: BinaryOp,
     pub right: ResolvedExpr<V>,
+}
+
+impl<V: PartialEq + Eq + std::hash::Hash> PartialEq for BinaryExpr<V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.left == other.left && self.op == other.op && self.right == other.right
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -142,7 +202,125 @@ pub enum ResolvedExpr<V = Value> {
         then: Box<Self>,
         or: Box<Self>,
     },
-    Op(Box<QueryPlan<V, ResolvedExpr<V>>>),
+}
+
+impl<V> ResolvedExpr<V> {
+    pub fn literal<T: Into<V>>(x: T) -> Self {
+        Self::Literal(x.into())
+    }
+
+    pub fn binary(left: Self, op: BinaryOp, right: Self) -> Self {
+        Self::BinaryOp(Box::new(BinaryExpr { left, op, right }))
+    }
+
+    pub fn eq(left: Self, right: Self) -> Self {
+        Self::binary(left, BinaryOp::Eq, right)
+    }
+
+    pub fn and(left: Self, right: Self) -> Self {
+        Self::binary(left, BinaryOp::And, right)
+    }
+}
+
+impl<V: PartialEq + Eq + std::hash::Hash> PartialEq for ResolvedExpr<V> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Literal(l0), Self::Literal(r0)) => l0 == r0,
+            (Self::Regex(l0), Self::Regex(r0)) => l0.as_str() == r0.as_str(),
+            (Self::List(l0), Self::List(r0)) => l0 == r0,
+            (Self::Attr(l0), Self::Attr(r0)) => l0 == r0,
+            (Self::Ident(l0), Self::Ident(r0)) => l0 == r0,
+            (
+                Self::UnaryOp {
+                    op: l_op,
+                    expr: l_expr,
+                },
+                Self::UnaryOp {
+                    op: r_op,
+                    expr: r_expr,
+                },
+            ) => l_op == r_op && l_expr == r_expr,
+            (Self::BinaryOp(l0), Self::BinaryOp(r0)) => l0 == r0,
+            (
+                Self::InLiteral {
+                    value: l_value,
+                    items: l_items,
+                },
+                Self::InLiteral {
+                    value: r_value,
+                    items: r_items,
+                },
+            ) => l_value == r_value && *l_items == *r_items,
+            (
+                Self::If {
+                    value: l_value,
+                    then: l_then,
+                    or: l_or,
+                },
+                Self::If {
+                    value: r_value,
+                    then: r_then,
+                    or: r_or,
+                },
+            ) => l_value == r_value && l_then == r_then && l_or == r_or,
+            _ => false,
+        }
+    }
+}
+
+impl<V: Eq + std::hash::Hash> Eq for ResolvedExpr<V> {}
+
+impl<V> ResolvedExpr<V> {
+    pub fn as_binary_op(&self) -> Option<&BinaryExpr<V>> {
+        if let Self::BinaryOp(v) = self {
+            Some(&v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_binary_op_with_op(&self, op: BinaryOp) -> Option<(&Self, &Self)> {
+        let bin = self.as_binary_op()?;
+        if bin.op == op {
+            Some((&bin.left, &bin.right))
+        } else {
+            None
+        }
+    }
+
+    pub fn as_binary_op_and(&self) -> Option<(&Self, &Self)> {
+        self.as_binary_op_with_op(BinaryOp::And)
+    }
+
+    pub fn as_binary_op_eq(&self) -> Option<(&Self, &Self)> {
+        self.as_binary_op_with_op(BinaryOp::Eq)
+    }
+
+    pub fn as_binary_op_attr_eq_value(&self) -> Option<(LocalAttributeId, &V)> {
+        match self.as_binary_op_eq()? {
+            (ResolvedExpr::Attr(id), ResolvedExpr::Literal(v)) => Some((*id, v.clone())),
+            (ResolvedExpr::Literal(v), ResolvedExpr::Attr(id)) => Some((*id, v.clone())),
+            _ => None,
+        }
+    }
+
+    pub fn as_in_literal_attr(&self) -> Option<(LocalAttributeId, &HashSet<V>)> {
+        match self {
+            ResolvedExpr::InLiteral { value, items } => {
+                let attr = value.as_attr()?;
+                Some((*attr, items))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_attr(&self) -> Option<&LocalAttributeId> {
+        if let Self::Attr(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 pub fn plan_select(
@@ -179,12 +357,15 @@ pub fn plan_select(
 
     // run optimizers.
 
-    let optimizers: Vec<&dyn Optimizer> = vec![&OptimizeEntitySelect];
+    let optimizers: Vec<&dyn FalliblePlanOptimizer> = vec![
+        &optimizers::OptimizeEntitySelect,
+        &optimizers::FilterWithIndex,
+    ];
 
     let plan = optimizers.iter().try_fold(
         *plan,
         |plan, opt| -> Result<QueryPlan<Value, ResolvedExpr>, anyhow::Error> {
-            if let Some(new) = opt.optimize(&plan)? {
+            if let Some(new) = opt.optimize(reg, &plan)? {
                 Ok(new)
             } else {
                 Ok(plan)
@@ -272,52 +453,6 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
                 items,
             })
         }
-    }
-}
-
-trait Optimizer {
-    fn optimize(
-        &self,
-        plan: &QueryPlan<Value, ResolvedExpr>,
-    ) -> Result<Option<QueryPlan<Value, ResolvedExpr>>, anyhow::Error>;
-}
-
-struct OptimizeEntitySelect;
-
-impl Optimizer for OptimizeEntitySelect {
-    fn optimize(
-        &self,
-        plan: &QueryPlan<Value, ResolvedExpr>,
-    ) -> Result<Option<QueryPlan<Value, ResolvedExpr>>, anyhow::Error> {
-        let new = plan.map_recurse(|plan| match plan {
-            QueryPlan::Scan { filter } => {
-                if let Some(id) = filter.as_ref().and_then(expr_is_entity_id_eq) {
-                    Some(QueryPlan::SelectEntity { id })
-                } else {
-                    None
-                }
-            }
-            // TODO: handle higher level filter also?
-            // QueryPlan::Filter { expr, input } => todo!(),
-            _ => None,
-        });
-
-        Ok(Some(new))
-    }
-}
-
-fn expr_is_entity_id_eq(expr: &ResolvedExpr) -> Option<Id> {
-    match expr {
-        ResolvedExpr::BinaryOp(binary) if binary.op == BinaryOp::Eq => {
-            match (&binary.left, &binary.right) {
-                (ResolvedExpr::Attr(ATTR_ID_LOCAL), ResolvedExpr::Literal(Value::Id(id)))
-                | (ResolvedExpr::Literal(Value::Id(id)), ResolvedExpr::Attr(ATTR_ID_LOCAL)) => {
-                    Some(*id)
-                }
-                _ => None,
-            }
-        }
-        _ => None,
     }
 }
 
