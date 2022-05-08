@@ -16,7 +16,7 @@ use factordb::{
 
 use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_TYPE_LOCAL};
 
-use self::optimizers::FalliblePlanOptimizer;
+use self::{expr_optimize::OwnedExprOptimizer, optimizers::FalliblePlanOptimizer};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum QueryPlan<V = Value, E = Expr> {
@@ -231,6 +231,14 @@ impl<V> ResolvedExpr<V> {
     pub fn and(left: Self, right: Self) -> Self {
         Self::binary(left, BinaryOp::And, right)
     }
+
+    pub fn as_literal(&self) -> Option<&V> {
+        if let Self::Literal(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl<V: PartialEq + Eq + std::hash::Hash> PartialEq for ResolvedExpr<V> {
@@ -303,6 +311,10 @@ impl<V> ResolvedExpr<V> {
         self.as_binary_op_with_op(BinaryOp::And)
     }
 
+    pub fn as_binary_op_in(&self) -> Option<(&Self, &Self)> {
+        self.as_binary_op_with_op(BinaryOp::In)
+    }
+
     pub fn as_binary_op_eq(&self) -> Option<(&Self, &Self)> {
         self.as_binary_op_with_op(BinaryOp::Eq)
     }
@@ -334,11 +346,17 @@ impl<V> ResolvedExpr<V> {
     }
 }
 
+fn optimize_expr(expr: ResolvedExpr) -> ResolvedExpr {
+    expr_optimize::BinaryToInLiteral.optimize(expr)
+}
+
 pub fn plan_select(
     query: Select,
     reg: &Registry,
 ) -> Result<QueryPlan<Value, ResolvedExpr>, AnyError> {
-    let filter = query.filter.map(|e| resolve_expr(e, reg)).transpose()?;
+    let filter_unoptimized = query.filter.map(|e| resolve_expr(e, reg)).transpose()?;
+    let filter = filter_unoptimized.map(optimize_expr);
+
     let plan = Box::new(QueryPlan::<Value, ResolvedExpr>::Scan { filter });
 
     let plan = if !query.sort.is_empty() {
