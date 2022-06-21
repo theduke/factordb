@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cmp::Ordering, collections::HashSet};
 
 use fnv::FnvHashMap;
 use ordered_float::OrderedFloat;
@@ -51,7 +51,7 @@ impl Eq for SharedStr {}
 
 // Value for in-memory storage.
 // Uses shared strings to save memory usage.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
+#[derive(Hash, Debug, Clone)]
 pub(super) enum MemoryValue {
     Unit,
 
@@ -66,6 +66,119 @@ pub(super) enum MemoryValue {
     Map(std::collections::BTreeMap<Self, Self>),
 
     Id(Id),
+}
+
+impl PartialEq for MemoryValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MemoryValue::Unit, MemoryValue::Unit) => true,
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::UInt(l0), Self::UInt(r0)) => l0 == r0,
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
+            (Self::String(l0), Self::String(r0)) => l0 == r0,
+            (Self::Bytes(l0), Self::Bytes(r0)) => l0 == r0,
+            (Self::List(l0), Self::List(r0)) => l0 == r0,
+            (Self::Map(l0), Self::Map(r0)) => l0 == r0,
+            (Self::Id(l0), Self::Id(r0)) => l0 == r0,
+            (Self::Int(i), Self::UInt(u)) | (Self::UInt(u), Self::Int(i)) => {
+                if let Ok(u2) = i64::try_from(*u) {
+                    *i == u2
+                } else {
+                    false
+                }
+            }
+            (Self::Float(f), Self::UInt(u)) | (Self::UInt(u), Self::Float(f)) => (*u as f64) == **f,
+            (Self::Float(f), Self::Int(u)) | (Self::Int(u), Self::Float(f)) => (*u as f64) == **f,
+            (_, _) => false,
+        }
+    }
+}
+
+impl Eq for MemoryValue {}
+
+impl PartialOrd for MemoryValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for MemoryValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            // Id
+            (MemoryValue::Id(a), MemoryValue::Id(b)) => a.cmp(b),
+            (MemoryValue::Id(i), MemoryValue::String(s))
+            | (MemoryValue::String(s), MemoryValue::Id(i)) => {
+                i.to_string().as_str().cmp(s.as_ref())
+            }
+            (MemoryValue::Id(_), _) => Ordering::Less,
+            (_, MemoryValue::Id(_)) => Ordering::Greater,
+
+            // Unit.
+            (MemoryValue::Unit, MemoryValue::Unit) => Ordering::Equal,
+            (MemoryValue::Unit, _) => Ordering::Less,
+            (_, MemoryValue::Unit) => Ordering::Greater,
+
+            // Bool.
+            (MemoryValue::Bool(a), MemoryValue::Bool(b)) => a.cmp(b),
+            (MemoryValue::Bool(_), _) => Ordering::Less,
+            (_, MemoryValue::Bool(_)) => Ordering::Greater,
+
+            // Int + UInt + Float
+            (MemoryValue::UInt(a), MemoryValue::UInt(b)) => a.cmp(b),
+            (MemoryValue::Int(a), MemoryValue::Int(b)) => a.cmp(b),
+            (MemoryValue::Float(a), MemoryValue::Float(b)) => a.cmp(b),
+            (MemoryValue::UInt(a), MemoryValue::Int(b)) => {
+                if let Ok(b2) = u64::try_from(*b) {
+                    a.cmp(&b2)
+                } else {
+                    Ordering::Less
+                }
+            }
+            (MemoryValue::Int(b), MemoryValue::UInt(a)) => {
+                if let Ok(b2) = u64::try_from(*b) {
+                    a.cmp(&b2)
+                } else {
+                    Ordering::Greater
+                }
+            }
+            (MemoryValue::UInt(i), MemoryValue::Float(f))
+            | (MemoryValue::Float(f), MemoryValue::UInt(i)) => {
+                let i2 = OrderedFloat::from((*i) as f64);
+                f.cmp(&i2)
+            }
+            (MemoryValue::Int(i), MemoryValue::Float(f))
+            | (MemoryValue::Float(f), MemoryValue::Int(i)) => {
+                let i2 = OrderedFloat::from((*i) as f64);
+                f.cmp(&i2)
+            }
+            (MemoryValue::UInt(_) | MemoryValue::Int(_) | MemoryValue::Float(_), _) => {
+                Ordering::Less
+            }
+            (_, MemoryValue::UInt(_) | MemoryValue::Int(_) | MemoryValue::Float(_)) => {
+                Ordering::Greater
+            }
+
+            // String
+            (MemoryValue::String(a), MemoryValue::String(b)) => a.cmp(b),
+            (MemoryValue::String(_), _) => Ordering::Less,
+            (_, MemoryValue::String(_)) => Ordering::Greater,
+
+            // Bytes.
+            (MemoryValue::Bytes(a), MemoryValue::Bytes(b)) => a.cmp(b),
+            (MemoryValue::Bytes(_), _) => Ordering::Less,
+            (_, MemoryValue::Bytes(_)) => Ordering::Greater,
+
+            // List
+            (MemoryValue::List(a), MemoryValue::List(b)) => a.cmp(b),
+            (MemoryValue::List(_), _) => Ordering::Less,
+            (_, MemoryValue::List(_)) => Ordering::Greater,
+
+            // Map
+            (MemoryValue::Map(a), MemoryValue::Map(b)) => a.cmp(b),
+        }
+    }
 }
 
 impl MemoryValue {

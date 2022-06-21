@@ -148,6 +148,9 @@ async fn test_db_with_test_schema(db: &Db) {
             test_attribute_create_index,
             test_attribute_create_unique_index_fails_with_duplicate_values,
             test_attr_union_add_variant,
+            test_int_sort,
+            test_uint_sort,
+            test_float_sort,
         ]
     );
 }
@@ -1029,4 +1032,273 @@ async fn test_index_non_unique(db: &Db) {
         "test/indexed": "a",
     };
     db.create(id, e1.clone()).await.unwrap();
+}
+
+async fn test_int_sort(db: &Db) {
+    let mut ids = Vec::new();
+    for x in -10..=10 {
+        let e1 = map! {
+            "test/int": x,
+        };
+        let id = Id::random();
+        db.create(id, e1.clone()).await.unwrap();
+        ids.push(id);
+    }
+
+    // Test equality.
+    let res1 = db
+        .select(Select::new().with_filter(Expr::eq(Expr::attr_ident("test/int"), 5)))
+        .await
+        .unwrap();
+    assert_eq!(res1.items.len(), 1);
+    assert_eq!(
+        res1.items[0]
+            .data
+            .get("test/int")
+            .unwrap()
+            .as_int()
+            .unwrap(),
+        5
+    );
+
+    // Test greater than.
+    let res1 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gt(Expr::attr_ident("test/int"), 0))
+                .with_sort(Expr::attr_ident("test/int"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res1
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[11..]);
+
+    // Test greatern than or equal.
+    let res2 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gte(Expr::attr_ident("test/int"), 0))
+                .with_sort(Expr::attr_ident("test/int"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res2
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[10..]);
+
+    // Test less than.
+    let res1 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::lt(Expr::attr_ident("test/int"), 0))
+                .with_sort(Expr::attr_ident("test/int"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res1
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[0..10]);
+
+    // Test less than or equal.
+    let res2 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::lte(Expr::attr_ident("test/int"), 0))
+                .with_sort(Expr::attr_ident("test/int"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res2
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[0..11]);
+}
+
+async fn test_uint_sort(db: &Db) {
+    let mut ids = Vec::new();
+    for x in 0..20 {
+        let e1 = map! {
+            "test/uint": x,
+        };
+        let id = Id::random();
+        db.create(id, e1.clone()).await.unwrap();
+        ids.push(id);
+    }
+
+    // Test equality.
+    let res1 = db
+        .select(Select::new().with_filter(Expr::eq(Expr::attr_ident("test/uint"), 5)))
+        .await
+        .unwrap();
+    assert_eq!(res1.items.len(), 1);
+    assert_eq!(res1.items[0].data.get_id().unwrap(), ids[5]);
+
+    // Test greater than.
+    let res1 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gt(Expr::attr_ident("test/uint"), 10))
+                .with_sort(Expr::attr_ident("test/uint"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res1
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[11..]);
+
+    // Test greatern than or equal.
+    let res2 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gte(Expr::attr_ident("test/uint"), 10))
+                .with_sort(Expr::attr_ident("test/uint"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res2
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[10..]);
+
+    // Test less than.
+    let res1 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::lt(Expr::attr_ident("test/uint"), 10))
+                .with_sort(Expr::attr_ident("test/uint"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res1
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+
+    assert_eq!(&res_ids, &ids[0..10]);
+
+    // Test less than or equal.
+    let res2 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::lte(Expr::attr_ident("test/uint"), 10))
+                .with_sort(Expr::attr_ident("test/uint"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res2
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[0..11]);
+}
+
+async fn test_float_sort(db: &Db) {
+    let mut ids = Vec::new();
+    for x in -10..=10 {
+        let e1 = map! {
+            "test/float": x as f64,
+        };
+        let id = Id::random();
+        db.create(id, e1.clone()).await.unwrap();
+        ids.push(id);
+    }
+
+    // Test equality.
+    let res1 = db
+        .select(Select::new().with_filter(Expr::eq(Expr::attr_ident("test/float"), 5.0)))
+        .await
+        .unwrap();
+    assert_eq!(res1.items.len(), 1);
+    assert_eq!(
+        res1.items[0]
+            .data
+            .get("test/float")
+            .unwrap()
+            .as_float()
+            .unwrap(),
+        5.0
+    );
+
+    // Test greater than.
+    let res1 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gt(Expr::attr_ident("test/float"), 0))
+                .with_sort(Expr::attr_ident("test/float"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res1
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[11..]);
+
+    // Test greatern than or equal.
+    let res2 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gte(Expr::attr_ident("test/float"), 0))
+                .with_sort(Expr::attr_ident("test/float"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res2
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[10..]);
+
+    // Test less than.
+    let res1 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::lt(Expr::attr_ident("test/float"), 0))
+                .with_sort(Expr::attr_ident("test/float"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res1
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[0..10]);
+
+    // Test less than or equal.
+    let res2 = db
+        .select(
+            Select::new()
+                .with_filter(Expr::lte(Expr::attr_ident("test/float"), 0))
+                .with_sort(Expr::attr_ident("test/float"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let res_ids = res2
+        .items
+        .iter()
+        .map(|x| x.data.get_id().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(&res_ids, &ids[0..11]);
 }
