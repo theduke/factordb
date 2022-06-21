@@ -77,6 +77,10 @@ impl Expr {
         Self::Attr(A::IDENT)
     }
 
+    pub fn attr_ident(value: &str) -> Self {
+        Self::Attr(IdOrIdent::Name(value.to_string().into()))
+    }
+
     pub fn literal<I>(value: I) -> Self
     where
         I: Into<Value>,
@@ -193,6 +197,38 @@ impl Expr {
         I2: Into<Self>,
     {
         Self::binary(left, BinaryOp::Neq, right)
+    }
+
+    pub fn gt<I1, I2>(left: I1, right: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<Self>,
+    {
+        Self::binary(left, BinaryOp::Gt, right)
+    }
+
+    pub fn gte<I1, I2>(left: I1, right: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<Self>,
+    {
+        Self::binary(left, BinaryOp::Gte, right)
+    }
+
+    pub fn lt<I1, I2>(left: I1, right: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<Self>,
+    {
+        Self::binary(left, BinaryOp::Lt, right)
+    }
+
+    pub fn lte<I1, I2>(left: I1, right: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<Self>,
+    {
+        Self::binary(left, BinaryOp::Lte, right)
     }
 
     pub fn is_null<I>(expr: I) -> Self
