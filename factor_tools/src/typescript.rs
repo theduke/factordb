@@ -100,42 +100,68 @@ fn build_entity(
     entity: &factordb::schema::EntitySchema,
     schema: &factordb::schema::DbSchema,
 ) -> Result<Vec<Item>, AnyError> {
-    let extends = if entity.extends.is_empty() {
-        vec!["BaseEntity".to_string()]
-    } else {
-        entity
-            .extends
-            .iter()
-            .map(|parent_ident| -> Result<_, AnyError> {
-                let parent = schema
-                    .resolve_entity(parent_ident)
-                    .ok_or_else(|| anyhow!("Could not find entity '{:?}'", parent_ident))?;
-                let clean_name = parent.ident.replace('/', "_").to_class_case();
-
-                Ok(format!("Omit<{}, \"factor/type\">", clean_name))
-            })
-            .collect::<Result<_, _>>()?
-    };
-
-    let mut fields = entity
-        .attributes
+    // find all the parent entities
+    let parents = entity
+        .extends
         .iter()
-        .map(|field| -> Result<_, AnyError> {
-            // TODO: extract object types into separate definitions.
-
-            let attr = schema.resolve_attr(&field.attribute).ok_or_else(|| {
-                anyhow!("Could not find attribute {:?} in schema", field.attribute)
-            })?;
-
-            let ty = field_ts_type(field, attr);
-
-            Ok(FieldDef {
-                name: attr.ident.clone(),
-                is_optional: field.cardinality.is_optional(),
-                ty,
-            })
+        .map(|ident| {
+            schema
+                .resolve_entity(ident)
+                .ok_or_else(|| anyhow!("Parent entity {ident} not found"))
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    let extends = if parents.is_empty() {
+        vec!["BaseEntity".to_string()]
+    } else {
+        parents
+            .iter()
+            .map(|parent| -> String {
+                let clean_name = parent.ident.replace('/', "_").to_class_case();
+
+                format!("Omit<{}, \"factor/type\">", clean_name)
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // resolve all attributes of the entity into a vec
+    let attributes = entity
+        .attributes
+        .iter()
+        .map(|attr| -> Result<_, AnyError> {
+            let s = schema
+                .resolve_attr(&attr.attribute)
+                .ok_or_else(|| anyhow!("Attribute {} not found", attr.attribute))?;
+            Ok((attr.clone(), s.clone()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut fields = Vec::new();
+    for (field, attr) in &attributes {
+        let parent_attr = parents.iter().find_map(|parent| {
+            parent
+                .attributes
+                .iter()
+                .find(|pattr| pattr.attribute.to_string() == attr.ident)
+        });
+
+        if let Some(parent_attr) = parent_attr {
+            if parent_attr.cardinality != field.cardinality {
+                todo!("handle differing schemas by Omit<_>");
+            } else {
+                continue;
+            }
+        }
+
+        let ty = field_ts_type(field, attr);
+        let def = FieldDef {
+            name: attr.ident.clone(),
+            is_optional: field.cardinality.is_optional(),
+            ty,
+        };
+
+        fields.push(def);
+    }
 
     let entity_name = entity.ident.replace('/', "_").to_class_case();
 
