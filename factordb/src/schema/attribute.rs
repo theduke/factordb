@@ -47,6 +47,10 @@ impl AttributeSchema {
         }
     }
 
+    pub fn ident(&self) -> IdOrIdent {
+        IdOrIdent::from(self.ident.clone())
+    }
+
     pub fn with_unique(mut self, unique: bool) -> Self {
         self.unique = unique;
         self

@@ -86,6 +86,10 @@ pub struct EntitySchema {
 }
 
 impl EntitySchema {
+    pub fn ident(&self) -> IdOrIdent {
+        IdOrIdent::Name(self.ident.clone().into())
+    }
+
     pub fn attribute(&self, name: &str) -> Option<&EntityAttribute> {
         self.attributes
             .iter()

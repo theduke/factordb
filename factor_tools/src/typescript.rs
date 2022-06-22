@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::anyhow;
 use factordb::{data::ValueType, AnyError};
 use inflector::Inflector;
@@ -124,8 +126,7 @@ fn build_entity(
             .collect::<Vec<_>>()
     };
 
-    // resolve all attributes of the entity into a vec
-    let attributes = entity
+    let fields = entity
         .attributes
         .iter()
         .map(|attr| -> Result<_, AnyError> {
@@ -136,19 +137,19 @@ fn build_entity(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut fields = Vec::new();
-    for (field, attr) in &attributes {
-        let parent_attr = parents.iter().find_map(|parent| {
-            parent
-                .attributes
-                .iter()
-                .find(|pattr| pattr.attribute.to_string() == attr.ident)
-        });
+    let mut field_defs = Vec::new();
+    let mut field_names = HashSet::new();
+    for (field, attr) in &fields {
+        // Guard against duplicate field names.
+        // Note: this should not be necessary, but is here for now because of
+        // some faulty schemas in older databases.
+        if field_names.contains(&field.attribute) {
+            continue;
+        }
+        field_names.insert(field.attribute.clone());
 
-        if let Some(parent_attr) = parent_attr {
-            if parent_attr.cardinality != field.cardinality {
-                todo!("handle differing schemas by Omit<_>");
-            } else {
+        if let Some(parent_attr) = schema.parent_entity_attr(&entity.ident(), &attr.ident()) {
+            if parent_attr.cardinality == field.cardinality {
                 continue;
             }
         }
@@ -160,12 +161,12 @@ fn build_entity(
             ty,
         };
 
-        fields.push(def);
+        field_defs.push(def);
     }
 
     let entity_name = entity.ident.replace('/', "_").to_class_case();
 
-    fields.insert(
+    field_defs.insert(
         0,
         FieldDef {
             name: "factor/type".to_string(),
@@ -177,7 +178,7 @@ fn build_entity(
     let interface = Item::Interface {
         name: entity_name.clone(),
         extends,
-        ty: ObjectType { fields },
+        ty: ObjectType { fields: field_defs },
     };
 
     let ty_const = Item::Const {
@@ -190,7 +191,7 @@ fn build_entity(
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 enum Value {
     Str(String),
     Array(Vec<Self>),
@@ -229,7 +230,7 @@ impl Value {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 enum Type {
     Constant(Value),
     Any,
@@ -283,12 +284,12 @@ impl Type {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 struct ObjectType {
     fields: Vec<FieldDef>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 struct FieldDef {
     name: String,
     is_optional: bool,
