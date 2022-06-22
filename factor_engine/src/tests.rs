@@ -415,8 +415,6 @@ async fn test_entity_delete_not_found(db: &Db) {
     db.delete(id).await.unwrap();
 
     let err = db.delete(id).await.expect_err("Must fail");
-    dbg!(&err);
-    dbg!(&err.downcast_ref::<error::EntityNotFound>());
     assert!(err.is::<error::EntityNotFound>());
 }
 
