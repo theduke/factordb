@@ -99,7 +99,7 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
             if alias.is_some() {
                 bail!("must select from the entities table: SELECT * FROM entities");
             }
-            if !args.is_empty() {
+            if args.is_some() {
                 bail!("must select from the entities table: SELECT * FROM entities");
             }
             if !with_hints.is_empty() {
@@ -284,6 +284,9 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
                     bail!("INTERVAL not supported");
                 }
                 SqlValue::Null => Value::Unit,
+                SqlValue::EscapedStringLiteral(_) => {
+                    bail!("escaped string literal not supported");
+                }
             };
             Expr::Literal(value)
         }
@@ -328,6 +331,27 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
         }
         SqlExpr::InUnnest { .. } => {
             bail!("UNNEST is not supported");
+        }
+        SqlExpr::JsonAccess { .. } => {
+            bail!("json accessors not supported");
+        }
+        SqlExpr::CompositeAccess { .. } => {
+            bail!("composite accessors not supported");
+        }
+        SqlExpr::IsFalse(_) => {
+            bail!("IS FALSE is not supported");
+        }
+        SqlExpr::IsTrue(_) => {
+            bail!("IS TRUE is not supported");
+        }
+        SqlExpr::AnyOp(_) => {
+            bail!("ANY(x) is not supported");
+        }
+        SqlExpr::AllOp(_) => {
+            bail!("ALL(x) is not supported");
+        }
+        SqlExpr::Position { .. } => {
+            bail!("POSITION is not supported");
         }
     };
 

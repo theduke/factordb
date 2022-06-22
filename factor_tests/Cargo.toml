@@ -16,8 +16,8 @@ factor_engine = { path = "../factor_engine" }
 criterion = { version = "0.3.5", features = ["async_futures"] }
 futures = "0.3.21"
 rand = "0.8.5"
-serde = { version = "1.0.136", features = ["derive"] }
-uuid = "0.8.2"
+serde = { version = "1.0.137", features = ["derive"] }
+uuid = "1.1.2"
 
 [dev-dependencies]
 criterion = "0.3.5"
