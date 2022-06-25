@@ -28,6 +28,14 @@ impl super::value_type::ValueTypeDescriptor for Id {
     }
 }
 
+impl FromStr for Id {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<uuid::Uuid>().map(Self)
+    }
+}
+
 impl Id {
     pub const fn from_uuid(uuid: uuid::Uuid) -> Self {
         Self(uuid)
