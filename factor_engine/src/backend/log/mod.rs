@@ -11,7 +11,10 @@ mod event;
 use anyhow::Context;
 pub use event::LogEvent;
 
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use futures::{
     future::{ready, BoxFuture},
@@ -21,7 +24,8 @@ use futures::{
 
 use factordb::{
     data,
-    query::{self, mutate::Batch, select::Item},
+    prelude::{AttrMapExt, AttrType, AttributeDescriptor, DataMap, Id, Mutate},
+    query::{self, migrate::SchemaAction, mutate::Batch, select::Item},
     AnyError,
 };
 
@@ -111,6 +115,99 @@ impl LogDb {
             .set_ignore_index_constraints(false);
 
         Ok(s)
+    }
+
+    /// Build entity data from a possibly corrupted event stream.
+    ///
+    /// All errors or invalid operations will be ignored.
+    pub async fn recover_data<S>(store: S) -> Result<HashMap<Id, DataMap>, AnyError>
+    where
+        S: LogStore + Send + Sync + 'static,
+    {
+        let mut stream = store.iter_events(0, EventId::MAX).await?;
+
+        let mut data = HashMap::<Id, DataMap>::new();
+
+        while let Some(res) = stream.next().await {
+            let event = res?;
+
+            match event.op {
+                LogOp::Batch(batch) => {
+                    for action in batch.actions {
+                        match action {
+                            Mutate::Create(create) => {
+                                data.insert(create.id, create.data);
+                            }
+                            Mutate::Replace(replace) => {
+                                data.insert(replace.id, replace.data);
+                            }
+                            Mutate::Merge(merge) => {
+                                if let Some(old) = data.get_mut(&merge.id) {
+                                    old.0.extend(merge.data.0.into_iter());
+                                } else {
+                                    data.insert(merge.id, merge.data);
+                                }
+                            }
+                            Mutate::Patch(patch) => {
+                                let values = data.get(&patch.id).cloned().unwrap_or_default();
+                                if let Ok(patched) = patch.patch.apply_map(values) {
+                                    data.insert(patch.id, patched);
+                                }
+                            }
+                            Mutate::Delete(del) => {
+                                data.remove(&del.id);
+                            }
+                        }
+                    }
+                }
+                LogOp::Migrate(mig) => {
+                    for action in mig.actions {
+                        match action {
+                            SchemaAction::AttributeCreate(_) => {}
+                            SchemaAction::AttributeUpsert(_) => {}
+                            SchemaAction::AttributeChangeType(_) => {
+                                // TODO: should cast the type...
+                            }
+                            SchemaAction::AttributeCreateIndex(_) => {}
+                            SchemaAction::AttributeDelete(spec) => {
+                                for values in data.values_mut() {
+                                    values.0.remove(&spec.name);
+                                }
+                            }
+                            SchemaAction::EntityCreate(_) => {}
+                            SchemaAction::EntityAttributeAdd(spec) => {
+                                if let Some(default) = spec.default_value {
+                                    for values in data.values_mut() {
+                                        if let Some(ty) = values
+                                            .get(AttrType::QUALIFIED_NAME)
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            if ty != spec.entity {
+                                                continue;
+                                            }
+                                        }
+                                        values.insert(spec.attribute.clone(), default.clone());
+                                    }
+                                }
+                            }
+                            SchemaAction::EntityAttributeChangeCardinality(_) => {
+                                // TODO: change type?
+                                // (not currently done in backend anyway)
+                            }
+                            SchemaAction::EntityUpsert(_) => {}
+                            SchemaAction::EntityDelete(_) => {
+                                // TODO: delete all entities?
+                                // (entity deletion migration is not implemented yet)
+                            }
+                            SchemaAction::IndexCreate(_) => {}
+                            SchemaAction::IndexDelete(_) => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(data)
     }
 
     /// Get access to the store.
