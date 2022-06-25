@@ -334,3 +334,42 @@ pub(super) enum MemoryExpr {
         items: HashSet<MemoryValue>,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memoryvalue_ord() {
+        // Int.
+        assert_eq!(MemoryValue::Int(5), MemoryValue::Int(5));
+        assert!(MemoryValue::Int(0) < MemoryValue::Int(6));
+        assert!(MemoryValue::Int(0) < MemoryValue::Int(6));
+        assert!(MemoryValue::Int(-5) > MemoryValue::Int(-10));
+        assert_eq!(MemoryValue::Int(5), MemoryValue::UInt(5));
+        assert!(MemoryValue::Int(0) < MemoryValue::UInt(10));
+
+        // UInt.
+        assert_eq!(MemoryValue::UInt(5), MemoryValue::UInt(5));
+        assert!(MemoryValue::UInt(0) < MemoryValue::UInt(6));
+        assert!(MemoryValue::UInt(0) < MemoryValue::UInt(6));
+        assert!(MemoryValue::UInt(20) > MemoryValue::UInt(11));
+        assert_eq!(MemoryValue::UInt(5), MemoryValue::Int(5));
+        assert!(MemoryValue::UInt(0) < MemoryValue::Int(10));
+
+        // Float.
+        assert_eq!(
+            MemoryValue::Float(5.5.into()),
+            MemoryValue::Float(5.5.into())
+        );
+        assert!(MemoryValue::Float(0.0.into()) < MemoryValue::Float(10.0.into()));
+        assert!(MemoryValue::Float((-5.5).into()) < MemoryValue::Float(0.0.into()));
+        assert!(MemoryValue::Float(1.0.into()) > MemoryValue::Float(0.5.into()));
+
+        assert_eq!(MemoryValue::Float(5.0.into()), MemoryValue::Int(5));
+        assert!(MemoryValue::Float(0.0.into()) < MemoryValue::Int(10));
+        assert_eq!(MemoryValue::Float(5.0.into()), MemoryValue::UInt(5));
+
+        // TODO: more tests!
+    }
+}
