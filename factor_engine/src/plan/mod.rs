@@ -354,13 +354,17 @@ pub fn plan_select(
     query: Select,
     reg: &Registry,
 ) -> Result<QueryPlan<Value, ResolvedExpr>, AnyError> {
-    let filter_unoptimized = query.filter.map(|e| resolve_expr(e, reg)).transpose()?;
+    let filter_unoptimized = query
+        .filter
+        .clone()
+        .map(|e| resolve_expr(e, reg))
+        .transpose()?;
     let filter = filter_unoptimized.map(optimize_expr);
 
     let plan = Box::new(QueryPlan::<Value, ResolvedExpr>::Scan { filter });
 
     let plan = if !query.sort.is_empty() {
-        let sorts = plan_sort(reg, query.sort)?;
+        let sorts = plan_sort(reg, query.sort.clone())?;
         Box::new(QueryPlan::Sort { sorts, input: plan })
     } else {
         plan
@@ -401,6 +405,8 @@ pub fn plan_select(
             }
         },
     )?;
+
+    tracing::debug!(?query, ?plan, "planned select query");
 
     Ok(plan)
 }
