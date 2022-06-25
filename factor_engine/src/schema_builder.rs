@@ -230,6 +230,7 @@ fn build_attribute_change_type(
 
             Ok(vec![ResolvedAction {
                 action: SchemaAction::AttributeChangeType(action),
+                // FIXME: need an op to change the type if required!
                 ops: Vec::new(),
             }])
         }
