@@ -579,7 +579,11 @@ pub trait LogConverter: Clone + Send + Sync {
 #[cfg(test)]
 mod tests {
 
-    use factordb::{map, prelude::Id, schema};
+    use factordb::{
+        map,
+        prelude::{AttrMapExt, Id},
+        schema,
+    };
 
     use crate::Engine;
 
@@ -679,5 +683,43 @@ mod tests {
                 }
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn test_log_backend_recover_data() {
+        let id1 = Id::random();
+        let id2 = Id::random();
+        let id3 = Id::random();
+
+        let mem = store_memory::MemoryLogStore::new();
+
+        {
+            let log = LogDb::open(mem.clone()).await.unwrap();
+            let db = Engine::new(log.clone()).into_client();
+
+            let data1 = map! {
+                "factor/title": "y",
+            };
+            db.create(id1, data1).await.unwrap();
+
+            let data2 = map! {
+                "factor/title": "y",
+                "factor/description": id2.to_string(),
+            };
+            db.create(id2, data2).await.unwrap();
+
+            let data3 = map! {
+                "factor/title": "y",
+                "factor/description": id3.to_string(),
+            };
+            db.create(id3, data3).await.unwrap();
+        }
+
+        let restored = LogDb::recover_data(mem).await.unwrap();
+
+        assert_eq!(3, restored.len());
+        assert_eq!(id1, restored[0].get_id().unwrap());
+        assert_eq!(id2, restored[1].get_id().unwrap());
+        assert_eq!(id3, restored[2].get_id().unwrap());
     }
 }
