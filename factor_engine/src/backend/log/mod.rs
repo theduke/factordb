@@ -595,99 +595,89 @@ mod tests {
         crate::tests::test_backend(log, |f| futures::executor::block_on(f));
     }
 
-    #[test]
-    fn test_log_backend_with_memory_store_restore() {
+    #[tokio::test]
+    async fn test_log_backend_with_memory_store_restore() {
         // Test that restores work.
-        futures::executor::block_on(async {
-            let log = LogDb::open(store_memory::MemoryLogStore::new())
-                .await
-                .unwrap();
-            let db = crate::Engine::new(log.clone()).into_client();
-
-            let mig = query::migrate::Migration {
-                name: None,
-                actions: vec![query::migrate::SchemaAction::AttributeCreate(
-                    query::migrate::AttributeCreate {
-                        schema: schema::AttributeSchema::new(
-                            "test",
-                            "text",
-                            data::ValueType::String,
-                        ),
-                    },
-                )],
-            };
-            db.migrate(mig).await.unwrap();
-
-            let id = Id::random();
-            db.create(
-                id,
-                map! {
-                    "test/text": "hello",
-                },
-            )
+        let log = LogDb::open(store_memory::MemoryLogStore::new())
             .await
             .unwrap();
+        let db = crate::Engine::new(log.clone()).into_client();
 
-            let data = db.entity(id).await.unwrap();
-            assert_eq!(data::Value::from("hello"), data["test/text"]);
+        let mig = query::migrate::Migration {
+            name: None,
+            actions: vec![query::migrate::SchemaAction::AttributeCreate(
+                query::migrate::AttributeCreate {
+                    schema: schema::AttributeSchema::new("test", "text", data::ValueType::String),
+                },
+            )],
+        };
+        db.migrate(mig).await.unwrap();
 
-            // Restore.
-            log.restore().await.unwrap();
+        let id = Id::random();
+        db.create(
+            id,
+            map! {
+                "test/text": "hello",
+            },
+        )
+        .await
+        .unwrap();
 
-            // Test that data is still there.
-            let data = db.entity(id).await.unwrap();
-            assert_eq!(data::Value::from("hello"), data["test/text"]);
-        });
+        let data = db.entity(id).await.unwrap();
+        assert_eq!(data::Value::from("hello"), data["test/text"]);
+
+        // Restore.
+        log.restore().await.unwrap();
+
+        // Test that data is still there.
+        let data = db.entity(id).await.unwrap();
+        assert_eq!(data::Value::from("hello"), data["test/text"]);
     }
 
-    #[test]
-    fn test_log_backend_with_memory_store_export() {
-        futures::executor::block_on(async {
-            let log = LogDb::open(store_memory::MemoryLogStore::new())
-                .await
-                .unwrap();
-            let db = Engine::new(log.clone()).into_client();
-
-            let id = Id::random();
-            let data = map! {
-                "factor/title": "y",
-            };
-            db.create(id, data.clone()).await.unwrap();
-
-            db.delete(id).await.unwrap();
-
-            let mut events = Vec::new();
-
-            // Restore.
-            log.export_events(|event| {
-                events.push(event);
-                Ok(())
-            })
+    #[tokio::test]
+    async fn test_log_backend_with_memory_store_export() {
+        let log = LogDb::open(store_memory::MemoryLogStore::new())
             .await
             .unwrap();
+        let db = Engine::new(log.clone()).into_client();
 
-            assert_eq!(
-                events,
-                vec![
-                    LogEvent {
-                        id: 1,
-                        op: LogOp::Batch(Batch {
-                            actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
-                                id,
-                                data
-                            }),]
-                        })
-                    },
-                    LogEvent {
-                        id: 2,
-                        op: LogOp::Batch(Batch {
-                            actions: vec![query::mutate::Mutate::Delete(query::mutate::Delete {
-                                id
-                            }),]
-                        })
-                    }
-                ]
-            );
-        });
+        let id = Id::random();
+        let data = map! {
+            "factor/title": "y",
+        };
+        db.create(id, data.clone()).await.unwrap();
+
+        db.delete(id).await.unwrap();
+
+        let mut events = Vec::new();
+
+        // Restore.
+        log.export_events(|event| {
+            events.push(event);
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            events,
+            vec![
+                LogEvent {
+                    id: 1,
+                    op: LogOp::Batch(Batch {
+                        actions: vec![query::mutate::Mutate::Create(query::mutate::Create {
+                            id,
+                            data
+                        }),]
+                    })
+                },
+                LogEvent {
+                    id: 2,
+                    op: LogOp::Batch(Batch {
+                        actions: vec![query::mutate::Mutate::Delete(query::mutate::Delete { id }),]
+                    })
+                }
+            ]
+        );
     }
 }
