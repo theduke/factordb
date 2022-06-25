@@ -138,18 +138,24 @@ impl Ord for MemoryValue {
             }
             (MemoryValue::Int(b), MemoryValue::UInt(a)) => {
                 if let Ok(b2) = u64::try_from(*b) {
-                    a.cmp(&b2)
+                    b2.cmp(&a)
                 } else {
                     Ordering::Greater
                 }
             }
-            (MemoryValue::UInt(i), MemoryValue::Float(f))
-            | (MemoryValue::Float(f), MemoryValue::UInt(i)) => {
+            (MemoryValue::UInt(i), MemoryValue::Float(f)) => {
+                let i2 = OrderedFloat::from((*i) as f64);
+                i2.cmp(&f)
+            }
+            (MemoryValue::Float(f), MemoryValue::UInt(i)) => {
                 let i2 = OrderedFloat::from((*i) as f64);
                 f.cmp(&i2)
             }
-            (MemoryValue::Int(i), MemoryValue::Float(f))
-            | (MemoryValue::Float(f), MemoryValue::Int(i)) => {
+            (MemoryValue::Int(i), MemoryValue::Float(f)) => {
+                let i2 = OrderedFloat::from((*i) as f64);
+                i2.cmp(&f)
+            }
+            (MemoryValue::Float(f), MemoryValue::Int(i)) => {
                 let i2 = OrderedFloat::from((*i) as f64);
                 f.cmp(&i2)
             }
