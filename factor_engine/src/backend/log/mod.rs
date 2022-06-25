@@ -12,7 +12,7 @@ use anyhow::Context;
 pub use event::LogEvent;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
 
@@ -24,7 +24,7 @@ use futures::{
 
 use factordb::{
     data,
-    prelude::{AttrMapExt, AttrType, AttributeDescriptor, DataMap, Id, Mutate},
+    prelude::{AttrId, AttrType, AttributeDescriptor, DataMap, Id, Mutate, Value},
     query::{self, migrate::SchemaAction, mutate::Batch, select::Item},
     AnyError,
 };
@@ -120,10 +120,45 @@ impl LogDb {
     /// Build entity data from a possibly corrupted event stream.
     ///
     /// All errors or invalid operations will be ignored.
-    pub async fn recover_data<S>(store: S) -> Result<HashMap<Id, DataMap>, AnyError>
+    pub async fn recover_data<S>(store: S) -> Result<Vec<DataMap>, AnyError>
     where
         S: LogStore + Send + Sync + 'static,
     {
+        fn find_ids_in_value(value: &Value) -> Vec<Id> {
+            match value {
+                Value::Unit
+                | Value::Bool(_)
+                | Value::UInt(_)
+                | Value::Int(_)
+                | Value::Float(_)
+                | Value::Bytes(_) => Vec::new(),
+                Value::String(s) => {
+                    if let Ok(id) = s.parse() {
+                        vec![id]
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Value::List(items) => items
+                    .iter()
+                    .flat_map(|item| find_ids_in_value(item))
+                    .collect(),
+                Value::Map(map) => map
+                    .values()
+                    .flat_map(|item| find_ids_in_value(item))
+                    .collect(),
+                Value::Id(id) => {
+                    vec![*id]
+                }
+            }
+        }
+
+        fn find_ids(data: &DataMap) -> Vec<Id> {
+            data.values()
+                .flat_map(|value| find_ids_in_value(value))
+                .collect()
+        }
+
         let mut stream = store.iter_events(0, EventId::MAX).await?;
 
         let mut data = HashMap::<Id, DataMap>::new();
@@ -135,16 +170,26 @@ impl LogDb {
                 LogOp::Batch(batch) => {
                     for action in batch.actions {
                         match action {
-                            Mutate::Create(create) => {
+                            Mutate::Create(mut create) => {
+                                create
+                                    .data
+                                    .insert(AttrId::QUALIFIED_NAME.to_string(), create.id.into());
                                 data.insert(create.id, create.data);
                             }
-                            Mutate::Replace(replace) => {
+                            Mutate::Replace(mut replace) => {
+                                replace
+                                    .data
+                                    .insert(AttrId::QUALIFIED_NAME.to_string(), replace.id.into());
                                 data.insert(replace.id, replace.data);
                             }
-                            Mutate::Merge(merge) => {
+                            Mutate::Merge(mut merge) => {
                                 if let Some(old) = data.get_mut(&merge.id) {
                                     old.0.extend(merge.data.0.into_iter());
                                 } else {
+                                    merge.data.insert(
+                                        AttrId::QUALIFIED_NAME.to_string(),
+                                        merge.id.into(),
+                                    );
                                     data.insert(merge.id, merge.data);
                                 }
                             }
@@ -207,7 +252,40 @@ impl LogDb {
             }
         }
 
-        Ok(data)
+        // Now try to order data so that entities that reference other entities
+        // come before the referenced ones.
+        // This is useful to enable re-importing into new stores.
+
+        let mut available = HashSet::<Id>::new();
+
+        let mut items = Vec::new();
+
+        while !data.is_empty() {
+            let mut removed = Vec::new();
+            for (id, values) in data.iter() {
+                let needs_more = find_ids(values).iter().any(|id| !available.contains(id));
+                if !needs_more {
+                    available.insert(*id);
+                    items.push(values.clone());
+                    removed.push(*id);
+                }
+            }
+
+            if removed.is_empty() {
+                // Could not make any more progress.
+                break;
+            }
+            for id in &removed {
+                data.remove(&id);
+            }
+        }
+
+        // Append the remaining entities that could not be ordered by references.
+        for values in data.values() {
+            items.push(values.clone());
+        }
+
+        Ok(items)
     }
 
     /// Get access to the store.
