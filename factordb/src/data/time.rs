@@ -1,4 +1,8 @@
+use std::convert::TryFrom;
+
 use chrono::TimeZone;
+
+use super::Value;
 
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
@@ -37,6 +41,21 @@ impl Timestamp {
 
     pub fn from_chrono_utc_datetime(t: chrono::NaiveDateTime) -> Self {
         Self(t.timestamp() as u64)
+    }
+}
+
+impl TryFrom<Value> for Timestamp {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::UInt(x) => Ok(Self::from_millis(x)),
+            Value::Int(x) if x >= 0 => Ok(Self::from_millis(x as u64)),
+            _ => Err(anyhow::anyhow!(
+                "Invalid timestamp: expected a millisecond number, got {:?}",
+                value.value_type()
+            )),
+        }
     }
 }
 
