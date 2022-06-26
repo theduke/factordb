@@ -25,6 +25,10 @@ impl Timestamp {
         Self(millis)
     }
 
+    pub fn to_system_time(self) -> Option<std::time::SystemTime> {
+        std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_millis(self.0))
+    }
+
     pub fn to_datetime(&self) -> chrono::DateTime<chrono::Utc> {
         let seconds = (self.0 / 1000) as i64;
         let nanos = ((self.0 % 1000) * 1_000_000) as u32;
