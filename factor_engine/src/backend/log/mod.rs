@@ -320,54 +320,56 @@ impl LogDb {
     }
 
     async fn restore(&self) -> Result<(), AnyError> {
+        tracing::debug!("log restore started");
+        let mut mutable = self.state.mutable.lock().await;
+
+        self.state.mem.write().unwrap().purge_all_data();
+
+        let mut migrations = Vec::new();
+
+        let mut event_id = 0;
         {
-            let mut mutable = self.state.mutable.lock().await;
+            let mut stream = mutable.store.iter_events(0, EventId::MAX).await?;
 
-            self.state.mem.write().unwrap().purge_all_data();
+            while let Some(res) = stream.next().await {
+                let event = res?;
+                event_id = event.id;
 
-            let mut migrations = Vec::new();
+                tracing::trace!(?event, "restoring logdb event");
 
-            let mut event_id = 0;
-            {
-                let mut stream = mutable.store.iter_events(0, EventId::MAX).await?;
-
-                while let Some(res) = stream.next().await {
-                    let event = res?;
-                    event_id = event.id;
-
-                    tracing::trace!(?event, "restoring logdb event");
-
-                    match event.op {
-                        LogOp::Batch(batch) => {
-                            self.state
-                                .mem
-                                .write()
-                                .unwrap()
-                                .apply_batch(batch)
-                                .context(format!(
-                                    "Could not apply event '{}' to memory state",
-                                    event_id
-                                ))?;
-                        }
-                        LogOp::Migrate(migration) => {
-                            self.state
-                                .mem
-                                .write()
-                                .unwrap()
-                                .migrate(migration.clone())
-                                .context(format!(
-                                    "Could not apply event '{}' to memory state",
-                                    event_id
-                                ))?;
-                            migrations.push(migration);
-                        }
+                match event.op {
+                    LogOp::Batch(batch) => {
+                        self.state
+                            .mem
+                            .write()
+                            .unwrap()
+                            .apply_batch(batch)
+                            .context(format!(
+                                "Could not apply event '{}' to memory state",
+                                event_id
+                            ))?;
+                    }
+                    LogOp::Migrate(migration) => {
+                        self.state
+                            .mem
+                            .write()
+                            .unwrap()
+                            .migrate(migration.clone())
+                            .context(format!(
+                                "Could not apply event '{}' to memory state",
+                                event_id
+                            ))?;
+                        migrations.push(migration);
                     }
                 }
             }
-
-            mutable.migrations = migrations;
-            mutable.current_event_id = event_id;
         }
+
+        mutable.migrations = migrations;
+        mutable.current_event_id = event_id;
+
+        tracing::debug!("log restore finished");
+
         Ok(())
     }
 
