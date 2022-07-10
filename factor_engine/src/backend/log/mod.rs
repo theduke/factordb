@@ -81,6 +81,17 @@ impl MutableState {
 }
 
 impl LogDb {
+    /// Get access to the store.
+    ///
+    /// Since the store is behind a Mutex, you must provide a closure.
+    pub async fn with_store<F, O>(&self, f: F) -> O
+    where
+        F: FnOnce(&dyn LogStore) -> O,
+    {
+        let state = self.state.mutable.lock().await;
+        f(&*state.store)
+    }
+
     pub async fn open<S>(store: S) -> Result<Self, AnyError>
     where
         S: LogStore + Send + Sync + 'static,
@@ -286,17 +297,6 @@ impl LogDb {
         }
 
         Ok(items)
-    }
-
-    /// Get access to the store.
-    ///
-    /// Since the store is behind a Mutex, you must provide a closure.
-    pub async fn with_store<F, O>(&self, f: F) -> O
-    where
-        F: FnOnce(&dyn LogStore) -> O,
-    {
-        let state = self.state.mutable.lock().await;
-        f(&*state.store)
     }
 
     /// Export all events in the log.
@@ -544,6 +544,8 @@ impl Backend for LogDb {
 
 /// Defines a storage backend used by a [LogStore].
 pub trait LogStore {
+    fn as_any(&self) -> &dyn std::any::Any;
+
     /// Iterate over the event log.
     /// use until: EventId::MAX to read until the end.
     fn iter_events<'a>(
@@ -573,7 +575,7 @@ pub trait LogStore {
 }
 
 /// De/serialier for a [LogStore].
-pub trait LogConverter: Clone + Send + Sync {
+pub trait LogConverter: Clone + Send + Sync + 'static {
     fn serialize(&self, event: &LogEvent) -> Result<Vec<u8>, AnyError>;
     fn deserialize(&self, data: &[u8]) -> Result<LogEvent, AnyError>;
 }

@@ -41,6 +41,10 @@ impl<C: LogConverter> FileLogStore<C> {
 }
 
 impl<C: LogConverter> super::LogStore for FileLogStore<C> {
+    fn as_any(&self) -> &dyn std::any::Any {
+        &*self
+    }
+
     fn iter_events<'a>(
         &'a self,
         from: EventId,

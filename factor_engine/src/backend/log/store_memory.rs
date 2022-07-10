@@ -34,6 +34,10 @@ impl MemoryLogStore {
 type StreamFuture<'a> = BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, AnyError>>, AnyError>>;
 
 impl super::LogStore for MemoryLogStore {
+    fn as_any(&self) -> &dyn std::any::Any {
+        &*self
+    }
+
     fn iter_events(&self, from: super::EventId, until: super::EventId) -> StreamFuture {
         let stream = self
             .events

@@ -130,6 +130,8 @@ impl Db {
 pub type DbFuture<'a, T> = futures::future::BoxFuture<'a, Result<T, anyhow::Error>>;
 
 pub trait DbClient {
+    fn as_any(&self) -> &dyn std::any::Any;
+
     fn schema(&self) -> DbFuture<'_, crate::schema::DbSchema>;
     fn entity(&self, id: IdOrIdent) -> DbFuture<'_, Option<DataMap>>;
     fn select(
