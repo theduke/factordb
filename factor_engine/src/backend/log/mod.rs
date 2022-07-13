@@ -583,6 +583,8 @@ pub trait LogConverter: Clone + Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
 
+    use std::str::FromStr;
+
     use factordb::{
         map,
         prelude::{AttrMapExt, Id},
@@ -691,9 +693,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_log_backend_recover_data() {
-        let id1 = Id::random();
-        let id2 = Id::random();
-        let id3 = Id::random();
+        let id1 = Id::from_str("00000000-0000-0000-1000-000000000000").unwrap();
+        let id2 = Id::from_str("00000000-0000-0000-2000-000000000000").unwrap();
+        let id3 = Id::from_str("00000000-0000-0000-3000-000000000000").unwrap();
 
         let mem = store_memory::MemoryLogStore::new();
 
@@ -719,7 +721,8 @@ mod tests {
             db.create(id3, data3).await.unwrap();
         }
 
-        let restored = LogDb::recover_data(mem).await.unwrap();
+        let mut restored = LogDb::recover_data(mem).await.unwrap();
+        restored.sort_by(|a, b| a.get_id().unwrap().cmp(&b.get_id().unwrap()));
 
         assert_eq!(3, restored.len());
         assert_eq!(id1, restored[0].get_id().unwrap());
