@@ -48,12 +48,30 @@ pub struct Select {
     pub joins: Vec<Join>,
     #[serde(default = "Vec::<Sort>::new")]
     pub sort: Vec<Sort>,
+
+    pub aggregate: Vec<Aggregation>,
+
     #[serde(default = "HashMap::<String, Value>::new")]
     pub variables: HashMap<String, Value>,
     pub limit: u64,
     #[serde(default)]
     pub offset: u64,
     pub cursor: Option<Id>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+pub struct Aggregation {
+    pub name: String,
+    pub op: AggregationOp,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+pub enum AggregationOp {
+    Count,
 }
 
 impl Select {
@@ -63,6 +81,7 @@ impl Select {
             filter: None,
             sort: Vec::new(),
             variables: Default::default(),
+            aggregate: Vec::new(),
             limit: 0,
             offset: 0,
             cursor: None,
@@ -98,6 +117,11 @@ impl Select {
             on: on.into(),
             order,
         });
+        self
+    }
+
+    pub fn with_aggregate(mut self, op: AggregationOp, name: String) -> Self {
+        self.aggregate.push(Aggregation { name, op });
         self
     }
 }

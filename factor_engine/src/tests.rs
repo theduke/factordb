@@ -152,6 +152,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_uint_sort,
             test_float_sort,
             test_select_delete,
+            test_aggregate_count,
         ]
     );
 }
@@ -1351,4 +1352,70 @@ async fn test_select_delete(db: &Db) {
         .map(|item| item.data.get("test/int").unwrap().as_int().unwrap())
         .collect();
     assert_eq!(values, vec![6, 7, 8, 9, 10]);
+}
+
+async fn test_aggregate_count(db: &Db) {
+    let q = Select::new().with_aggregate(query::select::AggregationOp::Count, "count".to_string());
+    let q_filtered = q
+        .clone()
+        .with_filter(Expr::gte(Expr::attr_ident("test/int"), 5));
+
+    assert_eq!(
+        db.select(q.clone())
+            .await
+            .unwrap()
+            .items
+            .pop()
+            .unwrap()
+            .data
+            .get("factor/count")
+            .unwrap()
+            .as_uint()
+            .unwrap(),
+        0
+    );
+
+    for x in 0..10 {
+        db.create(
+            Id::random(),
+            map! {
+                "test/int": x,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    assert_eq!(
+        db.select(q.clone()).await.unwrap().items[0]
+            .data
+            .get("factor/count")
+            .unwrap()
+            .as_uint()
+            .unwrap(),
+        10,
+    );
+
+    assert_eq!(
+        db.select(q_filtered.clone()).await.unwrap().items[0]
+            .data
+            .get("factor/count")
+            .unwrap()
+            .as_uint()
+            .unwrap(),
+        5,
+    );
+
+    // let sel_sql =
+    //     Select::parse_sql("select count() from entities where \"test/int\" >= 5").unwrap();
+    // dbg!(&sel_sql);
+    // assert_eq!(
+    //     db.select(sel_sql.clone()).await.unwrap().items[0]
+    //         .data
+    //         .get("factor/count")
+    //         .unwrap()
+    //         .as_uint()
+    //         .unwrap(),
+    //     5,
+    // );
 }

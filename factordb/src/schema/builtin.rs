@@ -32,6 +32,7 @@ const ATTR_ATTRIBUTES: Id = Id::from_u128(10);
 const ATTR_EXTEND: Id = Id::from_u128(11);
 const ATTR_ISRELATION: Id = Id::from_u128(12);
 const ATTR_INDEX_ATTRIBUTES: Id = Id::from_u128(13);
+pub const ATTR_COUNT: Id = Id::from_u128(14);
 
 // Built-in entity types.
 // Constants are kept together to see ids at a glance.
@@ -390,6 +391,28 @@ impl EntityDescriptor for EntitySchemaType {
     }
 }
 
+pub struct AttrCount;
+
+impl AttributeDescriptor for AttrCount {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "count";
+    const QUALIFIED_NAME: &'static str = "factor/count";
+    type Type = u64;
+
+    fn schema() -> AttributeSchema {
+        AttributeSchema {
+            id: ATTR_COUNT,
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Count".into()),
+            description: None,
+            value_type: ValueType::UInt,
+            unique: false,
+            index: false,
+            strict: true,
+        }
+    }
+}
+
 // IndexSchema attributes and entity type.
 
 pub struct AttrIndexAttributes;
@@ -481,6 +504,7 @@ pub fn builtin_db_schema() -> super::DbSchema {
             AttrExtend::schema(),
             AttrIsRelation::schema(),
             AttrIndexAttributes::schema(),
+            AttrCount::schema(),
         ],
         entities: vec![
             AttributeSchemaType::schema(),

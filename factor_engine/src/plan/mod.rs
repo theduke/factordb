@@ -9,7 +9,7 @@ use factordb::{
     data::{Id, IdOrIdent, Value},
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
-        select::{self, Order, Select},
+        select::{self, AggregationOp, Order, Select},
     },
     AnyError,
 };
@@ -68,6 +68,16 @@ pub enum QueryPlan<V = Value, E = Expr> {
 
         input: Box<Self>,
     },
+    Aggregate {
+        aggregations: Vec<Aggregation>,
+        input: Box<Self>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Aggregation {
+    pub name: String,
+    pub op: AggregationOp,
 }
 
 pub enum RecursionResult<T> {
@@ -117,6 +127,13 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
                 sorts: sorts.clone(),
                 input: Box::new(input.map_recurse_abortable(f)),
             },
+            Self::Aggregate {
+                aggregations,
+                input,
+            } => Self::Aggregate {
+                aggregations: aggregations.clone(),
+                input: Box::new(input.map_recurse_abortable(f)),
+            },
         }
     }
 
@@ -143,6 +160,7 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
                     input: Box::new(input.map_recurse(f)?),
                 }),
                 Self::Merge { left, right } => {
+                    // FIXME: need to map both left and right...
                     if let Some(x) = f(&left) {
                         Some(Self::Merge {
                             left: Box::new(x),
@@ -163,6 +181,13 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
                 Self::Sort { sorts, input } => Some(Self::Sort {
                     sorts: sorts.clone(),
                     input: Box::new(input.map_recurse(f)?),
+                }),
+                Self::Aggregate {
+                    aggregations,
+                    input,
+                } => Some(Self::Aggregate {
+                    aggregations: aggregations.clone(),
+                    input: f(input).map(Box::new).unwrap_or_else(|| input.clone()),
                 }),
             }
         }
@@ -382,6 +407,26 @@ pub fn plan_select(
     let plan = if query.limit > 0 {
         Box::new(QueryPlan::Limit {
             limit: query.limit,
+            input: plan,
+        })
+    } else {
+        plan
+    };
+
+    let plan = if !query.aggregate.is_empty() {
+        let aggregations = query
+            .aggregate
+            .iter()
+            .map(|agg| match agg.op {
+                AggregationOp::Count => Aggregation {
+                    name: agg.name.clone(),
+                    op: agg.op.clone(),
+                },
+            })
+            .collect();
+
+        Box::new(QueryPlan::Aggregate {
+            aggregations,
             input: plan,
         })
     } else {

@@ -31,8 +31,10 @@ pub use self::{
 
 const MAX_NAME_LEN: usize = 50;
 
+// FIXME: use consts for the numeric indexes?
 pub const ATTR_ID_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(0);
 pub const ATTR_TYPE_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(4);
+pub const ATTR_COUNT_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(13);
 
 pub const INDEX_ENTITY_TYPE_LOCAL: LocalIndexId = LocalIndexId::from_u32(0);
 pub const INDEX_IDENT_LOCAL: LocalIndexId = LocalIndexId::from_u32(1);
@@ -221,7 +223,6 @@ impl Registry {
             let local_id = self
                 .register_attribute(attr.clone())
                 .expect("Internal error: could not register builtin attribute");
-
             if attr.id == schema::builtin::ATTR_ID {
                 assert_eq!(local_id, ATTR_ID_LOCAL);
             }

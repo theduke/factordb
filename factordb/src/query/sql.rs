@@ -2,13 +2,13 @@ use std::{collections::HashMap, convert::TryInto};
 
 use anyhow::{bail, Context};
 
-use crate::{data::Value, AnyError};
+use crate::{data::Value, query::select::Aggregation, AnyError};
 
 use super::{
     expr::{BinaryOp, Expr},
     select::{Order, Select, Sort},
 };
-use sqlparser::ast::{Expr as SqlExpr, Value as SqlValue};
+use sqlparser::ast::{Expr as SqlExpr, SelectItem, Value as SqlValue};
 
 pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
     use sqlparser::ast::Statement;
@@ -77,9 +77,25 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
         bail!("SORT BY is not supported");
     }
 
-    if select.projection.len() != 1 || select.projection[0] != sqlparser::ast::SelectItem::Wildcard
+    let mut aggregate = Vec::<Aggregation>::new();
+
+    if select.projection.len() == 1 && select.projection[0] == sqlparser::ast::SelectItem::Wildcard
     {
-        bail!("only wildcard selects are supported (SELECT * FROM ...)");
+        // Select all attributes.
+    } else {
+        for proj in select.projection {
+            let (is_count, alias) = select_item_as_count(&proj);
+            if is_count {
+                let name = alias.unwrap_or_else(|| "count".to_string());
+
+                aggregate.push(Aggregation {
+                    name,
+                    op: crate::query::select::AggregationOp::Count,
+                });
+            } else {
+                bail!("Unsupported SQL projection: {proj:?}");
+            }
+        }
     }
 
     if select.from.len() != 1 {
@@ -152,12 +168,39 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
     Ok(Select {
         filter,
         joins: Vec::new(),
+        aggregate,
         sort,
         variables: HashMap::new(),
         limit,
         offset,
         cursor: None,
     })
+}
+
+/// Check if a projection is "select count(*) [AS XXX]".
+/// Returns (true, None) if it is a count with no alias, (true, Some("alias")) if an alias is given,
+/// or (false, None) if not a count expression.
+fn select_item_as_count(item: &SelectItem) -> (bool, Option<String>) {
+    match item {
+        SelectItem::UnnamedExpr(sqlparser::ast::Expr::Function(f)) => {
+            if f.name.0.len() == 1 && f.name.0[0].value == "count" && f.args.is_empty() {
+                (true, None)
+            } else {
+                (false, None)
+            }
+        }
+        SelectItem::ExprWithAlias {
+            expr: sqlparser::ast::Expr::Function(f),
+            alias,
+        } => {
+            if f.name.0.len() == 1 && f.name.0[0].value == "count" && f.args.is_empty() {
+                (true, Some(alias.value.clone()))
+            } else {
+                (false, None)
+            }
+        }
+        _ => (false, None),
+    }
 }
 
 fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
@@ -427,6 +470,14 @@ mod tests {
             Select::new()
                 .with_sort(AttrTitle::expr(), Order::Desc)
                 .with_sort(AttrIdent::expr(), Order::Asc),
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT count() FROM entities"#).unwrap(),
+            Select::new().with_aggregate(
+                crate::query::select::AggregationOp::Count,
+                "count".to_string()
+            )
         );
     }
 }

@@ -11,7 +11,7 @@ use factordb::{
         expr::Expr,
         migrate::Migration,
         mutate::EntityPatch,
-        select::{Item, Order, Page},
+        select::{AggregationOp, Item, Order, Page},
     },
     AnyError,
 };
@@ -19,7 +19,7 @@ use factordb::{
 use crate::{
     backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
     plan::{self, QueryPlan, ResolvedExpr, Sort},
-    registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry},
+    registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry, ATTR_COUNT_LOCAL},
 };
 
 use super::{
@@ -1233,6 +1233,29 @@ impl MemoryStore {
                     Box::new(out)
                 }
             },
+            QueryPlan::Aggregate {
+                aggregations,
+                input,
+            } => {
+                let input = self.run_query(*input);
+
+                if aggregations.len() == 1 && aggregations[0].op == AggregationOp::Count {
+                    let count: u64 = input.count().try_into().unwrap();
+
+                    // TODO: this is messy... done as a workaroudn because currently
+                    // the query logic only produces TupleIters with maps that use LocalAttributeId keys,
+                    // so arbitrary string keys are not possible
+                    // Need to rewrite to use genric tuples instead
+                    let mut tuple = MemoryTuple::new();
+                    tuple.insert(ATTR_COUNT_LOCAL, MemoryValue::UInt(count));
+
+                    Box::new(std::iter::once(Cow::Owned(tuple)))
+                } else if aggregations.is_empty() {
+                    Box::new(std::iter::empty())
+                } else {
+                    panic!("specified aggregations are not supported by memory backend: {aggregations:?}");
+                }
+            }
         }
     }
 
@@ -1302,6 +1325,13 @@ impl MemoryStore {
             QueryPlan::IndexSelect { index, value } => QueryPlan::IndexSelect {
                 index,
                 value: MemoryValue::from_value_standalone(value),
+            },
+            QueryPlan::Aggregate {
+                aggregations,
+                input,
+            } => QueryPlan::Aggregate {
+                aggregations,
+                input: Box::new(self.build_query_plan(*input, reg)?),
             },
         };
         Ok(plan)
