@@ -213,6 +213,9 @@ impl LogDb {
                             Mutate::Delete(del) => {
                                 data.remove(&del.id);
                             }
+                            Mutate::Select(_sel) => {
+                                todo!("recover_data does not yet support Mutate::Select");
+                            }
                         }
                     }
                 }

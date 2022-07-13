@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use crate::{
     data::{patch::Patch, DataMap, Id},
+    prelude::{Expr, Value},
     schema::AttrMapExt,
 };
 
@@ -80,12 +83,32 @@ pub struct Delete {
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
 #[cfg_attr(feature = "typescript-schema", ts(export))]
+pub enum MutateSelectAction {
+    Delete,
+    Patch(Patch),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
+pub struct MutateSelect {
+    pub filter: Expr,
+    pub variables: HashMap<String, Value>,
+    pub action: MutateSelectAction,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
 pub enum Mutate {
     Create(Create),
     Replace(Replace),
     Merge(Merge),
     Patch(EntityPatch),
     Delete(Delete),
+    Select(MutateSelect),
 }
 
 impl Mutate {
@@ -146,6 +169,12 @@ impl From<Delete> for Mutate {
     }
 }
 
+impl From<MutateSelect> for Mutate {
+    fn from(v: MutateSelect) -> Self {
+        Self::Select(v)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
@@ -189,6 +218,11 @@ impl Batch {
 
     pub fn and_delete(mut self, delete: Delete) -> Self {
         self.actions.push(Mutate::Delete(delete));
+        self
+    }
+
+    pub fn and_select(mut self, sel: MutateSelect) -> Self {
+        self.actions.push(Mutate::Select(sel));
         self
     }
 }

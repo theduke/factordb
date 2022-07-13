@@ -658,19 +658,10 @@ impl Registry {
         Ok(ops)
     }
 
-    pub fn validate_delete(
-        &self,
-        del: query::mutate::Delete,
-        old: DataMap,
-    ) -> Result<Vec<DbOp>, AnyError> {
-        let id = del.id;
-
+    pub fn validate_delete(&self, id: Id, old: DataMap) -> Result<Vec<DbOp>, AnyError> {
         let mut ops = Vec::new();
         let index_ops = self.build_index_ops_delete(&old)?;
         ops.push(DbOp::Tuple(TupleOp::Delete(TupleDelete { id, index_ops })));
-
-        // FIXME: index updates etc
-
         Ok(ops)
     }
 }

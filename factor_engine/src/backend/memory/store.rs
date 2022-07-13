@@ -651,6 +651,34 @@ impl MemoryStore {
         Ok(())
     }
 
+    fn tuple_select_delete(
+        &mut self,
+        selector: &MemoryExpr,
+        revert: &mut RevertList,
+        reg: &Registry,
+    ) -> Result<(), AnyError> {
+        // TODO: use query logic instead of full table scan for speedup.
+        // TODO: figure out how to do this in one step. Two step process
+        // right now due to borrow checker errors.
+        let mut to_remove = Vec::new();
+
+        for (entity_id, entity) in self.entities.iter() {
+            if Self::entity_filter(entity, selector) {
+                to_remove.push(*entity_id);
+            }
+        }
+
+        for entity_id in to_remove {
+            let mem_entity = self.entities.get(&entity_id).unwrap();
+            let data = self.tuple_to_data_map(&mem_entity);
+
+            let ops = reg.validate_delete(entity_id, data)?;
+            self.apply_db_ops(ops, revert, reg)?;
+        }
+
+        Ok(())
+    }
+
     /// Apply database operations.
     /// [RevertOp]s are collected into the provided revert list, which allows
     /// undoing operations.
@@ -825,8 +853,28 @@ impl MemoryStore {
             .ok_or_else(|| EntityNotFound::new(delete.id.into()))
             .map(|t| self.tuple_to_data_map(t))?;
 
-        let ops = reg.validate_delete(delete, old)?;
+        let ops = reg.validate_delete(delete.id, old)?;
         self.apply_db_ops(ops, revert, reg)?;
+        Ok(())
+    }
+
+    fn apply_mutate_select(
+        &mut self,
+        sel: query::mutate::MutateSelect,
+        revert: &mut RevertList,
+        reg: &Registry,
+    ) -> Result<(), AnyError> {
+        match sel.action {
+            query::mutate::MutateSelectAction::Delete => {
+                let resolved = plan::resolve_expr(sel.filter, reg)?;
+                let expr = self.build_memory_expr(resolved, reg)?;
+                self.tuple_select_delete(&expr, revert, reg)?;
+            }
+            query::mutate::MutateSelectAction::Patch(patch) => {
+                self.tuple_select_patch(&sel.filter, &patch, revert, reg)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -849,6 +897,9 @@ impl MemoryStore {
                 query::mutate::Mutate::Merge(merge) => self.apply_merge(merge, &mut revert, reg),
                 query::mutate::Mutate::Delete(del) => self.apply_delete(del, &mut revert, reg),
                 query::mutate::Mutate::Patch(patch) => self.apply_patch(patch, &mut revert, reg),
+                query::mutate::Mutate::Select(sel) => {
+                    self.apply_mutate_select(sel, &mut revert, reg)
+                }
             };
 
             if let Err(err) = res {

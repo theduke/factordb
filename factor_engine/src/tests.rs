@@ -6,7 +6,7 @@ use factordb::{
     data::{patch::Patch, Id, Value, ValueType},
     error::{self, UniqueConstraintViolation},
     map,
-    prelude::{Db, IdOrIdent, Order},
+    prelude::{Batch, Db, IdOrIdent, Order},
     query::{
         self,
         expr::Expr,
@@ -151,6 +151,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_int_sort,
             test_uint_sort,
             test_float_sort,
+            test_select_delete,
         ]
     );
 }
@@ -1299,4 +1300,55 @@ async fn test_float_sort(db: &Db) {
         .map(|x| x.data.get_id().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(&res_ids, &ids[0..11]);
+}
+
+async fn test_select_delete(db: &Db) {
+    for index in 1..=10 {
+        db.create(
+            Id::random(),
+            map! {
+                "test/int": index,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let page = db.select(Select::new()).await.unwrap();
+    assert_eq!(page.items.len(), 10);
+
+    let page = db
+        .select(
+            Select::new()
+                .with_filter(Expr::gt(Expr::attr_ident("test/int"), 5))
+                .with_sort(Expr::attr_ident("test/int"), Order::Asc),
+        )
+        .await
+        .unwrap();
+    let values: Vec<_> = page
+        .items
+        .iter()
+        .map(|item| item.data.get("test/int").unwrap().as_int().unwrap())
+        .collect();
+    assert_eq!(values, vec![6, 7, 8, 9, 10]);
+
+    db.batch(Batch::new().and_select(query::mutate::MutateSelect {
+        filter: Expr::lt(Expr::attr_ident("test/int"), 6),
+        variables: Default::default(),
+        action: query::mutate::MutateSelectAction::Delete,
+    }))
+    .await
+    .unwrap();
+
+    let page = db
+        .select(Select::new().with_sort(Expr::attr_ident("test/int"), Order::Asc))
+        .await
+        .unwrap();
+
+    let values: Vec<_> = page
+        .items
+        .iter()
+        .map(|item| item.data.get("test/int").unwrap().as_int().unwrap())
+        .collect();
+    assert_eq!(values, vec![6, 7, 8, 9, 10]);
 }
