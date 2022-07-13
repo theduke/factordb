@@ -126,7 +126,7 @@ impl AttributeDescriptor for AttrType {
             description: None,
             value_type: ValueType::Ref,
             unique: false,
-            index: false,
+            index: true,
             strict: true,
         }
     }
