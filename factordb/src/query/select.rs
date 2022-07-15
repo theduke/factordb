@@ -49,6 +49,7 @@ pub struct Select {
     #[serde(default = "Vec::<Sort>::new")]
     pub sort: Vec<Sort>,
 
+    #[serde(default)]
     pub aggregate: Vec<Aggregation>,
 
     #[serde(default = "HashMap::<String, Value>::new")]
