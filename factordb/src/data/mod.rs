@@ -21,21 +21,67 @@ pub type IdMap = fnv::FnvHashMap<Id, Value>;
 
 #[macro_export]
 macro_rules! map {
+
+
+    { __map $m:expr, } => {};
+
     {
-        $( $key:literal : $value:expr  ),* $(,)?
+        __map $m:expr,
+        $key:literal : $value:expr ,
+    } => {
+        let id = $key.to_string();
+        $m.insert(id, $value.into());
+    };
+
+    {
+        __map $m:expr,
+        $key:literal : $value:expr
+    } => {
+        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+    };
+
+    {
+        __map $m:expr,
+        $key:literal : $value:expr , $( $rest:tt )*
+    } => {
+        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        map!( __map $m, $( $rest )* );
+    };
+
+    // With ident.
+
+    {
+        __map $m:expr,
+        $key:ident : $value:expr ,
+    } => {
+        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+    };
+
+    {
+        __map $m:expr,
+        $key:ident : $value:expr
+    } => {
+        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+    };
+
+
+    {
+        __map $m:expr,
+        $key:ident : $value:expr , $( $rest:tt )*
+    } => {
+        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        map!( __map $m, $( $rest )* );
+    };
+
+    {
+        $( $rest:tt )*
     } => {
         {
             #[allow(unused_mut)]
-            let mut map = $crate::data::DataMap::new();
-            $(
-                {
-                    let id = $key.to_string();
-                    map.insert(id, $value.into());
-                }
+            let mut m = $crate::data::DataMap::new();
+            map!( __map m, $( $rest )* );
 
-            )*
-
-            map
+            m
         }
 
     };
