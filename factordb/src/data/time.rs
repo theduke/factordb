@@ -4,6 +4,7 @@ use chrono::TimeZone;
 
 use super::Value;
 
+/// A timestamp stored as UNIX timestamp in milliseconds.
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
