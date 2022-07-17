@@ -1,6 +1,8 @@
 mod id;
-
 pub use id::{Id, IdOrIdent};
+
+mod ident;
+pub use ident::{Ident, InvalidIdentError};
 
 mod map;
 pub mod patch;
