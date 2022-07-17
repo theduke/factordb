@@ -1,4 +1,4 @@
-use crate::data::IdOrIdent;
+use crate::{data::IdOrIdent, prelude::Id};
 
 // AttributeNotFound
 
@@ -46,7 +46,7 @@ impl std::error::Error for IndexNotFound {}
 
 #[derive(Debug)]
 pub struct EntityNotFound {
-    ident: IdOrIdent,
+    pub ident: IdOrIdent,
 }
 
 impl EntityNotFound {
@@ -68,7 +68,7 @@ impl std::error::Error for EntityNotFound {}
 #[derive(Debug)]
 pub struct UniqueConstraintViolation {
     pub index: String,
-    pub entity_id: crate::data::Id,
+    pub entity_id: Id,
     pub attribute: String,
     pub value: Option<crate::data::Value>,
 }
@@ -89,3 +89,25 @@ impl std::fmt::Display for UniqueConstraintViolation {
 }
 
 impl std::error::Error for UniqueConstraintViolation {}
+
+#[derive(Debug)]
+pub struct ReferenceConstraintViolation {
+    pub entity: Id,
+    pub attribute: String,
+    pub expected_type: Vec<String>,
+    pub actual_type: Option<String>,
+}
+
+impl std::fmt::Display for ReferenceConstraintViolation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,
+            "Reference constraint violated for entity {}: attribute {} must point to an entity of type {:?}, but it has type {:?}", 
+            self.entity,
+            self.attribute,
+            self.expected_type,
+            self.actual_type,
+       )
+    }
+}
+
+impl std::error::Error for ReferenceConstraintViolation {}

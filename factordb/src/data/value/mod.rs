@@ -336,7 +336,7 @@ impl Value {
                     }),
                 }
             }
-            ValueType::Ref => {
+            ValueType::Ref | ValueType::RefConstrained(_) => {
                 match self {
                     Value::String(strval) => {
                         // TODO: somehow idents?

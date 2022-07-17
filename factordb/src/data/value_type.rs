@@ -1,4 +1,4 @@
-use super::Value;
+use super::{IdOrIdent, Value};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -33,7 +33,19 @@ pub enum ValueType {
     /// Reference to an entity id.
     Ref,
 
+    /// Reference to entities with a constrained type.
+    // TODO: merge with Ref variant on next format breaking change
+    RefConstrained(ConstrainedRefType),
+
     Const(Value),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript-schema", ts(export))]
+pub struct ConstrainedRefType {
+    pub allowed_entity_types: Vec<IdOrIdent>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -74,6 +86,7 @@ impl ValueType {
             | Self::Bytes
             | Self::DateTime
             | Self::Ref
+            | Self::RefConstrained(_)
             | Self::Url
             | Self::Map(..) => {
                 // TODO: this is probably not the right thing to do...

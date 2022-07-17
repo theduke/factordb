@@ -3,10 +3,16 @@ use fnv::FnvHashMap;
 
 use factordb::{
     data::{Id, IdOrIdent, ValueType},
-    error, schema, AnyError,
+    error::{self, EntityNotFound},
+    schema, AnyError,
 };
 
-use crate::util::stable_map::{StableMap, StableMapKey};
+use crate::util::{
+    stable_map::{StableMap, StableMapKey},
+    VecSet,
+};
+
+use super::entity_registry::EntityRegistry;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct LocalAttributeId(u32);
@@ -24,6 +30,8 @@ pub struct RegisteredAttribute {
     pub is_deleted: bool,
     pub namespace: String,
     pub plain_name: String,
+
+    pub ref_allowed_entity_types: Option<VecSet<Id>>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,7 +68,11 @@ impl AttributeRegistry {
         self.names.clear();
     }
 
-    fn add(&mut self, schema: schema::AttributeSchema) -> Result<LocalAttributeId, AnyError> {
+    fn add(
+        &mut self,
+        schema: schema::AttributeSchema,
+        entities: &EntityRegistry,
+    ) -> Result<LocalAttributeId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
         let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
@@ -68,12 +80,31 @@ impl AttributeRegistry {
         let uid = schema.id;
         let ident = schema.ident.clone();
 
+        let ref_allowed_entity_types = match &schema.value_type {
+            ValueType::Ref => None,
+            ValueType::RefConstrained(con) => {
+                let ids = con
+                    .allowed_entity_types
+                    .iter()
+                    .map(|ty| -> Result<_, EntityNotFound> {
+                        let entity = entities.must_get_by_ident(&ty)?;
+                        Ok(entity.schema.id)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let ids = VecSet::from_iter(ids);
+                Some(ids)
+            }
+            _ => None,
+        };
+
         let local_id = self.items.insert_with(move |local_id| RegisteredAttribute {
             local_id,
             namespace: namespace.to_string(),
             plain_name: plain_name.to_string(),
             schema,
             is_deleted: false,
+            ref_allowed_entity_types,
         });
 
         self.uids.insert(uid, local_id);
@@ -155,9 +186,10 @@ impl AttributeRegistry {
     pub(super) fn register(
         &mut self,
         attr: schema::AttributeSchema,
+        entities: &EntityRegistry,
     ) -> Result<LocalAttributeId, AnyError> {
         self.validate_schema(&attr, false)?;
-        self.add(attr)
+        self.add(attr, entities)
     }
 
     /// Update an existing entity.

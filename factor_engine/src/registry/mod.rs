@@ -18,7 +18,7 @@ use factordb::{
 
 use crate::backend::{
     DbOp, TupleCreate, TupleDelete, TupleIndexInsert, TupleIndexOp, TupleIndexRemove,
-    TupleIndexReplace, TupleMerge, TupleOp, TupleReplace,
+    TupleIndexReplace, TupleMerge, TupleOp, TupleReplace, ValidateEntityType,
 };
 
 use self::entity_registry::EntityRegistry;
@@ -35,6 +35,7 @@ const MAX_NAME_LEN: usize = 50;
 pub const ATTR_ID_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(0);
 pub const ATTR_TYPE_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(4);
 pub const ATTR_COUNT_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(13);
+pub const ATTR_PARENT_LOCAL: LocalAttributeId = LocalAttributeId::from_u32(14);
 
 pub const INDEX_ENTITY_TYPE_LOCAL: LocalIndexId = LocalIndexId::from_u32(0);
 pub const INDEX_IDENT_LOCAL: LocalIndexId = LocalIndexId::from_u32(1);
@@ -297,7 +298,7 @@ impl Registry {
         &mut self,
         attr: schema::AttributeSchema,
     ) -> Result<LocalAttributeId, AnyError> {
-        self.attrs.register(attr)
+        self.attrs.register(attr, &self.entities)
     }
 
     pub fn attribute_update(
@@ -341,27 +342,41 @@ impl Registry {
         Ok(())
     }
 
-    /// Valdiate that a value conforms to a value type.
-    /// Coerces values into the desired type where appropriate.
-    ///
-    /// The name is provided for better errors.
-    fn validate_coerce_value_named(
-        name: &str,
-        ty: &ValueType,
-        value: &mut Value,
-    ) -> Result<(), AnyError> {
-        value
-            .coerce_mut(ty)
-            .context(format!("Invalid attribute '{}'", name))
-    }
-
     fn validate_attr_value(
         &self,
         attr: &RegisteredAttribute,
         value: &mut Value,
+        ops: &mut Vec<DbOp>,
     ) -> Result<(), AnyError> {
-        Self::validate_coerce_value_named(&attr.schema.ident, &attr.schema.value_type, value)
-            .context(format!("Invalid value for attribute {}", attr.schema.ident))
+        value
+            .coerce_mut(&attr.schema.value_type)
+            .context(format!("Invalid value for attribute {}", attr.schema.ident))?;
+
+        match &attr.schema.value_type {
+            ValueType::Ref => {
+                if attr.local_id != ATTR_ID_LOCAL {
+                    let id = value.as_id().unwrap();
+                    ops.push(DbOp::new_validate_entity_exists(id));
+                }
+            }
+            ValueType::RefConstrained(_con) => {
+                if attr.local_id != ATTR_ID_LOCAL {
+                    let id = value.as_id().unwrap();
+                    // TODO: don't require cloning every time...
+                    let allowed_types = attr
+                        .ref_allowed_entity_types
+                        .clone()
+                        .expect("Internal error: attr.ref_allowed_entity_types must be set if attr has ref type constraints");
+                    ops.push(DbOp::ValidateEntityType(ValidateEntityType {
+                        id,
+                        allowed_types,
+                    }));
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 
     // fn make_id_map(
@@ -385,6 +400,7 @@ impl Registry {
         &self,
         data: &mut DataMap,
         entity: &RegisteredEntity,
+        ops: &mut Vec<DbOp>,
     ) -> Result<(), AnyError> {
         for field in &entity.schema.attributes {
             // TODO: create a static list of fields for each entity so that
@@ -409,19 +425,19 @@ impl Registry {
                     // probably better left to the backend.
                 }
                 (Some(value), Cardinality::Optional) => {
-                    self.validate_attr_value(attr, value)?;
+                    self.validate_attr_value(attr, value, ops)?;
                 }
                 (Some(value), Cardinality::Required) => {
-                    self.validate_attr_value(attr, value)?;
+                    self.validate_attr_value(attr, value, ops)?;
                 }
                 (Some(value), Cardinality::Many) => match value {
                     Value::List(items) => {
                         for item in items {
-                            self.validate_attr_value(attr, item)?;
+                            self.validate_attr_value(attr, item, ops)?;
                         }
                     }
                     single => {
-                        self.validate_attr_value(attr, single)?;
+                        self.validate_attr_value(attr, single, ops)?;
                         let value = std::mem::replace(single, Value::Unit);
                         *single = Value::List(vec![value]);
                     }
@@ -432,7 +448,7 @@ impl Registry {
         // Validate extended parent fields.
         for parent_ident in &entity.schema.extends {
             let parent = self.entities.must_get_by_ident(parent_ident)?;
-            self.validate_entity_data(data, parent)?;
+            self.validate_entity_data(data, parent, ops)?;
         }
 
         // FIXME: if entity is strict, validate that no extra fields are present
@@ -440,14 +456,18 @@ impl Registry {
         Ok(())
     }
 
-    fn validate_attributes(&self, mut data: DataMap) -> Result<DataMap, AnyError> {
+    fn validate_attributes(
+        &self,
+        mut data: DataMap,
+        ops: &mut Vec<DbOp>,
+    ) -> Result<DataMap, AnyError> {
         if let Some(ty) = data.get_type() {
             let entity = self.entities.must_get_by_ident(&ty)?;
-            self.validate_entity_data(&mut data, entity)?;
+            self.validate_entity_data(&mut data, entity, ops)?;
         } else {
             for (key, value) in &mut data.0 {
                 let attr = self.attrs.must_get_by_name(&key)?;
-                self.validate_attr_value(attr, value)?;
+                self.validate_attr_value(attr, value, ops)?;
             }
         }
 
@@ -559,10 +579,10 @@ impl Registry {
     pub fn validate_create(&self, create: query::mutate::Create) -> Result<Vec<DbOp>, AnyError> {
         let id = create.id.non_nil_or_randomize();
 
-        let mut data = self.validate_attributes(create.data)?;
+        let mut ops = Vec::new();
+        let mut data = self.validate_attributes(create.data, &mut ops)?;
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
-        let mut ops = Vec::new();
         let index_ops = self.build_index_ops_create(&data)?;
         ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
             id: create.id,
@@ -589,12 +609,12 @@ impl Registry {
 
         let id = replace.id.non_nil_or_randomize();
 
-        let mut data = self.validate_attributes(replace.data)?;
+        let mut ops = Vec::new();
+        let mut data = self.validate_attributes(replace.data, &mut ops)?;
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
         let index_ops = self.build_index_ops_update(&data, &old)?;
 
-        let mut ops = Vec::new();
         ops.push(DbOp::Tuple(TupleOp::Replace(TupleReplace {
             id: replace.id,
             data,
@@ -614,11 +634,11 @@ impl Registry {
         debug_assert_eq!(Some(epatch.id), current_entity.get_id());
 
         let new_entity = epatch.patch.apply_map(current_entity.clone())?;
-        let data = self.validate_attributes(new_entity)?;
+        let mut ops = Vec::new();
+        let data = self.validate_attributes(new_entity, &mut ops)?;
 
         let index_ops = self.build_index_ops_update(&data, &current_entity)?;
 
-        let mut ops = Vec::new();
         ops.push(DbOp::Tuple(TupleOp::Replace(TupleReplace {
             id: epatch.id,
             data,
@@ -643,10 +663,10 @@ impl Registry {
         let mut values = old.clone();
         // FIXME: can't use extend here, have to respect list patching etc.
         values.0.extend(merge.data.0.into_iter());
-        let mut data = self.validate_attributes(values)?;
+        let mut ops = Vec::new();
+        let mut data = self.validate_attributes(values, &mut ops)?;
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
-        let mut ops = Vec::new();
         let index_ops = self.build_index_ops_update(&data, &old)?;
         ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge {
             id,
@@ -664,6 +684,35 @@ impl Registry {
         let index_ops = self.build_index_ops_delete(&old)?;
         ops.push(DbOp::Tuple(TupleOp::Delete(TupleDelete { id, index_ops })));
         Ok(ops)
+    }
+
+    pub(crate) fn validate_entity_type_constraint(
+        &self,
+        entity_id: Id,
+        val: &ValidateEntityType,
+        ty: Option<Id>,
+    ) -> Result<(), factordb::error::ReferenceConstraintViolation> {
+        if let Some(ty) = ty {
+            if val.allowed_types.contains(&ty) {
+                return Ok(());
+            }
+        }
+
+        let expected_type = val
+            .allowed_types
+            .iter()
+            .filter_map(|id| self.entity_by_id(*id).map(|e| e.schema.ident.clone()))
+            .collect();
+
+        let actual_type = ty.and_then(|t| self.entity_by_id(t).map(|e| e.schema.ident.clone()));
+
+        Err(factordb::error::ReferenceConstraintViolation {
+            entity: entity_id,
+            // TODO: add attribute!
+            attribute: "?".to_string(),
+            expected_type,
+            actual_type,
+        })
     }
 }
 

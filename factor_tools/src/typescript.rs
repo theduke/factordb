@@ -460,6 +460,10 @@ fn value_to_ts_type(ty: &ValueType) -> Type {
         ValueType::DateTime => Type::Ident("Timestamp".to_string()),
         ValueType::Url => Type::Ident("Url".to_string()),
         ValueType::Ref => Type::Ident("EntityId".to_string()),
+        ValueType::RefConstrained(_) => {
+            // TODO: use type alias for specific entity id if restricted to single type
+            Type::Ident("EntityId".to_string())
+        }
         ValueType::Const(v) => Type::Constant(value_to_ts_value(v)),
     }
 }

@@ -3,8 +3,8 @@ use schema::AttributeSchema;
 
 use crate::{backend::Backend, Engine};
 use factordb::{
-    data::{patch::Patch, Id, Value, ValueType},
-    error::{self, UniqueConstraintViolation},
+    data::{patch::Patch, value_type::ConstrainedRefType, Id, Value, ValueType},
+    error::{self, EntityNotFound, ReferenceConstraintViolation, UniqueConstraintViolation},
     map,
     prelude::{Batch, Db, IdOrIdent, Order},
     query::{
@@ -30,70 +30,6 @@ where
     let engine = Engine::new(b);
     let db = Db::new(engine);
     spawner(test_db(db).boxed());
-}
-
-const NS_TEST: &'static str = "test";
-
-const ATTR_TEXT: &'static str = "text";
-const ATTR_INT: &'static str = "int";
-const ATTR_UINT: &'static str = "uint";
-const ATTR_FLOAT: &'static str = "float";
-const ENTITY_COMMENT: &'static str = "test/comment";
-
-const ENTITY_FILE: &'static str = "test/File";
-const ENTITY_IMAGE: &'static str = "test/Image";
-const ENTITY_IMAGE_JPEG: &'static str = "test/ImageJpeg";
-
-async fn apply_test_schema(db: &Db) {
-    let mig = query::migrate::Migration::new()
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_UINT, ValueType::UInt))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_FLOAT, ValueType::Float))
-        .entity_create(EntitySchema {
-            id: Id::nil(),
-            ident: ENTITY_COMMENT.into(),
-            title: Some("Comment".into()),
-            description: None,
-            attributes: vec![EntityAttribute {
-                attribute: "test/int".into(),
-                cardinality: schema::Cardinality::Many,
-            }],
-            extends: Vec::new(),
-            strict: false,
-        })
-        .entity_create(EntitySchema {
-            id: Id::nil(),
-            ident: ENTITY_FILE.into(),
-            title: Some("File".into()),
-            description: None,
-            attributes: vec![EntityAttribute {
-                attribute: "test/int".into(),
-                cardinality: schema::Cardinality::Many,
-            }],
-            extends: Vec::new(),
-            strict: false,
-        })
-        .entity_create(EntitySchema {
-            id: Id::nil(),
-            ident: ENTITY_IMAGE.into(),
-            title: Some("Image".into()),
-            description: None,
-            attributes: vec![],
-            extends: vec![ENTITY_FILE.into()],
-            strict: false,
-        })
-        .entity_create(EntitySchema {
-            id: Id::nil(),
-            ident: ENTITY_IMAGE_JPEG.into(),
-            title: Some("Jpeg Image".into()),
-            description: None,
-            attributes: vec![],
-            extends: vec![ENTITY_IMAGE.into()],
-            strict: false,
-        });
-
-    db.migrate(mig).await.unwrap();
 }
 
 macro_rules! run_tests {
@@ -153,8 +89,84 @@ async fn test_db_with_test_schema(db: &Db) {
             test_float_sort,
             test_select_delete,
             test_aggregate_count,
+            test_reference_validation,
+            test_reference_validation_constrained_type,
         ]
     );
+}
+
+const NS_TEST: &'static str = "test";
+
+const ATTR_TEXT: &'static str = "text";
+const ATTR_INT: &'static str = "int";
+const ATTR_UINT: &'static str = "uint";
+const ATTR_FLOAT: &'static str = "float";
+const ENTITY_COMMENT: &'static str = "test/comment";
+const ATTR_REF: &'static str = "test/ref";
+const ATTR_REF_IMAGE: &'static str = "test/ref_image";
+
+const ENTITY_FILE: &'static str = "test/File";
+const ENTITY_IMAGE: &'static str = "test/Image";
+const ENTITY_IMAGE_JPEG: &'static str = "test/ImageJpeg";
+
+async fn apply_test_schema(db: &Db) {
+    let mig = query::migrate::Migration::new()
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int))
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_UINT, ValueType::UInt))
+        .attr_create(AttributeSchema::new(NS_TEST, ATTR_FLOAT, ValueType::Float))
+        .attr_create(AttributeSchema::new(NS_TEST, "ref", ValueType::Ref))
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_COMMENT.into(),
+            title: Some("Comment".into()),
+            description: None,
+            attributes: vec![EntityAttribute {
+                attribute: "test/int".into(),
+                cardinality: schema::Cardinality::Many,
+            }],
+            extends: Vec::new(),
+            strict: false,
+        })
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_FILE.into(),
+            title: Some("File".into()),
+            description: None,
+            attributes: vec![EntityAttribute {
+                attribute: "test/int".into(),
+                cardinality: schema::Cardinality::Many,
+            }],
+            extends: Vec::new(),
+            strict: false,
+        })
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_IMAGE.into(),
+            title: Some("Image".into()),
+            description: None,
+            attributes: vec![],
+            extends: vec![ENTITY_FILE.into()],
+            strict: false,
+        })
+        .entity_create(EntitySchema {
+            id: Id::nil(),
+            ident: ENTITY_IMAGE_JPEG.into(),
+            title: Some("Jpeg Image".into()),
+            description: None,
+            attributes: vec![],
+            extends: vec![ENTITY_IMAGE.into()],
+            strict: false,
+        })
+        .attr_create(AttributeSchema::new(
+            NS_TEST,
+            "ref_image",
+            ValueType::RefConstrained(ConstrainedRefType {
+                allowed_entity_types: vec!["test/Image".into()],
+            }),
+        ));
+
+    db.migrate(mig).await.unwrap();
 }
 
 async fn test_attr_corcions(db: &factordb::prelude::Db) {
@@ -1418,4 +1430,82 @@ async fn test_aggregate_count(db: &Db) {
     //         .unwrap(),
     //     5,
     // );
+}
+
+async fn test_reference_validation(db: &Db) {
+    let id1 = Id::random();
+    db.create(id1, map! {}).await.unwrap();
+
+    let id2 = Id::random();
+    db.create(
+        id2,
+        map! {
+            ATTR_REF: id1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let err = db
+        .create(
+            id2,
+            map! {
+                ATTR_REF: Id::nil(),
+            },
+        )
+        .await
+        .err()
+        .unwrap()
+        .downcast::<EntityNotFound>()
+        .unwrap();
+    assert_eq!(err.ident.as_id().unwrap(), Id::nil());
+}
+
+async fn test_reference_validation_constrained_type(db: &Db) {
+    let id1 = Id::random();
+    db.create(
+        id1,
+        map! {
+            "factor/type": ENTITY_IMAGE,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        db.entity(id1)
+            .await
+            .unwrap()
+            .get_type()
+            .unwrap()
+            .to_string(),
+        ENTITY_IMAGE,
+    );
+
+    let id2 = Id::random();
+    db.create(
+        id2,
+        map! {
+            ATTR_REF_IMAGE: id1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let id3 = Id::random();
+    db.create(id3, map! {}).await.unwrap();
+
+    // TODO: test error details
+    let _err = db
+        .create(
+            Id::random(),
+            map! {
+                ATTR_REF_IMAGE: id3,
+            },
+        )
+        .await
+        .err()
+        .unwrap()
+        .downcast::<ReferenceConstraintViolation>()
+        .unwrap();
 }

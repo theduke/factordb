@@ -4,7 +4,10 @@ pub mod memory;
 #[cfg(feature = "log")]
 pub mod log;
 
-use crate::registry::{LocalIndexId, SharedRegistry};
+use crate::{
+    registry::{LocalIndexId, SharedRegistry},
+    util::VecSet,
+};
 use factordb::{
     data::{patch::Patch, DataMap, Id, IdOrIdent, Value},
     query::{self, expr::Expr, migrate::Migration, select::Item},
@@ -141,9 +144,32 @@ pub struct IndexPopulate {
     pub index_id: Id,
 }
 
+/// Validate that an entity with the given id exists.
+#[derive(Clone, Debug)]
+pub struct ValidateEntityExists {
+    pub id: Id,
+}
+
+/// Validate that an entity with the given id exists and has the specified type(s).
+#[derive(Clone, Debug)]
+pub struct ValidateEntityType {
+    pub id: Id,
+    // TODO: this should be an Arc<_> to prevent cloning overhead
+    // TODO: use LocalEntityId instead of string id?
+    pub allowed_types: VecSet<Id>,
+}
+
 #[derive(Clone, Debug)]
 pub enum DbOp {
+    ValidateEntityExists(ValidateEntityExists),
+    ValidateEntityType(ValidateEntityType),
     Tuple(TupleOp),
     Select(SelectOpt),
     IndexPopulate(IndexPopulate),
+}
+
+impl DbOp {
+    pub fn new_validate_entity_exists(id: Id) -> Self {
+        Self::ValidateEntityExists(ValidateEntityExists { id })
+    }
 }

@@ -184,6 +184,14 @@ impl IdOrIdent {
             Self::Name(value.to_string().into())
         }
     }
+
+    pub fn from_string(value: String) -> Self {
+        if let Ok(id) = uuid::Uuid::from_str(&value) {
+            Self::Id(Id(id))
+        } else {
+            Self::Name(value.into())
+        }
+    }
 }
 
 impl From<Id> for IdOrIdent {

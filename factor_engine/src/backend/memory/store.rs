@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, str::FromStr};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -19,7 +19,10 @@ use factordb::{
 use crate::{
     backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
     plan::{self, QueryPlan, ResolvedExpr, Sort},
-    registry::{self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry, ATTR_COUNT_LOCAL},
+    registry::{
+        self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry, ATTR_COUNT_LOCAL,
+        ATTR_TYPE_LOCAL,
+    },
 };
 
 use super::{
@@ -100,6 +103,12 @@ impl MemoryStore {
     fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&MemoryTuple> {
         let id = self.resolve_ident(ident)?;
         self.entities.get(&id)
+    }
+
+    fn must_get_entity(&self, id: Id) -> Result<&MemoryTuple, EntityNotFound> {
+        self.entities
+            .get(&id)
+            .ok_or_else(|| EntityNotFound { ident: id.into() })
     }
 
     fn must_resolve_entity(
@@ -732,6 +741,37 @@ impl MemoryStore {
                 DbOp::IndexPopulate(pop) => {
                     let index = reg.require_index_by_id(pop.index_id)?;
                     self.index_populate(&reg, index, revert)?;
+                }
+                DbOp::ValidateEntityExists(val) => {
+                    self.must_get_entity(val.id)?;
+                }
+                DbOp::ValidateEntityType(val) => {
+                    let entity = self.must_get_entity(val.id)?;
+                    let ty = if let Some(ty) = entity.get(&ATTR_TYPE_LOCAL) {
+                        match ty {
+                            MemoryValue::String(s) => {
+                                let s = s.as_ref();
+
+                                if let Ok(id) = Id::from_str(s) {
+                                    Some(id)
+                                } else {
+                                    reg.entity_by_name(s).map(|x| x.schema.id)
+                                }
+                            }
+                            MemoryValue::Id(id) => Some(*id),
+                            _ => {
+                                bail!(
+                                "Invalid entity data: reference column contains invalid data type"
+                            );
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    // TODO: provide actual validated entity id in first arg.
+                    // Probably need to add it to the db op!
+                    reg.validate_entity_type_constraint(Id::nil(), &val, ty)?;
                 }
             }
         }
