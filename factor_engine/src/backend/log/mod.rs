@@ -499,6 +499,11 @@ impl Backend for LogDb {
         ready(res).boxed()
     }
 
+    fn select_map(&self, query: query::select::Select) -> BackendFuture<Vec<DataMap>> {
+        let res = self.state.mem.read().unwrap().select_map(query);
+        ready(res).boxed()
+    }
+
     fn apply_batch(&self, batch: Batch) -> super::BackendFuture<()> {
         self.clone().apply_batch(batch).boxed()
     }

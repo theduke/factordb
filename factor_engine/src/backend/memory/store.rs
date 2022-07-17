@@ -1411,6 +1411,29 @@ impl MemoryStore {
         })
     }
 
+    pub fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, AnyError> {
+        // TODO: query validation and planning
+
+        let span = tracing::debug_span!("executing select");
+        let _guard = span.enter();
+
+        let reg = self.registry().read().unwrap();
+
+        tracing::trace!(?query, "building query");
+        let raw_plan = plan::plan_select(query, &reg)?;
+        let mem_plan = self.build_query_plan(raw_plan, &reg)?;
+        tracing::debug!(query_plan=?mem_plan, "executing plan");
+
+        let items = self
+            .run_query(mem_plan)
+            .map(|tuple| self.tuple_to_data_map(tuple.as_ref()))
+            .collect::<Vec<_>>();
+
+        tracing::trace!(item_count=%items.len() ,"select complete");
+
+        Ok(items)
+    }
+
     fn build_memory_expr(
         &self,
         expr: ResolvedExpr,

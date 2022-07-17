@@ -73,6 +73,10 @@ impl Db {
         self.client.select(query).await
     }
 
+    pub async fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, AnyError> {
+        self.client.select_map(query).await
+    }
+
     // Mutate.
 
     pub async fn batch(&self, batch: Batch) -> Result<(), AnyError> {
@@ -134,10 +138,14 @@ pub trait DbClient {
 
     fn schema(&self) -> DbFuture<'_, crate::schema::DbSchema>;
     fn entity(&self, id: IdOrIdent) -> DbFuture<'_, Option<DataMap>>;
+
     fn select(
         &self,
         query: query::select::Select,
     ) -> DbFuture<'_, query::select::Page<query::select::Item>>;
+
+    fn select_map(&self, query: query::select::Select) -> DbFuture<'_, Vec<DataMap>>;
+
     fn batch(&self, batch: Batch) -> DbFuture<'_, ()>;
     fn migrate(&self, migration: query::migrate::Migration) -> DbFuture<'_, ()>;
     fn migrations(&self) -> DbFuture<'_, Vec<Migration>>;

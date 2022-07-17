@@ -7,6 +7,7 @@ use futures::{future::ready, FutureExt};
 
 use factordb::{
     data,
+    prelude::DataMap,
     query::{self, select::Item},
 };
 
@@ -53,6 +54,11 @@ impl super::Backend for MemoryDb {
 
     fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<Item>> {
         let res = self.state.read().unwrap().select(query);
+        ready(res).boxed()
+    }
+
+    fn select_map(&self, query: query::select::Select) -> BackendFuture<Vec<DataMap>> {
+        let res = self.state.read().unwrap().select_map(query);
         ready(res).boxed()
     }
 

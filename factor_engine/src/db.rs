@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use data::DataMap;
+use futures::FutureExt;
 
 use crate::backend::Backend;
 use factordb::{
@@ -53,6 +54,10 @@ impl Engine {
         self.backend.select(query).await
     }
 
+    pub async fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, AnyError> {
+        self.backend.select_map(query).await
+    }
+
     pub async fn batch(&self, batch: query::mutate::Batch) -> Result<(), AnyError> {
         self.backend.apply_batch(batch).await
     }
@@ -91,7 +96,11 @@ impl factordb::db::DbClient for Engine {
         &self,
         query: query::select::Select,
     ) -> DbFuture<'_, query::select::Page<query::select::Item>> {
-        Box::pin(async { self.select(query).await })
+        self.select(query).boxed()
+    }
+
+    fn select_map(&self, query: query::select::Select) -> DbFuture<'_, Vec<DataMap>> {
+        self.select_map(query).boxed()
     }
 
     fn batch(&self, batch: factordb::prelude::Batch) -> DbFuture<'_, ()> {

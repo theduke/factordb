@@ -34,6 +34,8 @@ pub trait Backend {
     fn entity(&self, id: IdOrIdent) -> BackendFuture<Option<DataMap>>;
     fn select(&self, query: query::select::Select) -> BackendFuture<query::select::Page<Item>>;
 
+    fn select_map(&self, query: query::select::Select) -> BackendFuture<Vec<DataMap>>;
+
     fn apply_batch(&self, batch: query::mutate::Batch) -> BackendFuture<()>;
     fn migrate(&self, migration: query::migrate::Migration) -> BackendFuture<()>;
 
