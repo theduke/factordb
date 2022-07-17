@@ -24,7 +24,7 @@ factor_macros = { version = "0.1", path = "../factor_macros" }
 url = { version = "2.2.2", features = ["serde"] }
 sqlparser = "0.18.0"
 # FIXME: use normal crate once https://github.com/GREsau/schemars/pull/141 is merged upstream.
-schemars = { version = "0.8.8", features = ["chrono", "uuid", "url", "ordered-float"], optional = true, git = "https://github.com/theduke/schemars", branch = "ordered-float" }
+schemars = { version = "0.8.10", features = ["chrono", "uuid1", "url", "ordered-float"], optional = true, git = "https://github.com/theduke/schemars", branch = "ordered-float" }
 # FIXME: use normal crate once https://github.com/Aleph-Alpha/ts-rs/pull/97 is merged upstream.
 ts-rs = { version = "6.1.2", features = ["chrono-impl", "uuid-impl", "ordered-float-impl"], optional = true, git = "https://github.com/theduke/ts-rs", branch = "theduke" }
 
