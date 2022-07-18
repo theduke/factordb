@@ -743,35 +743,39 @@ impl MemoryStore {
                     self.index_populate(&reg, index, revert)?;
                 }
                 DbOp::ValidateEntityExists(val) => {
-                    self.must_get_entity(val.id)?;
+                    if !self.ignore_index_constraints {
+                        self.must_get_entity(val.id)?;
+                    }
                 }
                 DbOp::ValidateEntityType(val) => {
-                    let entity = self.must_get_entity(val.id)?;
-                    let ty = if let Some(ty) = entity.get(&ATTR_TYPE_LOCAL) {
-                        match ty {
-                            MemoryValue::String(s) => {
-                                let s = s.as_ref();
+                    if !self.ignore_index_constraints {
+                        let entity = self.must_get_entity(val.id)?;
+                        let ty = if let Some(ty) = entity.get(&ATTR_TYPE_LOCAL) {
+                            match ty {
+                                MemoryValue::String(s) => {
+                                    let s = s.as_ref();
 
-                                if let Ok(id) = Id::from_str(s) {
-                                    Some(id)
-                                } else {
-                                    reg.entity_by_name(s).map(|x| x.schema.id)
+                                    if let Ok(id) = Id::from_str(s) {
+                                        Some(id)
+                                    } else {
+                                        reg.entity_by_name(s).map(|x| x.schema.id)
+                                    }
                                 }
-                            }
-                            MemoryValue::Id(id) => Some(*id),
-                            _ => {
-                                bail!(
+                                MemoryValue::Id(id) => Some(*id),
+                                _ => {
+                                    bail!(
                                 "Invalid entity data: reference column contains invalid data type"
                             );
+                                }
                             }
-                        }
-                    } else {
-                        None
-                    };
+                        } else {
+                            None
+                        };
 
-                    // TODO: provide actual validated entity id in first arg.
-                    // Probably need to add it to the db op!
-                    reg.validate_entity_type_constraint(Id::nil(), &val, ty)?;
+                        // TODO: provide actual validated entity id in first arg.
+                        // Probably need to add it to the db op!
+                        reg.validate_entity_type_constraint(Id::nil(), &val, ty)?;
+                    }
                 }
             }
         }
