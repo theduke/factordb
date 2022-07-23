@@ -281,7 +281,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                         assert_eq!(
                             <#prop as factordb::schema::AttributeDescriptor>::schema().value_type,
                             <#ty as factordb::prelude::ValueTypeDescriptor>::value_type(),
-                            "a Vec<_> field attribute have a ValueType::List<INNER_TYPE>"
+                            "an entity field with type Vec<_> must point to an attribute that is a List ( ValueType::List<INNER_TYPE> )"
                         );
                         factordb::schema::Cardinality::Required
                     })
