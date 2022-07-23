@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use fnv::FnvHashMap;
 
 use factordb::{
@@ -81,8 +81,25 @@ impl AttributeRegistry {
         let ident = schema.ident.clone();
 
         let ref_allowed_entity_types = match &schema.value_type {
+            ValueType::List(inner) => match &**inner {
+                ValueType::RefConstrained(con) => {
+                    let ids = con
+                        .allowed_entity_types
+                        .iter()
+                        .map(|ty| -> Result<_, EntityNotFound> {
+                            let entity = entities.must_get_by_ident(&ty)?;
+                            Ok(entity.schema.id)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let ids = VecSet::from_iter(ids);
+                    Some(ids)
+                }
+                _ => None,
+            },
             ValueType::Ref => None,
             ValueType::RefConstrained(con) => {
+                // TODO: code is same as above, unify with helper funciton!
                 let ids = con
                     .allowed_entity_types
                     .iter()
@@ -251,6 +268,11 @@ impl AttributeRegistry {
                             super::MAX_NAME_LEN
                         ));
                     }
+                }
+            }
+            ValueType::List(item_type) => {
+                if !item_type.is_scalar() {
+                    bail!("List item type '{:?}' is not a scalar", item_type);
                 }
             }
             other => {

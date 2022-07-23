@@ -99,6 +99,13 @@ impl ValueType {
         }
     }
 
+    pub fn is_list(&self) -> bool {
+        match self {
+            Self::List(_) => true,
+            _ => false,
+        }
+    }
+
     /// Compute the value type of this value.
     pub fn for_value(value: &Value) -> Self {
         match value {

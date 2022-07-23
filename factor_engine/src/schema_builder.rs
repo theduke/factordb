@@ -250,6 +250,21 @@ fn build_attribute_change_type(
                 ops: Vec::new(),
             }])
         }
+        (old, ValueType::List(item_ty)) => {
+            if old == &**item_ty && !item_ty.is_list() {
+                let mut new_schema = attr.schema.clone();
+                new_schema.value_type = action.new_type.clone();
+                reg.attribute_update(new_schema, true)?;
+
+                Ok(vec![ResolvedAction {
+                    action: SchemaAction::AttributeChangeType(action),
+                    // FIXME: need an op to change the type if required!
+                    ops: Vec::new(),
+                }])
+            } else {
+                bail!("Attribute type can only be changed to list if the list items have the previous type");
+            }
+        }
         (old, new) => {
             bail!(
                 "Changing the type of attribute '{}' from '{:?}' to '{:?}' is not supported",

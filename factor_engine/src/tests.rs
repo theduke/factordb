@@ -56,6 +56,12 @@ async fn test_db(db: Db) {
     test_remove_attr(&db).await;
     db.purge_all_data().await.unwrap();
 
+    test_attr_type_list(&db).await;
+    db.purge_all_data().await.unwrap();
+
+    test_convert_attr_to_list(&db).await;
+    db.purge_all_data().await.unwrap();
+
     test_db_with_test_schema(&db).await;
 }
 
@@ -1508,4 +1514,111 @@ async fn test_reference_validation_constrained_type(db: &Db) {
         .unwrap()
         .downcast::<ReferenceConstraintViolation>()
         .unwrap();
+}
+
+async fn test_attr_type_list(db: &Db) {
+    db.migrate(Migration::new().attr_create(AttributeSchema {
+        id: Id::nil(),
+        ident: "test/list".into(),
+        title: None,
+        description: None,
+        value_type: ValueType::List(Box::new(ValueType::UInt)),
+        unique: false,
+        index: false,
+        strict: false,
+    }))
+    .await
+    .unwrap();
+
+    let id1 = Id::random();
+    db.create(
+        id1,
+        map! {
+            "test/list": vec![1, 2, 3],
+        },
+    )
+    .await
+    .unwrap();
+
+    let data = db.entity(id1).await.unwrap();
+    let values = data
+        .get("test/list")
+        .unwrap()
+        .clone()
+        .try_into_list::<u64>()
+        .unwrap();
+    assert_eq!(values, vec![1, 2, 3]);
+}
+
+async fn test_convert_attr_to_list(db: &Db) {
+    db.migrate(Migration::new().attr_create(AttributeSchema {
+        id: Id::nil(),
+        ident: "test/int_to_list".to_string(),
+        title: None,
+        description: None,
+        value_type: ValueType::Int,
+        unique: false,
+        index: false,
+        strict: false,
+    }))
+    .await
+    .unwrap();
+
+    let id1 = Id::random();
+    db.create(
+        id1,
+        map! {
+            "test/int_to_list": 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let id2 = Id::random();
+    db.create(
+        id2,
+        map! {
+            "test/int_to_list": 2,
+        },
+    )
+    .await
+    .unwrap();
+
+    db.migrate(Migration::new().attr_change_type(
+        "test/int_to_list",
+        ValueType::List(Box::new(ValueType::Int)),
+    ))
+    .await
+    .unwrap();
+
+    let attr = db
+        .schema()
+        .await
+        .unwrap()
+        .resolve_attr(&"test/int_to_list".to_string().into())
+        .unwrap()
+        .clone();
+    assert_eq!(attr.value_type, ValueType::List(Box::new(ValueType::Int)));
+
+    let val1 = db
+        .entity(id1)
+        .await
+        .unwrap()
+        .get("test/int_to_list")
+        .unwrap()
+        .clone()
+        .try_into_list::<i64>()
+        .unwrap();
+    assert_eq!(val1, vec![1]);
+
+    let val2 = db
+        .entity(id2)
+        .await
+        .unwrap()
+        .get("test/int_to_list")
+        .unwrap()
+        .clone()
+        .try_into_list::<i64>()
+        .unwrap();
+    assert_eq!(val2, vec![2]);
 }

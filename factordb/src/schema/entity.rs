@@ -11,6 +11,7 @@ use super::AttrMapExt;
 pub enum Cardinality {
     Optional,
     Required,
+    #[deprecated]
     Many,
 }
 
@@ -35,13 +36,6 @@ impl EntityAttribute {
         Self {
             attribute: self.attribute,
             cardinality: Cardinality::Optional,
-        }
-    }
-
-    pub fn into_many(self) -> Self {
-        Self {
-            attribute: self.attribute,
-            cardinality: Cardinality::Many,
         }
     }
 }

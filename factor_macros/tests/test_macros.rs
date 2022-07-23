@@ -10,7 +10,7 @@ struct AttrSomeTitle(String);
 
 #[derive(Attribute)]
 #[factor(namespace = "test")]
-struct AttrLength(u64);
+struct AttrLength(Vec<u64>);
 
 #[derive(Attribute)]
 #[factor(namespace = "test")]
@@ -74,7 +74,7 @@ fn test_entity_derive() {
                 },
                 EntityAttribute {
                     attribute: AttrLength::IDENT,
-                    cardinality: factordb::schema::Cardinality::Many,
+                    cardinality: factordb::schema::Cardinality::Required,
                 },
             ],
             extends: Vec::new(),

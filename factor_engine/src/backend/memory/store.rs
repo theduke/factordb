@@ -1070,6 +1070,7 @@ impl MemoryStore {
         let mut reg = self.registry.read().unwrap().clone();
         let (mig, ops) = crate::schema_builder::build_migration(&mut reg, mig, is_internal)?;
 
+        let mut revert = Vec::new();
         for action in mig.actions {
             match action {
                 query::migrate::SchemaAction::IndexCreate(create) => {
@@ -1094,11 +1095,14 @@ impl MemoryStore {
                 query::migrate::SchemaAction::EntityAttributeAdd(_) => {}
                 query::migrate::SchemaAction::EntityAttributeChangeCardinality(_) => {}
                 query::migrate::SchemaAction::AttributeCreateIndex(_) => {}
-                query::migrate::SchemaAction::AttributeChangeType(_) => {}
+                query::migrate::SchemaAction::AttributeChangeType(action) => {
+                    // FIXME: this should be done via an OP created by the schema builder.
+                    let attr = reg.require_attr_by_name(&action.attribute)?;
+                    self.convert_attribute_type(attr, &action.new_type, &mut revert)?;
+                }
             }
         }
 
-        let mut revert = Vec::new();
         if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert, &reg) {
             self.apply_revert(revert);
             Err(err)
@@ -1651,6 +1655,32 @@ impl MemoryStore {
         for index in indexes {
             self.index_create(&index).unwrap();
         }
+    }
+
+    fn convert_attribute_type(
+        &mut self,
+        attr: &registry::RegisteredAttribute,
+        new_type: &factordb::prelude::ValueType,
+        revert: &mut RevertList,
+    ) -> Result<(), anyhow::Error> {
+        for (id, tuple) in &mut self.entities {
+            if let Some(memory_value) = tuple.get_mut(&attr.local_id) {
+                let mut value = memory_value.to_value();
+                value.coerce_mut(new_type)?;
+
+                let new_memory_value = self.interner.intern_value(value);
+
+                if &new_memory_value != memory_value {
+                    *memory_value = new_memory_value;
+                    revert.push(RevertOp::TupleMerged {
+                        id: *id,
+                        replaced_data: vec![(attr.local_id, Some(memory_value.clone()))],
+                    })
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

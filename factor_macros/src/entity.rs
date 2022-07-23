@@ -274,9 +274,19 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             let prop = &field_attrs.attribute.unwrap();
 
             let cardinality = match &field.ty {
-                x if is_option(x) => quote!(Optional),
-                x if is_vec(x) => quote!(Many),
-                _ => quote!(Required),
+                x if is_option(x) => quote!(factordb::schema::Cardinality::Optional),
+                ty if is_vec(ty) => {
+                    // TODO: use custom attr to signal Vec = optional?
+                    quote!({
+                        assert_eq!(
+                            <#prop as factordb::schema::AttributeDescriptor>::schema().value_type,
+                            <#ty as factordb::prelude::ValueTypeDescriptor>::value_type(),
+                            "a Vec<_> field attribute have a ValueType::List<INNER_TYPE>"
+                        );
+                        factordb::schema::Cardinality::Required
+                    })
+                }
+                _ => quote!(factordb::schema::Cardinality::Required),
             };
 
             if field_name.to_string() == "id" {
@@ -285,7 +295,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 schema_attributes.push(quote! {
                     factordb::schema::EntityAttribute {
                         attribute: <#prop as factordb::schema::AttributeDescriptor>::IDENT,
-                        cardinality: factordb::schema::Cardinality::#cardinality,
+                        cardinality: #cardinality,
                     },
                 });
 

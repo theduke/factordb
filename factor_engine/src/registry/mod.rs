@@ -342,18 +342,24 @@ impl Registry {
         Ok(())
     }
 
-    fn validate_attr_value(
+    // WARNING!: this function must only be called with a value that has already been
+    // coerced tot he appropriate value type with `Value::coerce_mut`.
+    fn build_attr_value_ops(
         &self,
         attr: &RegisteredAttribute,
-        value: &mut Value,
+        ty: &ValueType,
+        value: &Value,
         ops: &mut Vec<DbOp>,
     ) -> Result<(), AnyError> {
-        value
-            .coerce_mut(&attr.schema.value_type)
-            .context(format!("Invalid value for attribute {}", attr.schema.ident))?;
+        debug_assert!({
+            let mut v = value.clone();
+            v.coerce_mut(ty).unwrap();
+            v == *value
+        });
 
-        match &attr.schema.value_type {
+        match ty {
             ValueType::Ref => {
+                // Check that referenced entity exists, but skip the ID field to prevent checking the current tuple.
                 if attr.local_id != ATTR_ID_LOCAL {
                     let id = value.as_id().unwrap();
                     ops.push(DbOp::new_validate_entity_exists(id));
@@ -374,6 +380,29 @@ impl Registry {
                 }
             }
             _ => {}
+        }
+
+        Ok(())
+    }
+
+    fn validate_attr_value(
+        &self,
+        attr: &RegisteredAttribute,
+        value: &mut Value,
+        ops: &mut Vec<DbOp>,
+    ) -> Result<(), AnyError> {
+        value
+            .coerce_mut(&attr.schema.value_type)
+            .context(format!("Invalid value for attribute {}", attr.schema.ident))?;
+
+        if let ValueType::List(item_type) = &attr.schema.value_type {
+            // NOTE: this unwrap is fine because coerce_mut above has ensured that it is a list.
+            let items = value.as_list().unwrap();
+            for item in items {
+                self.build_attr_value_ops(attr, &*item_type, item, ops)?;
+            }
+        } else {
+            self.build_attr_value_ops(attr, &attr.schema.value_type, value, ops)?;
         }
 
         Ok(())
@@ -415,10 +444,14 @@ impl Registry {
                 }
                 (None, Cardinality::Optional) => {}
                 (None, Cardinality::Required) => {
-                    return Err(anyhow!(
-                        "Missing required attribute '{}'",
-                        attr.schema.ident
-                    ));
+                    if attr.schema.value_type.is_list() {
+                        data.insert(attr.schema.ident.clone(), Value::List(vec![]));
+                    } else {
+                        return Err(anyhow!(
+                            "Missing required attribute '{}'",
+                            attr.schema.ident
+                        ));
+                    }
                 }
                 (None, Cardinality::Many) => {
                     // We could insert a list here, but that decision is

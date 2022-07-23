@@ -136,6 +136,7 @@ pub enum TupleOp {
 #[derive(Clone, Debug)]
 pub struct SelectOpt {
     pub selector: Expr,
+    // FIXME: use dedicated type to prevent the reundant id field...
     /// Reusing TupleOp for convenience.
     /// Note that the Id on these TupleOps is always nil.
     pub op: TupleOp,

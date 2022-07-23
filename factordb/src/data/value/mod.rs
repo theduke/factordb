@@ -1,6 +1,7 @@
 //! This module contains types for representing data stored in a FactorDB.
 
 mod serde_deserialize;
+use anyhow::bail;
 pub use serde_serialize::{to_value, to_value_map, ValueSerializeError};
 
 mod serde_serialize;
@@ -269,9 +270,24 @@ impl Value {
                     path: None,
                 }),
             },
-            ValueType::List(_item_type) => {
-                panic!("Internal error: List is not a valid ValueType for attributes");
-            }
+            ValueType::List(item_type) => match &mut *self {
+                Self::Unit => {
+                    *self = Self::List(vec![]);
+                    Ok(())
+                }
+                Self::List(items) => {
+                    for item in items {
+                        item.coerce_mut(&*item_type)?;
+                    }
+                    Ok(())
+                }
+                other => {
+                    other.coerce_mut(&*item_type)?;
+                    let inner = other.clone();
+                    *self = Self::List(vec![inner]);
+                    Ok(())
+                }
+            },
             ValueType::Any => {
                 // Everything is allowed.
                 Ok(())
@@ -460,6 +476,21 @@ impl Value {
         }
     }
 
+    pub fn try_into_list<T>(self) -> Result<Vec<T>, anyhow::Error>
+    where
+        T: TryFrom<Value>,
+        T::Error: std::error::Error + Send + Sync + 'static,
+    {
+        if let Self::List(items) = self {
+            items
+                .into_iter()
+                .map(|x| T::try_from(x).map_err(anyhow::Error::from))
+                .collect()
+        } else {
+            bail!("expected list, got {:?}", self.value_type());
+        }
+    }
+
     /// Returns `true` if the value is [`Bytes`].
     pub fn is_bytes(&self) -> bool {
         matches!(self, Self::Bytes(..))
@@ -637,6 +668,22 @@ impl TryFrom<Value> for u64 {
         match value {
             Value::UInt(x) => Ok(x),
             Value::Int(x) if x >= 0 => Ok(x as u64),
+            _ => Err(ValueCoercionError {
+                expected_type: ValueType::UInt,
+                actual_type: value.value_type(),
+                path: None,
+            }),
+        }
+    }
+}
+
+impl TryFrom<Value> for i64 {
+    type Error = ValueCoercionError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Int(x) => Ok(x),
+            Value::UInt(x) if x <= i64::MAX as u64 => Ok(x as i64),
             _ => Err(ValueCoercionError {
                 expected_type: ValueType::UInt,
                 actual_type: value.value_type(),
