@@ -102,6 +102,84 @@ pub enum SchemaAction {
     IndexDelete(IndexDelete),
 }
 
+impl From<IndexDelete> for SchemaAction {
+    fn from(action: IndexDelete) -> Self {
+        SchemaAction::IndexDelete(action)
+    }
+}
+
+impl From<IndexCreate> for SchemaAction {
+    fn from(action: IndexCreate) -> Self {
+        SchemaAction::IndexCreate(action)
+    }
+}
+
+impl From<EntityDelete> for SchemaAction {
+    fn from(action: EntityDelete) -> Self {
+        SchemaAction::EntityDelete(action)
+    }
+}
+
+impl From<EntityUpsert> for SchemaAction {
+    fn from(action: EntityUpsert) -> Self {
+        SchemaAction::EntityUpsert(action)
+    }
+}
+
+impl From<EntityAttributeRemove> for SchemaAction {
+    fn from(action: EntityAttributeRemove) -> Self {
+        SchemaAction::EntityAttributeRemove(action)
+    }
+}
+
+impl From<EntityAttributeChangeCardinality> for SchemaAction {
+    fn from(action: EntityAttributeChangeCardinality) -> Self {
+        SchemaAction::EntityAttributeChangeCardinality(action)
+    }
+}
+
+impl From<EntityAttributeAdd> for SchemaAction {
+    fn from(action: EntityAttributeAdd) -> Self {
+        SchemaAction::EntityAttributeAdd(action)
+    }
+}
+
+impl From<EntityCreate> for SchemaAction {
+    fn from(action: EntityCreate) -> Self {
+        SchemaAction::EntityCreate(action)
+    }
+}
+
+impl From<AttributeDelete> for SchemaAction {
+    fn from(action: AttributeDelete) -> Self {
+        SchemaAction::AttributeDelete(action)
+    }
+}
+
+impl From<AttributeCreateIndex> for SchemaAction {
+    fn from(action: AttributeCreateIndex) -> Self {
+        SchemaAction::AttributeCreateIndex(action)
+    }
+}
+
+impl From<AttributeChangeType> for SchemaAction {
+    fn from(action: AttributeChangeType) -> Self {
+        SchemaAction::AttributeChangeType(action)
+    }
+}
+
+impl From<AttributeUpsert> for SchemaAction {
+    fn from(action: AttributeUpsert) -> Self {
+        SchemaAction::AttributeUpsert(action)
+    }
+}
+
+impl From<AttributeCreate> for SchemaAction {
+    fn from(action: AttributeCreate) -> Self {
+        SchemaAction::AttributeCreate(action)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Migration {
     pub name: Option<String>,
