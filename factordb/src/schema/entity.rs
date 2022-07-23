@@ -11,8 +11,6 @@ use super::AttrMapExt;
 pub enum Cardinality {
     Optional,
     Required,
-    #[deprecated]
-    Many,
 }
 
 impl Cardinality {

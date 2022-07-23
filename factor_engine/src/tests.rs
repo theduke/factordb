@@ -3,10 +3,13 @@ use schema::AttributeSchema;
 
 use crate::{backend::Backend, Engine};
 use factordb::{
-    data::{patch::Patch, value_type::ConstrainedRefType, Id, Value, ValueType},
+    data::{
+        patch::Patch, value::ValueCoercionError, value_type::ConstrainedRefType, Id, Value,
+        ValueType,
+    },
     error::{self, EntityNotFound, ReferenceConstraintViolation, UniqueConstraintViolation},
     map,
-    prelude::{Batch, Cardinality, Db, IdOrIdent, Order},
+    prelude::{Batch, Db, IdOrIdent, Order},
     query::{
         self,
         expr::Expr,
@@ -62,9 +65,6 @@ async fn test_db(db: Db) {
     test_convert_attr_to_list(&db).await;
     db.purge_all_data().await.unwrap();
 
-    test_change_many_cardinality(&db).await;
-    db.purge_all_data().await.unwrap();
-
     test_db_with_test_schema(&db).await;
 }
 
@@ -100,6 +100,7 @@ async fn test_db_with_test_schema(db: &Db) {
             test_aggregate_count,
             test_reference_validation,
             test_reference_validation_constrained_type,
+            test_attr_disallows_multiple_values,
         ]
     );
 }
@@ -108,6 +109,7 @@ const NS_TEST: &'static str = "test";
 
 const ATTR_TEXT: &'static str = "text";
 const ATTR_INT: &'static str = "int";
+const ATTR_INT_LIST: &'static str = "int_list";
 const ATTR_UINT: &'static str = "uint";
 const ATTR_FLOAT: &'static str = "float";
 const ENTITY_COMMENT: &'static str = "test/comment";
@@ -129,6 +131,10 @@ async fn apply_test_schema(db: &Db) {
             ValueType::Int,
         ))
         .attr_create(AttributeSchema::new(
+            format!("{}/{}", NS_TEST, ATTR_INT_LIST),
+            ValueType::new_list(ValueType::Int),
+        ))
+        .attr_create(AttributeSchema::new(
             format!("{}/{}", NS_TEST, ATTR_UINT),
             ValueType::UInt,
         ))
@@ -146,8 +152,8 @@ async fn apply_test_schema(db: &Db) {
             title: Some("Comment".into()),
             description: None,
             attributes: vec![EntityAttribute {
-                attribute: "test/int".into(),
-                cardinality: schema::Cardinality::Many,
+                attribute: "test/int_list".into(),
+                cardinality: schema::Cardinality::Optional,
             }],
             extends: Vec::new(),
             strict: false,
@@ -158,8 +164,8 @@ async fn apply_test_schema(db: &Db) {
             title: Some("File".into()),
             description: None,
             attributes: vec![EntityAttribute {
-                attribute: "test/int".into(),
-                cardinality: schema::Cardinality::Many,
+                attribute: "test/int_list".into(),
+                cardinality: schema::Cardinality::Optional,
             }],
             extends: Vec::new(),
             strict: false,
@@ -190,6 +196,16 @@ async fn apply_test_schema(db: &Db) {
         ));
 
     db.migrate(mig).await.unwrap();
+}
+
+async fn test_attr_disallows_multiple_values(db: &Db) {
+    let is_coercion = db
+        .create(Id::random(), map! {"test/int": vec![22]})
+        .await
+        .err()
+        .unwrap()
+        .is::<ValueCoercionError>();
+    assert_eq!(true, is_coercion);
 }
 
 async fn test_attr_corcions(db: &factordb::prelude::Db) {
@@ -1649,57 +1665,4 @@ async fn test_convert_attr_to_list(db: &Db) {
         .try_into_list::<i64>()
         .unwrap();
     assert_eq!(val2, vec![2]);
-}
-
-async fn test_change_many_cardinality(db: &Db) {
-    db.migrate(
-        Migration::new()
-            .attr_create(AttributeSchema {
-                id: Id::nil(),
-                ident: "test/int".to_string(),
-                title: None,
-                description: None,
-                value_type: ValueType::List(Box::new(ValueType::Int)),
-                unique: false,
-                index: false,
-                strict: false,
-            })
-            .entity_create(EntitySchema {
-                id: Id::nil(),
-                ident: "test/entity_many".to_string(),
-                title: None,
-                description: None,
-                attributes: vec![EntityAttribute {
-                    attribute: "test/int".to_string().into(),
-                    cardinality: Cardinality::Many,
-                }],
-                extends: vec![],
-                strict: false,
-            }),
-    )
-    .await
-    .unwrap();
-
-    db.migrate(
-        Migration::new().action(SchemaAction::EntityAttributeChangeCardinality(
-            EntityAttributeChangeCardinality {
-                entity_type: "test/entity_many".to_string(),
-                attribute: "test/int".to_string(),
-                new_cardinality: Cardinality::Required,
-            },
-        )),
-    )
-    .await
-    .unwrap();
-
-    let card = db
-        .schema()
-        .await
-        .unwrap()
-        .resolve_entity(&"test/entity_many".into())
-        .unwrap()
-        .attribute("test/int")
-        .unwrap()
-        .cardinality;
-    assert_eq!(card, Cardinality::Required);
 }

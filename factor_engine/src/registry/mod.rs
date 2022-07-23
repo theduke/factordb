@@ -514,28 +514,12 @@ impl Registry {
                         ));
                     }
                 }
-                (None, Cardinality::Many) => {
-                    // We could insert a list here, but that decision is
-                    // probably better left to the backend.
-                }
                 (Some(value), Cardinality::Optional) => {
                     self.validate_attr_value(attr, value, ops)?;
                 }
                 (Some(value), Cardinality::Required) => {
                     self.validate_attr_value(attr, value, ops)?;
                 }
-                (Some(value), Cardinality::Many) => match value {
-                    Value::List(items) => {
-                        for item in items {
-                            self.validate_attr_value(attr, item, ops)?;
-                        }
-                    }
-                    single => {
-                        self.validate_attr_value(attr, single, ops)?;
-                        let value = std::mem::replace(single, Value::Unit);
-                        *single = Value::List(vec![value]);
-                    }
-                },
             }
         }
 

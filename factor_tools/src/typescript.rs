@@ -423,7 +423,6 @@ fn field_ts_type(
     match field.cardinality {
         factordb::schema::Cardinality::Optional => Type::Union(vec![inner, Type::Null]),
         factordb::schema::Cardinality::Required => inner,
-        factordb::schema::Cardinality::Many => Type::Array(Box::new(inner)),
     }
 }
 

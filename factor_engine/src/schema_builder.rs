@@ -449,7 +449,6 @@ fn build_entity_attribute_change_cardinality(
     })?;
 
     match (field.cardinality, change.new_cardinality) {
-        (Cardinality::Optional, Cardinality::Many) => {}
         (Cardinality::Optional, Cardinality::Optional) => {
             bail!("Cardinality is unchanged");
         }
@@ -459,27 +458,6 @@ fn build_entity_attribute_change_cardinality(
         }
         (Cardinality::Required, Cardinality::Optional) => {}
         (Cardinality::Required, Cardinality::Required) => {
-            bail!("Cardinality is unchanged");
-        }
-        (Cardinality::Required, Cardinality::Many) => {}
-        (Cardinality::Many, Cardinality::Required | Cardinality::Optional) => {
-            // NOTE: this is only here for migrating away from Cardinality::Many.
-            // Can be removed once Many is removed!
-            if attr.schema.value_type.is_list() {
-                let mut new_entity = entity.schema.clone();
-                new_entity
-                    .attributes
-                    .iter_mut()
-                    .find(|a| a.attribute == attr.schema.ident())
-                    .unwrap()
-                    .cardinality = change.new_cardinality;
-                reg.entity_update(new_entity, true)?;
-            } else {
-                // TODO: allow with a migration that trims extranious values.
-                bail!("Can't change cardinality from many to optional if value type is not a list (it is: {:?})", attr.schema.value_type);
-            }
-        }
-        (Cardinality::Many, Cardinality::Many) => {
             bail!("Cardinality is unchanged");
         }
     }
