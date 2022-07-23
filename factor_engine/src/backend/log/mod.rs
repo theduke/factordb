@@ -651,7 +651,7 @@ mod tests {
             name: None,
             actions: vec![query::migrate::SchemaAction::AttributeCreate(
                 query::migrate::AttributeCreate {
-                    schema: schema::AttributeSchema::new("test", "text", data::ValueType::String),
+                    schema: schema::AttributeSchema::new("test/text", data::ValueType::String),
                 },
             )],
         };

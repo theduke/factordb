@@ -30,14 +30,10 @@ pub struct AttributeSchema {
 }
 
 impl AttributeSchema {
-    pub fn new(
-        namespace: impl Into<String>,
-        name: impl Into<String>,
-        value_type: ValueType,
-    ) -> Self {
+    pub fn new(ident: impl Into<String>, value_type: ValueType) -> Self {
         Self {
             id: Id::nil(),
-            ident: format!("{}/{}", namespace.into(), name.into()),
+            ident: ident.into(),
             title: None,
             description: None,
             value_type,

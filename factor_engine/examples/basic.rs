@@ -11,9 +11,8 @@ async fn custom() {
     let db = factordb::db::Db::new(engine);
 
     db.migrate(
-        Migration::new().attr_create(
-            AttributeSchema::new("test", "unique", ValueType::String).with_unique(true),
-        ),
+        Migration::new()
+            .attr_create(AttributeSchema::new("test/unique", ValueType::String).with_unique(true)),
     )
     .await
     .unwrap();

@@ -120,11 +120,26 @@ const ENTITY_IMAGE_JPEG: &'static str = "test/ImageJpeg";
 
 async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_TEXT, ValueType::String))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_INT, ValueType::Int))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_UINT, ValueType::UInt))
-        .attr_create(AttributeSchema::new(NS_TEST, ATTR_FLOAT, ValueType::Float))
-        .attr_create(AttributeSchema::new(NS_TEST, "ref", ValueType::Ref))
+        .attr_create(AttributeSchema::new(
+            format!("{}/{}", NS_TEST, ATTR_TEXT),
+            ValueType::String,
+        ))
+        .attr_create(AttributeSchema::new(
+            format!("{}/{}", NS_TEST, ATTR_INT),
+            ValueType::Int,
+        ))
+        .attr_create(AttributeSchema::new(
+            format!("{}/{}", NS_TEST, ATTR_UINT),
+            ValueType::UInt,
+        ))
+        .attr_create(AttributeSchema::new(
+            format!("{}/{}", NS_TEST, ATTR_FLOAT),
+            ValueType::Float,
+        ))
+        .attr_create(AttributeSchema::new(
+            format!("{}/{}", NS_TEST, "ref"),
+            ValueType::Ref,
+        ))
         .entity_create(EntitySchema {
             id: Id::nil(),
             ident: ENTITY_COMMENT.into(),
@@ -168,8 +183,7 @@ async fn apply_test_schema(db: &Db) {
             strict: false,
         })
         .attr_create(AttributeSchema::new(
-            NS_TEST,
-            "ref_image",
+            format!("{}/{}", NS_TEST, "ref_image"),
             ValueType::RefConstrained(ConstrainedRefType {
                 allowed_entity_types: vec!["test/Image".into()],
             }),
@@ -713,7 +727,10 @@ async fn test_create_attribute(f: &Db) {
         name: None,
         actions: vec![query::migrate::SchemaAction::AttributeCreate(
             query::migrate::AttributeCreate {
-                schema: schema::AttributeSchema::new(NS_TEST, "text", ValueType::String),
+                schema: schema::AttributeSchema::new(
+                    format!("{}/{}", NS_TEST, "text"),
+                    ValueType::String,
+                ),
             },
         )],
     };
@@ -966,8 +983,7 @@ async fn test_query_contains_with_two_lists(db: &Db) {
 async fn test_remove_attr(db: &Db) {
     // Create new attribute.
     let mig = Migration::new().attr_create(AttributeSchema::new(
-        NS_TEST,
-        "removeAttr",
+        format!("{}/{}", NS_TEST, "removeAttr"),
         ValueType::String,
     ));
     db.migrate(mig).await.unwrap();
@@ -1009,9 +1025,15 @@ async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
 }
 
 async fn test_index_unique(db: &Db) {
-    db.migrate(query::migrate::Migration::new().attr_create(
-        AttributeSchema::new(NS_TEST, "indexed_unique", ValueType::String).with_unique(true),
-    ))
+    db.migrate(
+        query::migrate::Migration::new().attr_create(
+            AttributeSchema::new(
+                format!("{}/{}", NS_TEST, "indexed_unique"),
+                ValueType::String,
+            )
+            .with_unique(true),
+        ),
+    )
     .await
     .unwrap();
 
@@ -1033,9 +1055,12 @@ async fn test_index_unique(db: &Db) {
 }
 
 async fn test_index_non_unique(db: &Db) {
-    db.migrate(query::migrate::Migration::new().attr_create(
-        AttributeSchema::new(NS_TEST, "indexed", ValueType::String).with_indexed(true),
-    ))
+    db.migrate(
+        query::migrate::Migration::new().attr_create(
+            AttributeSchema::new(format!("{}/{}", NS_TEST, "indexed"), ValueType::String)
+                .with_indexed(true),
+        ),
+    )
     .await
     .unwrap();
 
