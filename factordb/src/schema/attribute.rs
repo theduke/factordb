@@ -51,6 +51,16 @@ impl AttributeSchema {
         IdOrIdent::from(self.ident.clone())
     }
 
+    pub fn with_title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
     pub fn with_unique(mut self, unique: bool) -> Self {
         self.unique = unique;
         self
@@ -58,6 +68,11 @@ impl AttributeSchema {
 
     pub fn with_indexed(mut self, index: bool) -> Self {
         self.index = index;
+        self
+    }
+
+    pub fn with_strict(mut self, strict: bool) -> Self {
+        self.strict = strict;
         self
     }
 

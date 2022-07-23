@@ -80,6 +80,18 @@ pub struct EntitySchema {
 }
 
 impl EntitySchema {
+    pub fn new(ident: impl Into<String>) -> Self {
+        Self {
+            id: Id::nil(),
+            ident: ident.into(),
+            title: None,
+            description: None,
+            attributes: vec![],
+            extends: vec![],
+            strict: false,
+        }
+    }
+
     pub fn ident(&self) -> IdOrIdent {
         IdOrIdent::Name(self.ident.clone().into())
     }
@@ -88,6 +100,34 @@ impl EntitySchema {
         self.attributes
             .iter()
             .find(|a| a.attribute.as_name() == Some(name))
+    }
+
+    pub fn with_title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    pub fn with_attribute(mut self, attr: impl Into<IdOrIdent>, cardinality: Cardinality) -> Self {
+        self.attributes.push(EntityAttribute {
+            attribute: attr.into(),
+            cardinality,
+        });
+        self
+    }
+
+    pub fn with_attributes(mut self, attributes: Vec<EntityAttribute>) -> Self {
+        self.attributes.extend(attributes);
+        self
+    }
+
+    pub fn with_extend(mut self, extend: impl Into<IdOrIdent>) -> Self {
+        self.extends.push(extend.into());
+        self
     }
 
     /// Split the ident into (namespace, name)
