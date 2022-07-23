@@ -458,6 +458,8 @@ impl LogDb {
         };
         self.write_event_revertable(&mut mutable, event, revert_epoch)
             .await?;
+
+        *self.state.registry.write().unwrap() = reg;
         Ok(())
     }
 

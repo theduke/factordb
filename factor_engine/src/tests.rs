@@ -6,7 +6,7 @@ use factordb::{
     data::{patch::Patch, value_type::ConstrainedRefType, Id, Value, ValueType},
     error::{self, EntityNotFound, ReferenceConstraintViolation, UniqueConstraintViolation},
     map,
-    prelude::{Batch, Db, IdOrIdent, Order},
+    prelude::{Batch, Cardinality, Db, IdOrIdent, Order},
     query::{
         self,
         expr::Expr,
@@ -60,6 +60,9 @@ async fn test_db(db: Db) {
     db.purge_all_data().await.unwrap();
 
     test_convert_attr_to_list(&db).await;
+    db.purge_all_data().await.unwrap();
+
+    test_change_many_cardinality(&db).await;
     db.purge_all_data().await.unwrap();
 
     test_db_with_test_schema(&db).await;
@@ -1621,4 +1624,57 @@ async fn test_convert_attr_to_list(db: &Db) {
         .try_into_list::<i64>()
         .unwrap();
     assert_eq!(val2, vec![2]);
+}
+
+async fn test_change_many_cardinality(db: &Db) {
+    db.migrate(
+        Migration::new()
+            .attr_create(AttributeSchema {
+                id: Id::nil(),
+                ident: "test/int".to_string(),
+                title: None,
+                description: None,
+                value_type: ValueType::List(Box::new(ValueType::Int)),
+                unique: false,
+                index: false,
+                strict: false,
+            })
+            .entity_create(EntitySchema {
+                id: Id::nil(),
+                ident: "test/entity_many".to_string(),
+                title: None,
+                description: None,
+                attributes: vec![EntityAttribute {
+                    attribute: "test/int".to_string().into(),
+                    cardinality: Cardinality::Many,
+                }],
+                extends: vec![],
+                strict: false,
+            }),
+    )
+    .await
+    .unwrap();
+
+    db.migrate(
+        Migration::new().action(SchemaAction::EntityAttributeChangeCardinality(
+            EntityAttributeChangeCardinality {
+                entity_type: "test/entity_many".to_string(),
+                attribute: "test/int".to_string(),
+                new_cardinality: Cardinality::Required,
+            },
+        )),
+    )
+    .await
+    .unwrap();
+
+    let card = db
+        .schema()
+        .await
+        .unwrap()
+        .resolve_entity(&"test/entity_many".into())
+        .unwrap()
+        .attribute("test/int")
+        .unwrap()
+        .cardinality;
+    assert_eq!(card, Cardinality::Required);
 }
