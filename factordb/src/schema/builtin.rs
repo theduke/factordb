@@ -288,23 +288,25 @@ impl AttributeDescriptor for AttrAttributes {
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Entity Attributes".into()),
             description: None,
-            value_type: ValueType::Object(crate::data::value_type::ObjectType {
-                name: Some("ObjectType".to_string()),
-                fields: vec![
-                    crate::data::value_type::ObjectField {
-                        name: "attribute".to_string(),
-                        value_type: ValueType::Ref,
-                    },
-                    crate::data::value_type::ObjectField {
-                        name: "cardinality".to_string(),
-                        value_type: ValueType::Union(vec![
-                            ValueType::Const("Optional".into()),
-                            ValueType::Const("Many".into()),
-                            ValueType::Const("Required".into()),
-                        ]),
-                    },
-                ],
-            }),
+            value_type: ValueType::List(Box::new(ValueType::Object(
+                crate::data::value_type::ObjectType {
+                    name: Some("ObjectType".to_string()),
+                    fields: vec![
+                        crate::data::value_type::ObjectField {
+                            name: "attribute".to_string(),
+                            value_type: ValueType::Ref,
+                        },
+                        crate::data::value_type::ObjectField {
+                            name: "cardinality".to_string(),
+                            value_type: ValueType::Union(vec![
+                                ValueType::Const("Optional".into()),
+                                ValueType::Const("Many".into()),
+                                ValueType::Const("Required".into()),
+                            ]),
+                        },
+                    ],
+                },
+            ))),
             unique: false,
             index: false,
             strict: true,
@@ -326,7 +328,7 @@ impl AttributeDescriptor for AttrExtend {
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Extends".into()),
             description: None,
-            value_type: ValueType::Bool,
+            value_type: ValueType::List(Box::new(ValueType::Ref)),
             unique: false,
             index: false,
             strict: true,
@@ -378,11 +380,11 @@ impl EntityDescriptor for EntitySchemaType {
                 ATTR_ISRELATION.into(),
                 EntityAttribute {
                     attribute: ATTR_EXTEND.into(),
-                    cardinality: Cardinality::Many,
+                    cardinality: Cardinality::Required,
                 },
                 EntityAttribute {
                     attribute: ATTR_ATTRIBUTES.into(),
-                    cardinality: Cardinality::Many,
+                    cardinality: Cardinality::Required,
                 },
             ],
             extends: Vec::new(),
@@ -429,7 +431,7 @@ impl AttributeDescriptor for AttrIndexAttributes {
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Indexed Attributes".into()),
             description: None,
-            value_type: ValueType::Ref,
+            value_type: ValueType::List(Box::new(ValueType::Ref)),
             unique: false,
             index: false,
             strict: true,
@@ -457,7 +459,7 @@ impl EntityDescriptor for IndexSchemaType {
                 EntityAttribute::from(ATTR_DESCRIPTION).into_optional(),
                 EntityAttribute {
                     attribute: ATTR_INDEX_ATTRIBUTES.into(),
-                    cardinality: Cardinality::Many,
+                    cardinality: Cardinality::Required,
                 },
             ],
             extends: Vec::new(),

@@ -272,7 +272,8 @@ impl AttributeRegistry {
             }
             ValueType::List(item_type) => {
                 if !item_type.is_scalar() {
-                    bail!("List item type '{:?}' is not a scalar", item_type);
+                    // FIXME: removed after allowing List<_>, validate if any checks need to be added
+                    // bail!("List item type '{:?}' is not a scalar", item_type);
                 }
             }
             other => {
