@@ -76,6 +76,10 @@ pub struct ObjectField {
 }
 
 impl ValueType {
+    pub fn new_list(inner: ValueType) -> Self {
+        ValueType::List(Box::new(inner))
+    }
+
     pub fn is_scalar(&self) -> bool {
         match self {
             Self::Bool
