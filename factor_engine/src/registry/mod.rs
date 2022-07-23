@@ -6,7 +6,7 @@ use fnv::FnvHashSet;
 
 use std::sync::{Arc, RwLock};
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 
 use factordb::{
     data::{DataMap, Id, IdMap, IdOrIdent, Value, ValueType},
@@ -136,6 +136,11 @@ impl Registry {
     #[inline]
     pub fn require_entity_by_name(&self, name: &str) -> Result<&RegisteredEntity, EntityNotFound> {
         self.entities.must_get_by_name(name)
+    }
+
+    #[inline]
+    pub fn require_entity_by_id(&self, id: Id) -> Result<&RegisteredEntity, EntityNotFound> {
+        self.entities.must_get_by_uid(id)
     }
 
     #[inline]
@@ -311,7 +316,33 @@ impl Registry {
     }
 
     pub fn remove_attribute(&mut self, id: Id) -> Result<(), AnyError> {
-        // FIXME: validate that attribute is not used by any entity or index.
+        let attr = self.require_attr_by_id(id)?;
+
+        // Validate that attribute is not used by any entity.
+        let entities_with_attr = self
+            .entities
+            .iter()
+            .filter_map(|e| {
+                let has_attr = e.schema.attributes.iter().any(|a| {
+                    self.require_attr_by_ident(&a.attribute).unwrap().local_id == attr.local_id
+                });
+
+                if has_attr {
+                    Some(e.schema.ident.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !entities_with_attr.is_empty() {
+            bail!(
+                "Cannot remove attribute {} because it is used by entities: {}",
+                attr.schema.ident,
+                entities_with_attr.join(", ")
+            );
+        }
+
         self.attrs.remove(id)?;
         Ok(())
     }
@@ -330,6 +361,36 @@ impl Registry {
         validate: bool,
     ) -> Result<(), AnyError> {
         self.entities.update(entity, validate, &self.attrs)?;
+        Ok(())
+    }
+
+    pub fn remove_entity(&mut self, id: Id) -> Result<(), AnyError> {
+        let entity = self.require_entity_by_id(id)?;
+
+        // Validate that entity is not extended by any other entity.
+        let extenders = self
+            .entities
+            .iter()
+            .filter_map(|e| {
+                let is_extender =
+                    e.local_id != entity.local_id && e.extends.contains(&entity.local_id);
+                if is_extender {
+                    Some(e.schema.ident.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !extenders.is_empty() {
+            bail!(
+                "Cannot remove entity {} because it is extended by entities: {}",
+                entity.schema.ident,
+                extenders.join(", ")
+            );
+        }
+
+        self.entities.remove(id)?;
         Ok(())
     }
 

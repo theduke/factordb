@@ -30,6 +30,14 @@ pub struct EntityAttributeChangeCardinality {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct EntityAttributeRemove {
+    pub entity_type: String,
+    pub attribute: String,
+    #[serde(default)]
+    pub delete_values: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeUpsert {
     pub schema: schema::AttributeSchema,
 }
@@ -64,6 +72,7 @@ pub struct EntityUpsert {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct EntityDelete {
     pub name: String,
+    pub delete_all: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -86,6 +95,7 @@ pub enum SchemaAction {
     EntityCreate(EntityCreate),
     EntityAttributeAdd(EntityAttributeAdd),
     EntityAttributeChangeCardinality(EntityAttributeChangeCardinality),
+    EntityAttributeRemove(EntityAttributeRemove),
     EntityUpsert(EntityUpsert),
     EntityDelete(EntityDelete),
     IndexCreate(IndexCreate),
@@ -163,9 +173,10 @@ impl Migration {
         self
     }
 
-    pub fn entity_delete(mut self, name: impl Into<String>) -> Self {
+    pub fn entity_delete(mut self, name: impl Into<String>, delete_all: bool) -> Self {
         self.actions.push(SchemaAction::EntityDelete(EntityDelete {
             name: name.into(),
+            delete_all,
         }));
         self
     }

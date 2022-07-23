@@ -320,4 +320,10 @@ impl EntityRegistry {
 
         Ok(())
     }
+
+    pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
+        let local_id = self.must_get_by_uid(id)?.local_id;
+        self.items.get_mut(local_id).is_deleted = true;
+        Ok(())
+    }
 }

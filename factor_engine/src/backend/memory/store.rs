@@ -1073,6 +1073,16 @@ impl MemoryStore {
         let mut revert = Vec::new();
         for action in mig.actions {
             match action {
+                query::migrate::SchemaAction::AttributeCreate(_) => {}
+                query::migrate::SchemaAction::AttributeUpsert(_) => {}
+                query::migrate::SchemaAction::AttributeDelete(_) => {}
+                query::migrate::SchemaAction::EntityCreate(_) => {}
+                query::migrate::SchemaAction::EntityUpsert(_) => {}
+                query::migrate::SchemaAction::EntityDelete(_) => {}
+                query::migrate::SchemaAction::EntityAttributeAdd(_) => {}
+                query::migrate::SchemaAction::EntityAttributeChangeCardinality(_) => {}
+                query::migrate::SchemaAction::AttributeCreateIndex(_) => {}
+                query::migrate::SchemaAction::EntityAttributeRemove(_) => {}
                 query::migrate::SchemaAction::IndexCreate(create) => {
                     let index = reg.require_index_by_id(create.schema.id).context(format!(
                         "Registry does not contain index '{}'",
@@ -1086,15 +1096,6 @@ impl MemoryStore {
                         .context(format!("Registry does not contain index '{}'", del.name,))?;
                     self.index_delete(index)?;
                 }
-                query::migrate::SchemaAction::AttributeCreate(_) => {}
-                query::migrate::SchemaAction::AttributeUpsert(_) => {}
-                query::migrate::SchemaAction::AttributeDelete(_) => {}
-                query::migrate::SchemaAction::EntityCreate(_) => {}
-                query::migrate::SchemaAction::EntityUpsert(_) => {}
-                query::migrate::SchemaAction::EntityDelete(_) => {}
-                query::migrate::SchemaAction::EntityAttributeAdd(_) => {}
-                query::migrate::SchemaAction::EntityAttributeChangeCardinality(_) => {}
-                query::migrate::SchemaAction::AttributeCreateIndex(_) => {}
                 query::migrate::SchemaAction::AttributeChangeType(action) => {
                     // FIXME: this should be done via an OP created by the schema builder.
                     let attr = reg.require_attr_by_name(&action.attribute)?;

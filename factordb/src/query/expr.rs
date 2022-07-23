@@ -249,6 +249,10 @@ impl Expr {
         Self::eq(Expr::attr::<AttrType>(), T::QUALIFIED_NAME)
     }
 
+    pub fn is_entity_name(name: &str) -> Self {
+        Self::eq(Expr::attr::<AttrType>(), name.to_string())
+    }
+
     pub fn is_entity_nested<T: EntityDescriptor>() -> Self {
         Self::InheritsEntityType(T::QUALIFIED_NAME.to_string())
     }

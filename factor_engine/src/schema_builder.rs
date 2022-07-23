@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::{anyhow, bail};
 
 use crate::{
-    backend::{DbOp, IndexPopulate, SelectOpt, TupleOp, TuplePatch},
+    backend::{DbOp, IndexPopulate, SelectOpt, TupleDelete, TupleOp, TuplePatch, TupleRemoveAttrs},
     registry::Registry,
 };
 use factordb::{
@@ -490,6 +490,48 @@ fn build_entity_attribute_change_cardinality(
     }])
 }
 
+fn build_entity_attribute_remove(
+    reg: &mut Registry,
+    change: migrate::EntityAttributeRemove,
+    _is_internal: bool,
+) -> Result<Vec<ResolvedAction>, AnyError> {
+    let attr = reg.require_attr_by_name(&change.attribute)?.clone();
+    let entity = reg.require_entity_by_name(&change.entity_type)?.clone();
+
+    let _field = entity.schema.attribute(&change.attribute).ok_or_else(|| {
+        anyhow!(
+            "Can't remove attribute from entity: '{}' does not have attribute '{}'",
+            entity.schema.ident,
+            attr.schema.ident
+        )
+    })?;
+
+    let mut new_entity = entity.schema.clone();
+    new_entity
+        .attributes
+        .retain(|a| a.attribute != attr.schema.ident());
+    reg.entity_update(new_entity, true)?;
+
+    let ops = if change.delete_values {
+        vec![DbOp::Select(SelectOpt {
+            selector: Expr::is_entity_name(&entity.schema.ident),
+            op: TupleOp::RemoveAttrs(TupleRemoveAttrs {
+                id: Id::nil(),
+                attrs: vec![attr.schema.id],
+                // FIXME: update index!
+                index_ops: vec![],
+            }),
+        })]
+    } else {
+        vec![]
+    };
+
+    Ok(vec![ResolvedAction {
+        action: migrate::SchemaAction::EntityAttributeRemove(change),
+        ops,
+    }])
+}
+
 fn build_entity_upsert(
     reg: &mut Registry,
     upsert: migrate::EntityUpsert,
@@ -611,11 +653,31 @@ fn build_entity_upsert(
 }
 
 fn build_entity_delete(
-    _reg: &mut Registry,
-    _del: migrate::EntityDelete,
+    reg: &mut Registry,
+    del: migrate::EntityDelete,
     _is_internal: bool,
 ) -> Result<Vec<ResolvedAction>, AnyError> {
-    Err(anyhow!("Entity deletion is not implemented yet"))
+    let schema = reg.require_entity_by_name(&del.name)?;
+
+    let ops = if del.delete_all {
+        vec![DbOp::Select(SelectOpt {
+            selector: Expr::is_entity_name(&schema.schema.ident),
+            op: TupleOp::Delete(TupleDelete {
+                id: Id::nil(),
+                // FIXME: need to build index updates here!
+                index_ops: vec![],
+            }),
+        })]
+    } else {
+        vec![]
+    };
+
+    let action = ResolvedAction {
+        action: SchemaAction::EntityDelete(del),
+        ops,
+    };
+
+    Ok(vec![action])
 }
 
 fn build_index_create(
@@ -662,6 +724,9 @@ fn build_action(
         SchemaAction::EntityAttributeAdd(add) => build_entity_attribute_add(reg, add, is_internal),
         SchemaAction::EntityAttributeChangeCardinality(change) => {
             build_entity_attribute_change_cardinality(reg, change, is_internal)
+        }
+        SchemaAction::EntityAttributeRemove(rem) => {
+            build_entity_attribute_remove(reg, rem, is_internal)
         }
         SchemaAction::EntityUpsert(upsert) => build_entity_upsert(reg, upsert, is_internal),
         SchemaAction::EntityDelete(del) => build_entity_delete(reg, del, is_internal),

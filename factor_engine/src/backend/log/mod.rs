@@ -254,12 +254,36 @@ impl LogDb {
                                 // (not currently done in backend anyway)
                             }
                             SchemaAction::EntityUpsert(_) => {}
-                            SchemaAction::EntityDelete(_) => {
-                                // TODO: delete all entities?
-                                // (entity deletion migration is not implemented yet)
+                            SchemaAction::EntityDelete(del) => {
+                                if del.delete_all {
+                                    data.retain(|_id, values| {
+                                        if let Some(ty) = values
+                                            .get(AttrType::QUALIFIED_NAME)
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            ty == del.name
+                                        } else {
+                                            false
+                                        }
+                                    });
+                                }
                             }
                             SchemaAction::IndexCreate(_) => {}
                             SchemaAction::IndexDelete(_) => {}
+                            SchemaAction::EntityAttributeRemove(rem) => {
+                                if rem.delete_values {
+                                    for values in data.values_mut() {
+                                        if let Some(ty) = values
+                                            .get(AttrType::QUALIFIED_NAME)
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            if ty == rem.entity_type {
+                                                values.remove(&rem.attribute);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
