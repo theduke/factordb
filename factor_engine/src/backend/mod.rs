@@ -84,47 +84,47 @@ pub enum TupleIndexOp {
 
 #[derive(Clone, Debug)]
 pub struct TupleCreate {
-    pub id: Id,
     pub data: DataMap,
     pub index_ops: Vec<TupleIndexInsert>,
 }
 
+impl From<TupleCreate> for TupleAction {
+    fn from(v: TupleCreate) -> Self {
+        Self::Create(v)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TupleReplace {
-    pub id: Id,
     pub data: DataMap,
     pub index_ops: Vec<TupleIndexOp>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleMerge {
-    pub id: Id,
     pub data: DataMap,
     pub index_ops: Vec<TupleIndexOp>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TuplePatch {
-    pub id: Id,
     pub patch: Patch,
     pub index_ops: Vec<TupleIndexOp>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleDelete {
-    pub id: Id,
     pub index_ops: Vec<TupleIndexRemove>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TupleRemoveAttrs {
-    pub id: Id,
     pub attrs: Vec<Id>,
     pub index_ops: Vec<TupleIndexRemove>,
 }
 
 #[derive(Clone, Debug)]
-pub enum TupleOp {
+pub enum TupleAction {
     Create(TupleCreate),
     Replace(TupleReplace),
     Merge(TupleMerge),
@@ -133,13 +133,65 @@ pub enum TupleOp {
     Delete(TupleDelete),
 }
 
+impl From<TupleMerge> for TupleAction {
+    fn from(v: TupleMerge) -> Self {
+        Self::Merge(v)
+    }
+}
+
+impl From<TupleReplace> for TupleAction {
+    fn from(v: TupleReplace) -> Self {
+        Self::Replace(v)
+    }
+}
+
+impl From<TuplePatch> for TupleAction {
+    fn from(v: TuplePatch) -> Self {
+        Self::Patch(v)
+    }
+}
+
+impl From<TupleDelete> for TupleAction {
+    fn from(v: TupleDelete) -> Self {
+        Self::Delete(v)
+    }
+}
+
+impl From<TupleRemoveAttrs> for TupleAction {
+    fn from(v: TupleRemoveAttrs) -> Self {
+        Self::RemoveAttrs(v)
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct SelectOpt {
+pub struct TupleOp {
+    pub target: IdOrIdent,
+    pub action: TupleAction,
+}
+
+impl TupleOp {
+    pub fn new<A: Into<TupleAction>, I: Into<IdOrIdent>>(target: I, action: A) -> Self {
+        Self {
+            target: target.into(),
+            action: action.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SelectOp {
     pub selector: Expr,
     // FIXME: use dedicated type to prevent the reundant id field...
-    /// Reusing TupleOp for convenience.
-    /// Note that the Id on these TupleOps is always nil.
-    pub op: TupleOp,
+    pub action: TupleAction,
+}
+
+impl SelectOp {
+    pub fn new<I: Into<TupleAction>>(selector: Expr, action: I) -> Self {
+        Self {
+            selector,
+            action: action.into(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -167,7 +219,7 @@ pub enum DbOp {
     ValidateEntityExists(ValidateEntityExists),
     ValidateEntityType(ValidateEntityType),
     Tuple(TupleOp),
-    Select(SelectOpt),
+    Select(SelectOp),
     IndexPopulate(IndexPopulate),
 }
 

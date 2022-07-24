@@ -675,11 +675,10 @@ impl Registry {
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
         let index_ops = self.build_index_ops_create(&data)?;
-        ops.push(DbOp::Tuple(TupleOp::Create(TupleCreate {
-            id: create.id,
-            data,
-            index_ops,
-        })));
+        ops.push(DbOp::Tuple(TupleOp::new(
+            create.id,
+            TupleCreate { data, index_ops },
+        )));
 
         Ok(ops)
     }
@@ -706,11 +705,10 @@ impl Registry {
 
         let index_ops = self.build_index_ops_update(&data, &old)?;
 
-        ops.push(DbOp::Tuple(TupleOp::Replace(TupleReplace {
-            id: replace.id,
-            data,
-            index_ops,
-        })));
+        ops.push(DbOp::Tuple(TupleOp::new(
+            replace.id,
+            TupleReplace { data, index_ops },
+        )));
 
         // FIXME: cleanup for old data (index removal etc)
 
@@ -730,11 +728,10 @@ impl Registry {
 
         let index_ops = self.build_index_ops_update(&data, &current_entity)?;
 
-        ops.push(DbOp::Tuple(TupleOp::Replace(TupleReplace {
-            id: epatch.id,
-            data,
-            index_ops,
-        })));
+        ops.push(DbOp::Tuple(TupleOp::new(
+            epatch.id,
+            TupleReplace { data, index_ops },
+        )));
 
         // FIXME: cleanup for old data (index removal etc)
 
@@ -759,11 +756,10 @@ impl Registry {
         data.insert(AttrId::QUALIFIED_NAME.into(), id.into());
 
         let index_ops = self.build_index_ops_update(&data, &old)?;
-        ops.push(DbOp::Tuple(TupleOp::Merge(TupleMerge {
+        ops.push(DbOp::Tuple(TupleOp::new(
             id,
-            data,
-            index_ops,
-        })));
+            TupleMerge { data, index_ops },
+        )));
 
         // FIXME: index updates etc
 
@@ -773,7 +769,7 @@ impl Registry {
     pub fn validate_delete(&self, id: Id, old: DataMap) -> Result<Vec<DbOp>, AnyError> {
         let mut ops = Vec::new();
         let index_ops = self.build_index_ops_delete(&old)?;
-        ops.push(DbOp::Tuple(TupleOp::Delete(TupleDelete { id, index_ops })));
+        ops.push(DbOp::Tuple(TupleOp::new(id, TupleDelete { index_ops })));
         Ok(ops)
     }
 

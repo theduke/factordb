@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::{anyhow, bail};
 
 use crate::{
-    backend::{DbOp, IndexPopulate, SelectOpt, TupleDelete, TupleOp, TuplePatch, TupleRemoveAttrs},
+    backend::{DbOp, IndexPopulate, SelectOp, TupleDelete, TuplePatch, TupleRemoveAttrs},
     registry::Registry,
 };
 use factordb::{
@@ -333,15 +333,14 @@ fn build_attribute_delete(
         }
     }
 
-    let op = DbOp::Select(SelectOpt {
-        selector: Expr::literal(true),
-        op: TupleOp::RemoveAttrs(crate::backend::TupleRemoveAttrs {
-            id: attr.schema.id,
+    let op = DbOp::Select(SelectOp::new(
+        Expr::literal(true),
+        crate::backend::TupleRemoveAttrs {
             attrs: vec![attr.schema.id],
             // FIXME: handle index ops!
             index_ops: Vec::new(),
-        }),
-    });
+        },
+    ));
 
     let action = ResolvedAction {
         action: SchemaAction::AttributeDelete(del),
@@ -398,10 +397,9 @@ fn build_entity_attribute_add(
     let ops: Vec<DbOp> = if add.cardinality == Cardinality::Required {
         if let Some(value) = &add.default_value {
             // TODO: write a test that validates that nested entity types are also correctly updated.
-            vec![DbOp::Select(SelectOpt {
-                selector: Expr::InheritsEntityType(entity.schema.ident.clone()),
-                op: TupleOp::Patch(TuplePatch {
-                    id: Id::nil(),
+            vec![DbOp::Select(SelectOp::new(
+                Expr::InheritsEntityType(entity.schema.ident.clone()),
+                TuplePatch {
                     patch: Patch::new().replace_with_old(
                         attr.schema.ident.clone(),
                         value.clone(),
@@ -409,8 +407,8 @@ fn build_entity_attribute_add(
                         false,
                     ),
                     index_ops: vec![],
-                }),
-            })]
+                },
+            ))]
         } else {
             bail!(
                 "Adding attribute '{}' with required cardinality to entity '{}' requires a default value", 
@@ -491,15 +489,14 @@ fn build_entity_attribute_remove(
     reg.entity_update(new_entity, true)?;
 
     let ops = if change.delete_values {
-        vec![DbOp::Select(SelectOpt {
-            selector: Expr::is_entity_name(&entity.schema.ident),
-            op: TupleOp::RemoveAttrs(TupleRemoveAttrs {
-                id: Id::nil(),
+        vec![DbOp::Select(SelectOp::new(
+            Expr::is_entity_name(&entity.schema.ident),
+            TupleRemoveAttrs {
                 attrs: vec![attr.schema.id],
                 // FIXME: update index!
                 index_ops: vec![],
-            }),
-        })]
+            },
+        ))]
     } else {
         vec![]
     };
@@ -638,14 +635,13 @@ fn build_entity_delete(
     let schema = reg.require_entity_by_name(&del.name)?;
 
     let ops = if del.delete_all {
-        vec![DbOp::Select(SelectOpt {
-            selector: Expr::is_entity_name(&schema.schema.ident),
-            op: TupleOp::Delete(TupleDelete {
-                id: Id::nil(),
+        vec![DbOp::Select(SelectOp::new(
+            Expr::is_entity_name(&schema.schema.ident),
+            TupleDelete {
                 // FIXME: need to build index updates here!
                 index_ops: vec![],
-            }),
-        })]
+            },
+        ))]
     } else {
         vec![]
     };

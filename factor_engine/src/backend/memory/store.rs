@@ -17,7 +17,10 @@ use factordb::{
 };
 
 use crate::{
-    backend::{self, DbOp, TupleIndexInsert, TupleIndexOp, TupleIndexRemove, TupleIndexReplace},
+    backend::{
+        self, DbOp, TupleAction, TupleIndexInsert, TupleIndexOp, TupleIndexRemove,
+        TupleIndexReplace,
+    },
     plan::{self, QueryPlan, ResolvedExpr, Sort},
     registry::{
         self, LocalAttributeId, LocalIndexId, RegisteredIndex, Registry, ATTR_COUNT_LOCAL,
@@ -98,6 +101,12 @@ impl MemoryStore {
                     )))
             }
         }
+    }
+
+    fn must_resolve_ident(&self, ident: &IdOrIdent) -> Result<Id, EntityNotFound> {
+        self.resolve_ident(ident).ok_or_else(|| EntityNotFound {
+            ident: ident.clone(),
+        })
     }
 
     fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&MemoryTuple> {
@@ -431,58 +440,58 @@ impl MemoryStore {
 
     fn tuple_create(
         &mut self,
+        id: Id,
         create: backend::TupleCreate,
         revert: &mut RevertList,
         reg: &Registry,
     ) -> Result<(), AnyError> {
-        if self.entities.contains_key(&create.id) {
-            return Err(anyhow!("Entity id already exists: '{}'", create.id));
+        if self.entities.contains_key(&id) {
+            return Err(anyhow!("Entity id already exists: '{}'", id));
         }
 
         for op in create.index_ops {
-            self.tuple_index_insert(create.id, op, revert, reg)?;
+            self.tuple_index_insert(id, op, revert, reg)?;
         }
 
         let map = self.intern_data_map(create.data)?;
-        self.entities.insert(create.id, map);
-        revert.push(RevertOp::TupleCreated { id: create.id });
+        self.entities.insert(id, map);
+        revert.push(RevertOp::TupleCreated { id });
         Ok(())
     }
 
     fn tuple_replace(
         &mut self,
+        id: Id,
         replace: backend::TupleReplace,
         revert: &mut RevertList,
         reg: &Registry,
     ) -> Result<(), AnyError> {
         for op in replace.index_ops {
-            self.apply_tuple_index_op(replace.id, op, revert, reg)?;
+            self.apply_tuple_index_op(id, op, revert, reg)?;
         }
 
-        let old = self.entities.remove(&replace.id);
+        let old = self.entities.remove(&id);
         let map = self.intern_data_map(replace.data)?;
-        self.entities.insert(replace.id, map);
-        revert.push(RevertOp::TupleReplaced {
-            id: replace.id,
-            data: old,
-        });
+        self.entities.insert(id, map);
+        revert.push(RevertOp::TupleReplaced { id, data: old });
         Ok(())
     }
 
     fn tuple_merge(
         &mut self,
+        id: Id,
         mut update: backend::TupleMerge,
         revert: &mut RevertList,
         reg: &Registry,
     ) -> Result<(), AnyError> {
         for op in std::mem::take(&mut update.index_ops) {
-            self.apply_tuple_index_op(update.id, op, revert, reg)?;
+            self.apply_tuple_index_op(id, op, revert, reg)?;
         }
 
         let old = self
             .entities
-            .get_mut(&update.id)
-            .ok_or_else(|| error::EntityNotFound::new(update.id.into()))?;
+            .get_mut(&id)
+            .ok_or_else(|| error::EntityNotFound::new(id.into()))?;
 
         let reg = self.registry.read().unwrap();
 
@@ -520,7 +529,7 @@ impl MemoryStore {
         if !replaced_values.is_empty() {
             // FIXME: this doesn't UNDO properly for new values.
             revert.push(RevertOp::TupleMerged {
-                id: update.id,
+                id,
                 replaced_data: replaced_values,
             });
         }
@@ -530,17 +539,18 @@ impl MemoryStore {
 
     fn tuple_remove_attrs(
         &mut self,
+        id: Id,
         mut rem: backend::TupleRemoveAttrs,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         for op in std::mem::take(&mut rem.index_ops) {
-            self.tuple_index_remove(rem.id, op, revert)?;
+            self.tuple_index_remove(id, op, revert)?;
         }
 
         let old = self
             .entities
-            .get_mut(&rem.id)
-            .ok_or_else(|| error::EntityNotFound::new(rem.id.into()))?;
+            .get_mut(&id)
+            .ok_or_else(|| error::EntityNotFound::new(id.into()))?;
 
         let reg = self.registry.read().unwrap();
         let mut removed = Vec::new();
@@ -552,10 +562,7 @@ impl MemoryStore {
         }
 
         if !removed.is_empty() {
-            revert.push(RevertOp::TupleAttrsRemoved {
-                id: rem.id,
-                attrs: removed,
-            });
+            revert.push(RevertOp::TupleAttrsRemoved { id, attrs: removed });
         }
 
         Ok(())
@@ -563,19 +570,20 @@ impl MemoryStore {
 
     fn tuple_delete(
         &mut self,
+        id: Id,
         del: backend::TupleDelete,
         revert: &mut RevertList,
     ) -> Result<(), AnyError> {
         for op in del.index_ops {
-            self.tuple_index_remove(del.id, op, revert)?;
+            self.tuple_index_remove(id, op, revert)?;
         }
 
-        match self.entities.remove(&del.id) {
+        match self.entities.remove(&id) {
             Some(data) => {
-                revert.push(RevertOp::TupleDeleted { id: del.id, data });
+                revert.push(RevertOp::TupleDeleted { id, data });
                 Ok(())
             }
-            None => Err(error::EntityNotFound::new(del.id.into()).into()),
+            None => Err(error::EntityNotFound::new(id.into()).into()),
         }
     }
 
@@ -586,7 +594,7 @@ impl MemoryStore {
         revert: &mut RevertList,
         reg: &Registry,
     ) -> Result<(), AnyError> {
-        // TODO: should there be a helper function to plan a scna directly?
+        // TODO: should there be a helper function to plan a scan directly?
         let select = Select::new().with_filter(expr.clone());
         let raw_ops = plan::plan_select(select, reg)?;
         let plan = self.build_query_plan(raw_ops, reg)?;
@@ -697,44 +705,46 @@ impl MemoryStore {
         revert: &mut RevertList,
         reg: &Registry,
     ) -> Result<(), AnyError> {
-        use crate::backend::TupleOp;
-
         // FIXME: implement validate_ checks via registry for all operations.
         // FIXME: guard against schema changes outside of a migration.
         for op in ops {
             match op {
-                DbOp::Tuple(tuple) => match tuple {
-                    TupleOp::Create(create) => {
-                        self.tuple_create(create, revert, reg)?;
+                DbOp::Tuple(tuple) => {
+                    let id = self.must_resolve_ident(&tuple.target)?;
+
+                    match tuple.action {
+                        TupleAction::Create(create) => {
+                            self.tuple_create(id, create, revert, reg)?;
+                        }
+                        TupleAction::Replace(repl) => {
+                            self.tuple_replace(id, repl, revert, reg)?;
+                        }
+                        TupleAction::Merge(update) => {
+                            self.tuple_merge(id, update, revert, reg)?;
+                        }
+                        TupleAction::RemoveAttrs(remove) => {
+                            self.tuple_remove_attrs(id, remove, revert)?;
+                        }
+                        TupleAction::Delete(del) => {
+                            self.tuple_delete(id, del, revert)?;
+                        }
+                        TupleAction::Patch(_patch) => {
+                            // will never exist as a real op.
+                            unreachable!()
+                        }
                     }
-                    TupleOp::Replace(repl) => {
-                        self.tuple_replace(repl, revert, reg)?;
-                    }
-                    TupleOp::Merge(update) => {
-                        self.tuple_merge(update, revert, reg)?;
-                    }
-                    TupleOp::RemoveAttrs(remove) => {
-                        self.tuple_remove_attrs(remove, revert)?;
-                    }
-                    TupleOp::Delete(del) => {
-                        self.tuple_delete(del, revert)?;
-                    }
-                    TupleOp::Patch(_patch) => {
-                        // will never exist as a real op.
-                        unreachable!()
-                    }
-                },
-                DbOp::Select(sel) => match sel.op {
-                    TupleOp::Create(_) => todo!(),
-                    TupleOp::Replace(_) => todo!(),
-                    TupleOp::Merge(_) => todo!(),
-                    TupleOp::RemoveAttrs(remove) => {
+                }
+                DbOp::Select(sel) => match sel.action {
+                    TupleAction::Create(_) => todo!(),
+                    TupleAction::Replace(_) => todo!(),
+                    TupleAction::Merge(_) => todo!(),
+                    TupleAction::RemoveAttrs(remove) => {
                         let resolved = plan::resolve_expr(sel.selector, reg)?;
                         let expr = self.build_memory_expr(resolved, reg)?;
                         self.tuple_select_remove(&expr, &remove, revert, reg)?;
                     }
-                    TupleOp::Delete(_) => todo!(),
-                    TupleOp::Patch(patch) => {
+                    TupleAction::Delete(_) => todo!(),
+                    TupleAction::Patch(patch) => {
                         self.tuple_select_patch(&sel.selector, &patch.patch, revert, reg)?;
                     }
                 },
