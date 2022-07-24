@@ -11,6 +11,7 @@ use anyhow::{anyhow, bail, Context};
 use factordb::{
     data::{DataMap, Id, IdMap, IdOrIdent, Value, ValueType},
     error::{self, EntityNotFound},
+    prelude::AttrType,
     query,
     schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality, DbSchema},
     AnyError,
@@ -529,7 +530,19 @@ impl Registry {
             self.validate_entity_data(data, parent, ops)?;
         }
 
-        // FIXME: if entity is strict, validate that no extra fields are present
+        // Validate extra attributes
+        for (key, value) in data.iter_mut() {
+            if key == AttrType::QUALIFIED_NAME || key == AttrId::QUALIFIED_NAME {
+                continue;
+            }
+            if !entity.nested_attribute_names.contains(key) {
+                if entity.schema.strict {
+                    bail!("Invalid attribute '{}' for entity '{}': entity type is strict and does not allow additional attributes", key, entity.schema.ident);
+                }
+                let attr = self.require_attr_by_name(key)?;
+                self.validate_attr_value(attr, value, ops)?;
+            }
+        }
 
         Ok(())
     }

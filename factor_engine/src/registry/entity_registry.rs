@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::util::stable_map::{StableMap, StableMapKey};
 use factordb::{
     data::{Id, IdOrIdent},
-    error::{self, EntityNotFound},
-    schema, AnyError,
+    error, schema, AnyError,
 };
 
 use super::attribute_registry::AttributeRegistry;
@@ -25,6 +24,7 @@ pub struct RegisteredEntity {
     pub extends: FnvHashSet<LocalEntityId>,
     /// Stores all child ids, including nested children.
     pub nested_children: FnvHashSet<Id>,
+    pub nested_attribute_names: FnvHashSet<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -59,55 +59,75 @@ impl EntityRegistry {
         }
     }
 
-    fn add_entity_hierarchy(&mut self, parent: LocalEntityId, child_id: Id) {
+    fn add_entity_hierarchy_item(&mut self, parent: LocalEntityId, child_id: Id) {
         if let Some(parent) = self.get_mut(parent) {
             parent.nested_children.insert(child_id);
 
             let nested = parent.extends.clone();
             for nested_parent in nested {
-                self.add_entity_hierarchy(nested_parent, child_id);
+                self.add_entity_hierarchy_item(nested_parent, child_id);
             }
         }
     }
 
-    fn add(&mut self, schema: schema::EntitySchema) -> Result<LocalEntityId, AnyError> {
-        assert!(self.items.len() < u32::MAX as usize - 1);
-        assert!(!schema.id.is_nil());
+    fn add_entity_to_hierarchy(&mut self, entity: &RegisteredEntity) {
+        for parent_id in &entity.extends {
+            self.add_entity_hierarchy_item(*parent_id, entity.schema.id);
+        }
+    }
 
+    fn build_registered_entity(
+        &self,
+        schema: schema::EntitySchema,
+        attrs: &AttributeRegistry,
+    ) -> Result<RegisteredEntity, AnyError> {
         let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
             .map(|(a, b)| (a.to_string(), b.to_string()))?;
 
-        let parent_ids = schema
-            .extends
-            .iter()
-            .map(|name| self.must_get_by_ident(name).map(|e| e.local_id))
-            .collect::<Result<FnvHashSet<LocalEntityId>, EntityNotFound>>()?;
+        let mut parent_ids = FnvHashSet::<LocalEntityId>::default();
+        let mut nested_attribute_names = FnvHashSet::<String>::default();
 
-        for parent_id in &parent_ids {
-            self.add_entity_hierarchy(*parent_id, schema.id);
+        for parent_name in &schema.extends {
+            let parent = self.must_get_by_ident(parent_name)?;
+            parent_ids.insert(parent.local_id);
+            nested_attribute_names.extend(parent.nested_attribute_names.clone());
         }
 
-        let ident = schema.ident.clone();
-        let uid = schema.id;
+        for field in &schema.attributes {
+            let attr = attrs.must_get_by_ident(&field.attribute)?;
+            nested_attribute_names.insert(attr.schema.ident.clone());
+        }
+
+        Ok(RegisteredEntity {
+            local_id: LocalEntityId(0),
+            schema,
+            is_deleted: false,
+            namespace: namespace.to_string(),
+            plain_name: plain_name.to_string(),
+            extends: parent_ids,
+            nested_children: FnvHashSet::default(),
+            nested_attribute_names,
+        })
+    }
+
+    fn add(
+        &mut self,
+        schema: schema::EntitySchema,
+        attrs: &AttributeRegistry,
+    ) -> Result<LocalEntityId, AnyError> {
+        assert!(self.items.len() < u32::MAX as usize - 1);
+        assert!(!schema.id.is_nil());
+
+        let registered = self.build_registered_entity(schema.clone(), attrs)?;
 
         let local_id = self.items.insert_with(move |local_id| RegisteredEntity {
             local_id,
-            namespace: namespace.to_string(),
-            plain_name: plain_name.to_string(),
-            schema,
-            is_deleted: false,
-            extends: parent_ids,
-            nested_children: FnvHashSet::default(),
+            ..registered
         });
 
-        self.uids.insert(uid, local_id);
-
-        // TODO: what's going on here? why the .remove()?
-        if self.names.contains_key(&ident) {
-            self.names.remove(&ident);
-        } else {
-            self.names.insert(ident, local_id);
-        }
+        self.add_entity_to_hierarchy(&self.get(local_id).unwrap().clone());
+        self.uids.insert(schema.id, local_id);
+        self.names.insert(schema.ident, local_id);
         Ok(local_id)
     }
 
@@ -201,6 +221,7 @@ impl EntityRegistry {
             .verify_non_nil()
             .context("Entity can not have a nil id")?;
 
+        // FIXME: this shouldn't be commented out!
         // if let Some(_old) = self.get_by_uid(entity.id) {
         //     return Err(anyhow!("Entity id already exists: '{}'", entity.id));
         // }
@@ -212,7 +233,7 @@ impl EntityRegistry {
             self.validate_schema(&entity, attrs, true)?;
         }
 
-        self.add(entity)
+        self.add(entity, attrs)
     }
 
     /// Register a new entity.
@@ -232,9 +253,29 @@ impl EntityRegistry {
             self.validate_schema(&entity, attrs, false)?;
         }
 
-        let old_id = self.must_get_by_uid(entity.id)?.local_id;
-        self.items.get_mut(old_id).schema = entity;
-        Ok(old_id)
+        // FIXME: this is incomplete, we need to update the hierarchy etc!
+
+        let local_id = {
+            let old = self.must_get_by_uid(entity.id)?;
+            if old.schema.ident != entity.ident {
+                bail!(
+                    "Changing the ident of an entity is not supported (old: {}, new: {})",
+                    old.schema.ident,
+                    entity.ident
+                );
+            }
+            old.local_id
+        };
+
+        let new = self.build_registered_entity(entity.clone(), attrs)?;
+        *self.items.get_mut(local_id) = new;
+
+        self.add_entity_to_hierarchy(&self.items.get(local_id).clone());
+
+        // FIXME: also need to do additional cleanup of the hierarchy
+        // (remove from nested_children if parent removed)!
+
+        Ok(local_id)
     }
 
     fn validate_schema(
@@ -324,6 +365,7 @@ impl EntityRegistry {
     pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
         let local_id = self.must_get_by_uid(id)?.local_id;
         self.items.get_mut(local_id).is_deleted = true;
+        // FIXME: need to update entity hierarchy (nested_children)
         Ok(())
     }
 }
