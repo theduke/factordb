@@ -32,6 +32,8 @@ pub enum ValueType {
     Url,
     /// Reference to an entity id.
     Ref,
+    /// Reference to an entity using it's ident.
+    Ident(ConstrainedRefType),
 
     /// Reference to entities with a constrained type.
     // TODO: merge with Ref variant on next format breaking change
@@ -89,6 +91,7 @@ impl ValueType {
             | Self::String
             | Self::Bytes
             | Self::DateTime
+            | Self::Ident(_)
             | Self::Ref
             | Self::RefConstrained(_)
             | Self::Url

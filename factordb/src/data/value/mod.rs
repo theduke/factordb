@@ -386,6 +386,18 @@ impl Value {
                     })
                 }
             }
+            ValueType::Ident(_) => match self {
+                Value::String(_) => Ok(()),
+                Value::Id(id) => {
+                    *self = Value::String(id.to_string());
+                    Ok(())
+                }
+                other => Err(ValueCoercionError {
+                    expected_type: ty.clone(),
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
         }
     }
 

@@ -42,6 +42,10 @@ pub fn schema_to_typescript(
             name: "EntityId".to_string(),
             ty: Type::String,
         };
+        let ident = Item::TypeAlias {
+            name: "EntityIdent".to_string(),
+            ty: Type::String,
+        };
         let url = Item::TypeAlias {
             name: "Url".to_string(),
             ty: Type::String,
@@ -51,8 +55,8 @@ pub fn schema_to_typescript(
             ty: Type::Number,
         };
 
-        let ident = Item::TypeAlias {
-            name: "Ident".to_string(),
+        let id_or_ident = Item::TypeAlias {
+            name: "IdOrIdent".to_string(),
             ty: Type::Union(vec![Type::Ident("EntityId".into()), Type::String]),
         };
 
@@ -80,7 +84,9 @@ pub fn schema_to_typescript(
             },
         };
 
-        module.items.extend(vec![id, ident, url, timestamp, base]);
+        module
+            .items
+            .extend(vec![id, ident, id_or_ident, url, timestamp, base]);
     };
 
     module.add_newlines(1);
@@ -459,6 +465,7 @@ fn value_to_ts_type(ty: &ValueType) -> Type {
         ValueType::DateTime => Type::Ident("Timestamp".to_string()),
         ValueType::Url => Type::Ident("Url".to_string()),
         ValueType::Ref => Type::Ident("EntityId".to_string()),
+        ValueType::Ident(_) => Type::Ident("EntityIdent".to_string()),
         ValueType::RefConstrained(_) => {
             // TODO: use type alias for specific entity id if restricted to single type
             Type::Ident("EntityId".to_string())

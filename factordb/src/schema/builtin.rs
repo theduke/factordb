@@ -6,7 +6,7 @@
 //! which are statically defined.
 
 use crate::{
-    data::{Id, IdOrIdent, ValueType},
+    data::{value_type::ConstrainedRefType, Id, IdOrIdent, ValueType},
     schema::{
         AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, EntityDescriptor,
         EntitySchema,
@@ -125,7 +125,9 @@ impl AttributeDescriptor for AttrType {
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Type".into()),
             description: None,
-            value_type: ValueType::Ref,
+            value_type: ValueType::Ident(ConstrainedRefType {
+                allowed_entity_types: vec![EntitySchemaType::IDENT],
+            }),
             unique: false,
             index: true,
             strict: true,
@@ -294,7 +296,9 @@ impl AttributeDescriptor for AttrAttributes {
                     fields: vec![
                         crate::data::value_type::ObjectField {
                             name: "attribute".to_string(),
-                            value_type: ValueType::Ref,
+                            value_type: ValueType::Ident(ConstrainedRefType {
+                                allowed_entity_types: vec![AttributeSchemaType::IDENT],
+                            }),
                         },
                         crate::data::value_type::ObjectField {
                             name: "cardinality".to_string(),
@@ -328,7 +332,9 @@ impl AttributeDescriptor for AttrExtend {
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Extends".into()),
             description: None,
-            value_type: ValueType::List(Box::new(ValueType::Ref)),
+            value_type: ValueType::List(Box::new(ValueType::Ident(ConstrainedRefType {
+                allowed_entity_types: vec![EntitySchemaType::IDENT],
+            }))),
             unique: false,
             index: false,
             strict: true,
