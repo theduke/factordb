@@ -74,6 +74,7 @@ async fn test_db_with_test_schema(db: &Db) {
         [
             test_schema_contains_builtins,
             test_ref_insert_with_id_or_ident,
+            test_select_in_with_list,
             test_select,
             test_query_in,
             test_query_regex,
@@ -1691,4 +1692,24 @@ async fn test_convert_attr_to_list(db: &Db) {
         .try_into_list::<i64>()
         .unwrap();
     assert_eq!(val2, vec![2]);
+}
+
+async fn test_select_in_with_list(db: &Db) {
+    let id1 = Id::random();
+    db.create(
+        id1,
+        map! {
+            "test/int_list": vec![1, 2, 3],
+        },
+    )
+    .await
+    .unwrap();
+
+    let sel = Select::new().with_filter(Expr::in_(1i64, Expr::attr_ident("test/int_list")));
+    let items = db.select_map(sel).await.unwrap();
+    assert!(items.len() == 1 && items[0].get_id().unwrap() == id1);
+
+    let sel = Select::new().with_filter(Expr::in_(4i64, Expr::attr_ident("test/int_list")));
+    let items = db.select_map(sel).await.unwrap();
+    assert!(items.is_empty());
 }

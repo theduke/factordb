@@ -45,6 +45,8 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
         }
     };
 
+    dbg!(&select);
+
     if select.distinct {
         bail!("DISTINCT is not supported");
     }
@@ -247,27 +249,47 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
         SqlExpr::Between { .. } => {
             bail!("BETWEEN not supported")
         }
-        SqlExpr::BinaryOp { left, op, right } => {
-            let left = Box::new(build_expr(*left)?);
-            let right = Box::new(build_expr(*right)?);
+        SqlExpr::BinaryOp { left, op, right } => match (*left, *right) {
+            (SqlExpr::AnyOp(any), other) | (other, SqlExpr::AnyOp(any)) => {
+                dbg!(&any, &other);
+                let target = match *any {
+                    SqlExpr::Identifier(ident) => Expr::Attr(ident.value.into()),
+                    other => {
+                        bail!("Unsupported ANY operator {:?}: ANY(_) is only supported with an identifer, like ANY(\"my/attribute\")", other);
+                    }
+                };
 
-            let op = match op {
-                sqlparser::ast::BinaryOperator::Gt => BinaryOp::Gt,
-                sqlparser::ast::BinaryOperator::Lt => BinaryOp::Lt,
-                sqlparser::ast::BinaryOperator::GtEq => BinaryOp::Gte,
-                sqlparser::ast::BinaryOperator::LtEq => BinaryOp::Lte,
-                sqlparser::ast::BinaryOperator::Eq => BinaryOp::Eq,
-                sqlparser::ast::BinaryOperator::NotEq => BinaryOp::Neq,
-                sqlparser::ast::BinaryOperator::And => BinaryOp::And,
-                sqlparser::ast::BinaryOperator::Or => BinaryOp::Or,
-                sqlparser::ast::BinaryOperator::Like => BinaryOp::Contains,
-                other => {
-                    bail!("Comparison operator {} not supported", other);
+                let value = build_expr(other)?;
+
+                match op {
+                    sqlparser::ast::BinaryOperator::Eq => Expr::in_(value, target),
+                    _ => bail!(
+                        "Unsupported ANY operator {:?}: ANY(_) is only supported with =, like ",
+                        op
+                    ),
                 }
-            };
+            }
+            (left, right) => {
+                let left = build_expr(left)?;
+                let right = build_expr(right)?;
+                let op = match op {
+                    sqlparser::ast::BinaryOperator::Gt => BinaryOp::Gt,
+                    sqlparser::ast::BinaryOperator::Lt => BinaryOp::Lt,
+                    sqlparser::ast::BinaryOperator::GtEq => BinaryOp::Gte,
+                    sqlparser::ast::BinaryOperator::LtEq => BinaryOp::Lte,
+                    sqlparser::ast::BinaryOperator::Eq => BinaryOp::Eq,
+                    sqlparser::ast::BinaryOperator::NotEq => BinaryOp::Neq,
+                    sqlparser::ast::BinaryOperator::And => BinaryOp::And,
+                    sqlparser::ast::BinaryOperator::Or => BinaryOp::Or,
+                    sqlparser::ast::BinaryOperator::Like => BinaryOp::Contains,
+                    other => {
+                        bail!("Comparison operator {} not supported", other);
+                    }
+                };
 
-            Expr::BinaryOp { left, op, right }
-        }
+                Expr::binary(left, op, right)
+            }
+        },
         SqlExpr::UnaryOp { op, expr } => {
             let expr = build_expr(*expr)?;
             match op {
@@ -478,6 +500,11 @@ mod tests {
                 crate::query::select::AggregationOp::Count,
                 "count".to_string()
             )
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT * from entities where 'hello' = ANY("my/attr")  "#).unwrap(),
+            Select::new().with_filter(Expr::in_("hello", Expr::attr_ident("my/attr"),))
         );
     }
 }
