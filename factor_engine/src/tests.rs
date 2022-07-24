@@ -73,6 +73,7 @@ async fn test_db_with_test_schema(db: &Db) {
         db,
         [
             test_schema_contains_builtins,
+            test_ref_insert_with_id_or_ident,
             test_select,
             test_query_in,
             test_query_regex,
@@ -206,6 +207,26 @@ async fn test_attr_disallows_multiple_values(db: &Db) {
         .unwrap()
         .is::<ValueCoercionError>();
     assert_eq!(true, is_coercion);
+}
+
+async fn test_ref_insert_with_id_or_ident(db: &Db) {
+    // let ident = "insert_ident1";
+    // let id1 = Id::random();
+    // db.create(id1, map! {"factor/ident": ident}).await.unwrap();
+
+    // let id3 = Id::random();
+    // db.create(id3, map! {"test/ref": id1}).await.unwrap();
+
+    // let id2 = Id::random();
+    // db.create(id2, map! {"test/ref": ident}).await.unwrap();
+
+    // let tuple2 = db.entity(id2).await.unwrap();
+    // let tuple3 = db.entity(id3).await.unwrap();
+
+    // tuple3.get("test/ref").unwrap().as_id().unwrap();
+    // tuple2.get("test/ref").unwrap().as_id().unwrap();
+
+    // TODO: enable!
 }
 
 async fn test_attr_corcions(db: &factordb::prelude::Db) {
@@ -483,7 +504,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
             cardinality: schema::Cardinality::Required,
         }],
         extends: vec![],
-        strict: true,
+        strict: false,
     }))
     .await
     .unwrap();
@@ -654,7 +675,7 @@ async fn test_merge_list_attr(db: &Db) {
         id,
         map! {
             "factor/type": ENTITY_COMMENT,
-            "test/int": vec![22],
+            "test/int_list": vec![22],
         },
     )
     .await
@@ -663,14 +684,14 @@ async fn test_merge_list_attr(db: &Db) {
     db.merge(
         id,
         map! {
-            "test/int": vec![22, 23],
+            "test/int_list": vec![22, 23],
         },
     )
     .await
     .unwrap();
 
     let map = db.entity(id).await.unwrap();
-    let values = map.get("test/int").unwrap();
+    let values = map.get("test/int_list").unwrap();
     let v: Value = vec![22, 23].into();
     assert_eq!(values, &v);
 }
@@ -683,7 +704,8 @@ async fn test_patch(db: &Db) {
             "factor/type": ENTITY_COMMENT,
             "factor/title": "hello",
             "test/text": "no",
-            "test/int": vec![22, 55],
+            "test/int": 42,
+            "test/int_list": vec![22, 55],
         },
     )
     .await
@@ -694,8 +716,11 @@ async fn test_patch(db: &Db) {
         Patch::new()
             .remove("factor/title")
             .replace("test/text", "yes")
-            .add("test/int", 33)
-            .remove_with_old("test/int", 55),
+            .replace("test/int", 33)
+            .remove_with_old("test/int", 33)
+            .replace("test/int", 100)
+            .add("test/int_list", 33)
+            .remove_with_old("test/int_list", 22),
     )
     .await
     .unwrap();
@@ -707,7 +732,8 @@ async fn test_patch(db: &Db) {
             "factor/id": id,
             "factor/type": ENTITY_COMMENT,
             "test/text": "yes",
-            "test/int": vec![22, 33]
+            "test/int": 100,
+            "test/int_list": vec![55, 33]
         }
     );
 }
@@ -973,7 +999,7 @@ async fn test_query_contains_with_two_lists(db: &Db) {
         id,
         map! {
             "factor/type": ENTITY_COMMENT,
-            "test/int": vec![22, 23],
+            "test/int_list": vec![22, 23],
         },
     )
     .await
@@ -983,13 +1009,13 @@ async fn test_query_contains_with_two_lists(db: &Db) {
         Id::random(),
         map! {
             "factor/type": ENTITY_COMMENT,
-            "test/int": vec![1],
+            "test/int_list": vec![1],
         },
     )
     .await
     .unwrap();
 
-    let filter = Expr::contains(Expr::Attr("test/int".into()), vec![22]);
+    let filter = Expr::contains(Expr::Attr("test/int_list".into()), vec![22]);
     let page = db.select(Select::new().with_filter(filter)).await.unwrap();
 
     assert_eq!(page.items.len(), 1);
