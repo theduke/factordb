@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    data::{DataMap, Id, IdOrIdent, Value},
-    AnyError,
-};
+use crate::data::{DataMap, Id, IdOrIdent, Value};
 
 use super::expr::Expr;
 
@@ -89,7 +86,8 @@ impl Select {
         }
     }
 
-    pub fn parse_sql(sql: &str) -> Result<Self, AnyError> {
+    #[cfg(feature = "sql")]
+    pub fn parse_sql(sql: &str) -> Result<Self, anyhow::Error> {
         super::sql::parse_select(sql)
     }
 
