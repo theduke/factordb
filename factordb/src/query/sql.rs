@@ -282,6 +282,29 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
                     sqlparser::ast::BinaryOperator::And => BinaryOp::And,
                     sqlparser::ast::BinaryOperator::Or => BinaryOp::Or,
                     sqlparser::ast::BinaryOperator::Like => BinaryOp::Contains,
+                    // sqlparser::ast::BinaryOperator::Plus => todo!(),
+                    // sqlparser::ast::BinaryOperator::Minus => todo!(),
+                    // sqlparser::ast::BinaryOperator::Multiply => todo!(),
+                    // sqlparser::ast::BinaryOperator::Divide => todo!(),
+                    // sqlparser::ast::BinaryOperator::Modulo => todo!(),
+                    // sqlparser::ast::BinaryOperator::StringConcat => todo!(),
+                    // sqlparser::ast::BinaryOperator::Spaceship => todo!(),
+                    // sqlparser::ast::BinaryOperator::Xor => todo!(),
+                    // sqlparser::ast::BinaryOperator::NotLike => todo!(),
+                    // sqlparser::ast::BinaryOperator::ILike => todo!(),
+                    // sqlparser::ast::BinaryOperator::NotILike => todo!(),
+                    // sqlparser::ast::BinaryOperator::BitwiseOr => todo!(),
+                    // sqlparser::ast::BinaryOperator::BitwiseAnd => todo!(),
+                    // sqlparser::ast::BinaryOperator::BitwiseXor => todo!(),
+                    // sqlparser::ast::BinaryOperator::PGBitwiseXor => todo!(),
+                    // sqlparser::ast::BinaryOperator::PGBitwiseShiftLeft => todo!(),
+                    // sqlparser::ast::BinaryOperator::PGBitwiseShiftRight => todo!(),
+                    // sqlparser::ast::BinaryOperator::PGRegexNotMatch => todo!(),
+                    // sqlparser::ast::BinaryOperator::PGRegexNotIMatch => todo!(),
+                    sqlparser::ast::BinaryOperator::PGRegexMatch => BinaryOp::RegexMatch,
+                    sqlparser::ast::BinaryOperator::PGRegexIMatch => {
+                        BinaryOp::RegexMatchCaseInsensitive
+                    }
                     other => {
                         bail!("Comparison operator {} not supported", other);
                     }
@@ -505,6 +528,19 @@ mod tests {
         assert_eq!(
             parse_select(r#" SELECT * from entities where 'hello' = ANY("my/attr")  "#).unwrap(),
             Select::new().with_filter(Expr::in_("hello", Expr::attr_ident("my/attr"),))
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT * from entities where "a" ~ 'hello' "#).unwrap(),
+            Select::new().with_filter(Expr::regex_match(Expr::attr_ident("a"), "hello"))
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT * from entities where "a" ~* 'hello' "#).unwrap(),
+            Select::new().with_filter(Expr::regex_match_case_insensitive(
+                Expr::attr_ident("a"),
+                "hello"
+            ))
         );
     }
 }
