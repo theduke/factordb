@@ -19,6 +19,7 @@ pub enum BinaryOp {
     In,
     Contains,
     RegexMatch,
+    RegexMatchCaseInsensitive,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -139,6 +140,18 @@ impl Expr {
         Self::binary(
             left,
             BinaryOp::RegexMatch,
+            Expr::Literal(Value::String(regex.into())),
+        )
+    }
+
+    pub fn regex_match_case_insensitive<I1, I2>(left: I1, regex: I2) -> Self
+    where
+        I1: Into<Self>,
+        I2: Into<String>,
+    {
+        Self::binary(
+            left,
+            BinaryOp::RegexMatchCaseInsensitive,
             Expr::Literal(Value::String(regex.into())),
         )
     }

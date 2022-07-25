@@ -491,26 +491,31 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
             expr: Box::new(resolve_expr(*expr, reg)?),
         }),
         // TODO: normalize BinaryOp::In into ResolvedExpr::InLiteral if possible.
-        Expr::BinaryOp {
-            left,
-            op: BinaryOp::RegexMatch,
-            right,
-        } => {
-            let raw = right.as_literal().and_then(|v| v.as_str()).ok_or_else(|| {
-                anyhow::anyhow!("Invalid binary expr RegexMatch: right operand must be a string")
-            })?;
-            let re = regex::Regex::new(raw).context("Invalid regular expression")?;
-            Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
+        Expr::BinaryOp { left, op, right } => match op {
+            BinaryOp::RegexMatch | BinaryOp::RegexMatchCaseInsensitive => {
+                let raw = right.as_literal().and_then(|v| v.as_str()).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Invalid binary expr RegexMatch: right operand must be a string"
+                    )
+                })?;
+
+                let re = regex::RegexBuilder::new(raw)
+                    .case_insensitive(op == BinaryOp::RegexMatchCaseInsensitive)
+                    .build()
+                    .context("Invalid regular expression")?;
+
+                Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
+                    left: resolve_expr(*left, reg)?,
+                    op: BinaryOp::RegexMatch,
+                    right: ResolvedExpr::Regex(re),
+                })))
+            }
+            op => Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
                 left: resolve_expr(*left, reg)?,
-                op: BinaryOp::RegexMatch,
-                right: ResolvedExpr::Regex(re),
-            })))
-        }
-        Expr::BinaryOp { left, op, right } => Ok(ResolvedExpr::BinaryOp(Box::new(BinaryExpr {
-            left: resolve_expr(*left, reg)?,
-            op,
-            right: resolve_expr(*right, reg)?,
-        }))),
+                op,
+                right: resolve_expr(*right, reg)?,
+            }))),
+        },
         Expr::If { value, then, or } => Ok(ResolvedExpr::If {
             value: Box::new(resolve_expr(*value, reg)?),
             then: Box::new(resolve_expr(*then, reg)?),

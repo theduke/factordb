@@ -1552,7 +1552,11 @@ impl MemoryStore {
                         Self::eval_expr(entity, right)
                     }
                 }
-                query::expr::BinaryOp::RegexMatch => {
+                query::expr::BinaryOp::RegexMatch
+                | query::expr::BinaryOp::RegexMatchCaseInsensitive => {
+                    // NOTE: the regex is assumed to be constructed with as case sensitive or
+                    // insensitive corresponding to the BinaryOp, so there is no
+                    // need to distinguish it here.
                     let left = Self::eval_expr(entity, left);
 
                     let re = if let MemoryExpr::Regex(re) = &**right {
@@ -1608,7 +1612,10 @@ impl MemoryStore {
                                 _other => false,
                             }
                         }
-                        BinaryOp::And | BinaryOp::Or | BinaryOp::RegexMatch => {
+                        BinaryOp::And
+                        | BinaryOp::Or
+                        | BinaryOp::RegexMatch
+                        | BinaryOp::RegexMatchCaseInsensitive => {
                             // Covered above in separate matches.
                             unreachable!()
                         }
