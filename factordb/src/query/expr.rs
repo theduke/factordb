@@ -180,6 +180,22 @@ impl Expr {
         Self::binary(left, BinaryOp::And, right)
     }
 
+    pub fn and_iter(exprs: impl IntoIterator<Item = Self>) -> Option<Self> {
+        let mut exprs = exprs.into_iter();
+        let first = exprs.next()?;
+
+        let finished = exprs.fold(first, |left, right| Self::and(left, right));
+        Some(finished)
+    }
+
+    pub fn or_iter(exprs: impl IntoIterator<Item = Self>) -> Option<Self> {
+        let mut exprs = exprs.into_iter();
+        let first = exprs.next()?;
+
+        let finished = exprs.fold(first, |left, right| Self::or(left, right));
+        Some(finished)
+    }
+
     pub fn and_with(self, other: impl Into<Self>) -> Self {
         Self::and(self, other.into())
     }
