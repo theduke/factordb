@@ -5,3 +5,6 @@ pub mod select;
 
 #[cfg(feature = "sql")]
 mod sql;
+
+#[cfg(feature = "mongodb-query")]
+pub mod mongo;

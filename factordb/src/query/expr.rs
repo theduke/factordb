@@ -62,6 +62,14 @@ pub enum Expr {
 }
 
 impl Expr {
+    /// Parse a MongoDB style query into an expression.
+    ///
+    /// Returns None if the query does not contain any comparisons.
+    #[cfg(feature = "mongodb-query")]
+    pub fn parse_mongodb(query: &str) -> Result<Option<Self>, anyhow::Error> {
+        super::mongo::parse_mongo_query(query)
+    }
+
     pub fn as_literal(&self) -> Option<&Value> {
         if let Self::Literal(v) = self {
             Some(v)
