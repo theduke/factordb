@@ -321,14 +321,38 @@ impl Value {
             ValueType::DateTime => {
                 // FIXME: coerce from uint/int and convert to special Self::DateTime variant once
                 // added.
-                if self.is_uint() {
-                    Ok(())
-                } else {
-                    Err(ValueCoercionError {
+                match self {
+                    Value::UInt(_) => Ok(()),
+                    Value::Int(x) => {
+                        let x2: u64 = (*x).try_into().map_err(|_| ValueCoercionError {
+                            expected_type: ValueType::DateTime,
+                            actual_type: self.value_type(),
+                            path: None,
+                        })?;
+
+                        *self = Value::UInt(x2);
+                        Ok(())
+                    }
+                    Value::String(s) => {
+                        if let Ok(x) = s.parse::<u64>() {
+                            *self = Value::UInt(x);
+                            Ok(())
+                        } else if let Ok(t) = chrono::DateTime::parse_from_rfc3339(s) {
+                            *self = Value::UInt(t.timestamp().try_into().unwrap());
+                            Ok(())
+                        } else {
+                            Err(ValueCoercionError {
+                                expected_type: ValueType::DateTime,
+                                actual_type: self.value_type(),
+                                path: None,
+                            })
+                        }
+                    }
+                    other => Err(ValueCoercionError {
                         expected_type: ValueType::DateTime,
-                        actual_type: self.value_type(),
+                        actual_type: other.value_type(),
                         path: None,
-                    })
+                    }),
                 }
             }
             ValueType::Url => {
