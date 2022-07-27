@@ -8,7 +8,7 @@ struct StructAttrs {
     title: Option<String>,
 }
 
-const STRUCT_USAGE: &'static str =
+const STRUCT_USAGE: &str =
     "Invalid #[factor(...)) macro key: expected #[factor(namespace= \"my.namespace\")]";
 
 impl syn::parse::Parse for StructAttrs {
@@ -61,8 +61,7 @@ struct FieldAttrs {
     // relation: Option<syn::Path>,
 }
 
-const FIELD_USAGE: &'static str =
-    "Invalid #[factor()] macro key: expected #[factor(attr = Attribute)]";
+const FIELD_USAGE: &str = "Invalid #[factor()] macro key: expected #[factor(attr = Attribute)]";
 
 impl syn::parse::Parse for FieldAttrs {
     fn parse(outer: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -111,11 +110,10 @@ impl syn::parse::Parse for FieldAttrs {
             }
         }
 
-        if !attrs.ignored {
-            if attrs.attribute.is_none() && !(attrs.extend || attrs.is_relation) {
-                return Err(input
-                    .error("Must either specify or #[factor(attr = AttrType)] #[factor(extend)]"));
-            }
+        if !attrs.ignored && attrs.attribute.is_none() && !(attrs.extend || attrs.is_relation) {
+            return Err(
+                input.error("Must either specify or #[factor(attr = AttrType)] #[factor(extend)]")
+            );
         }
 
         Ok(attrs)
@@ -289,7 +287,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 _ => quote!(factordb::schema::Cardinality::Required),
             };
 
-            if field_name.to_string() == "id" {
+            if *field_name == "id" {
                 have_id = true;
             } else {
                 schema_attributes.push(quote! {

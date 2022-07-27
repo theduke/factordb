@@ -161,18 +161,16 @@ impl<V: Clone, E: Clone> QueryPlan<V, E> {
                 }),
                 Self::Merge { left, right } => {
                     // FIXME: need to map both left and right...
-                    if let Some(x) = f(&left) {
+                    if let Some(x) = f(left) {
                         Some(Self::Merge {
                             left: Box::new(x),
                             right: right.clone(),
                         })
-                    } else if let Some(x) = f(right) {
-                        Some(Self::Merge {
+                    } else {
+                        f(right).map(|x| Self::Merge {
                             left: left.clone(),
                             right: Box::new(x),
                         })
-                    } else {
-                        None
                     }
                 }
                 Self::IndexSelect { .. } => None,
@@ -317,7 +315,7 @@ impl<V: Eq + std::hash::Hash> Eq for ResolvedExpr<V> {}
 impl<V> ResolvedExpr<V> {
     pub fn as_binary_op(&self) -> Option<&BinaryExpr<V>> {
         if let Self::BinaryOp(v) = self {
-            Some(&v)
+            Some(v)
         } else {
             None
         }
@@ -346,8 +344,8 @@ impl<V> ResolvedExpr<V> {
 
     pub fn as_binary_op_attr_eq_value(&self) -> Option<(LocalAttributeId, &V)> {
         match self.as_binary_op_eq()? {
-            (ResolvedExpr::Attr(id), ResolvedExpr::Literal(v)) => Some((*id, v.clone())),
-            (ResolvedExpr::Literal(v), ResolvedExpr::Attr(id)) => Some((*id, v.clone())),
+            (ResolvedExpr::Attr(id), ResolvedExpr::Literal(v)) => Some((*id, v)),
+            (ResolvedExpr::Literal(v), ResolvedExpr::Attr(id)) => Some((*id, v)),
             _ => None,
         }
     }

@@ -45,31 +45,27 @@ impl UniqueIndex {
                 Box::new(out)
             }
             (None, Some(end), Order::Asc) => {
-                let out = self.data.range(..=end).map(|(_v, id)| id.clone());
+                let out = self.data.range(..=end).map(|(_v, id)| *id);
                 Box::new(out)
             }
             (None, Some(end), Order::Desc) => {
-                let out = self.data.range(..=end).rev().map(|(_v, id)| id.clone());
+                let out = self.data.range(..=end).rev().map(|(_v, id)| *id);
                 Box::new(out)
             }
             (Some(start), None, Order::Asc) => {
-                let out = self.data.range(start..).map(|(_v, id)| id.clone());
+                let out = self.data.range(start..).map(|(_v, id)| *id);
                 Box::new(out)
             }
             (Some(start), None, Order::Desc) => {
-                let out = self.data.range(start..).rev().map(|(_v, id)| id.clone());
+                let out = self.data.range(start..).rev().map(|(_v, id)| *id);
                 Box::new(out)
             }
             (Some(start), Some(end), Order::Asc) => {
-                let out = self.data.range(start..=end).map(|(_v, id)| id.clone());
+                let out = self.data.range(start..=end).map(|(_v, id)| *id);
                 Box::new(out)
             }
             (Some(start), Some(end), Order::Desc) => {
-                let out = self
-                    .data
-                    .range(start..=end)
-                    .rev()
-                    .map(|(_v, id)| id.clone());
+                let out = self.data.range(start..=end).rev().map(|(_v, id)| *id);
                 Box::new(out)
             }
         }
@@ -92,7 +88,7 @@ impl UniqueIndex {
                         // Should never happen!
                         _ => true,
                     })
-                    .map(|(_key, id)| id.clone());
+                    .map(|(_key, id)| *id);
                 Box::new(out)
             }
             (v @ MemoryValue::String(s), Order::Desc) => {
@@ -107,7 +103,7 @@ impl UniqueIndex {
                         // Should never happen!
                         _ => true,
                     })
-                    .map(|(_key, id)| id.clone());
+                    .map(|(_key, id)| *id);
                 Box::new(out)
             }
             (_, Order::Asc) => {
@@ -146,7 +142,7 @@ impl UniqueIndex {
     // }
 
     pub fn remove(&mut self, value: &MemoryValue) -> Option<Id> {
-        self.data.remove(&value)
+        self.data.remove(value)
     }
 
     pub fn clear(&mut self) {
@@ -186,14 +182,14 @@ impl MultiIndex {
     // }
 
     pub fn remove(&mut self, value: &MemoryValue, id: Id) -> Option<Id> {
-        let (removed, purge) = if let Some(set) = self.data.get_mut(&value) {
+        let (removed, purge) = if let Some(set) = self.data.get_mut(value) {
             set.remove(&id);
             (Some(id), set.is_empty())
         } else {
             (None, false)
         };
         if purge {
-            self.data.remove(&value);
+            self.data.remove(value);
         }
         removed
     }
@@ -214,7 +210,7 @@ impl MultiIndex {
                 Box::new(out)
             }
             (None, Some(end), Order::Asc) => {
-                let out = self.data.range(..=end).map(|(_v, id)| id.clone()).flatten();
+                let out = self.data.range(..=end).flat_map(|(_v, id)| id.clone());
                 Box::new(out)
             }
             (None, Some(end), Order::Desc) => {
@@ -222,16 +218,11 @@ impl MultiIndex {
                     .data
                     .range(..=end)
                     .rev()
-                    .map(|(_v, id)| id.clone())
-                    .flatten();
+                    .flat_map(|(_v, id)| id.clone());
                 Box::new(out)
             }
             (Some(start), None, Order::Asc) => {
-                let out = self
-                    .data
-                    .range(start..)
-                    .map(|(_v, id)| id.clone())
-                    .flatten();
+                let out = self.data.range(start..).flat_map(|(_v, id)| id.clone());
                 Box::new(out)
             }
             (Some(start), None, Order::Desc) => {
@@ -239,16 +230,11 @@ impl MultiIndex {
                     .data
                     .range(start..)
                     .rev()
-                    .map(|(_v, id)| id.clone())
-                    .flatten();
+                    .flat_map(|(_v, id)| id.clone());
                 Box::new(out)
             }
             (Some(start), Some(end), Order::Asc) => {
-                let out = self
-                    .data
-                    .range(start..=end)
-                    .map(|(_v, id)| id.clone())
-                    .flatten();
+                let out = self.data.range(start..=end).flat_map(|(_v, id)| id.clone());
                 Box::new(out)
             }
             (Some(start), Some(end), Order::Desc) => {
@@ -256,8 +242,7 @@ impl MultiIndex {
                     .data
                     .range(start..=end)
                     .rev()
-                    .map(|(_v, id)| id.clone())
-                    .flatten();
+                    .flat_map(|(_v, id)| id.clone());
                 Box::new(out)
             }
         }
@@ -280,8 +265,7 @@ impl MultiIndex {
                         // Should never happen!
                         _ => true,
                     })
-                    .map(|(_key, id)| id.clone())
-                    .flatten();
+                    .flat_map(|(_key, id)| id.clone());
                 Box::new(out)
             }
             (v @ MemoryValue::String(s), Order::Desc) => {
@@ -296,8 +280,7 @@ impl MultiIndex {
                         // Should never happen!
                         _ => true,
                     })
-                    .map(|(_key, id)| id.clone())
-                    .flatten();
+                    .flat_map(|(_key, id)| id.clone());
                 Box::new(out)
             }
             (_, Order::Asc) => {

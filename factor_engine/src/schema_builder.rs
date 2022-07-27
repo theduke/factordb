@@ -73,7 +73,7 @@ fn build_attribute_ident(attr: &AttributeSchema) -> String {
     // schema change that would break older databases.
     format!(
         "factor_indexes/attr_{}{}",
-        attr.id.to_string().replace("-", "_"),
+        attr.id.to_string().replace('-', "_"),
         unique_marker
     )
 }
@@ -113,20 +113,17 @@ fn build_attribute_create(
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
     }
 
-    match &create.schema.value_type {
-        ValueType::RefConstrained(constr) => {
-            // Validate that the referenced entity types exist.
+    if let ValueType::RefConstrained(constr) = &create.schema.value_type {
+        // Validate that the referenced entity types exist.
 
-            for allowed in &constr.allowed_entity_types {
-                let _entity_type = reg.entity_by_ident(allowed).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Invalid reference constraint: unknown entity type '{}'",
-                        allowed
-                    )
-                })?;
-            }
+        for allowed in &constr.allowed_entity_types {
+            let _entity_type = reg.entity_by_ident(allowed).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Invalid reference constraint: unknown entity type '{}'",
+                    allowed
+                )
+            })?;
         }
-        _ => {}
     }
 
     // Do any necessary modifications to the schema.

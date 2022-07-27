@@ -124,10 +124,8 @@ impl std::fmt::Display for InvalidIdentError {
 impl std::error::Error for InvalidIdentError {}
 
 fn is_valid_name(s: &str) -> bool {
-    s.chars().all(|c| match c {
-        'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' => true,
-        _ => false,
-    })
+    s.chars()
+        .all(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_'))
 }
 
 impl std::str::FromStr for Ident {
@@ -156,6 +154,13 @@ impl<'de> serde::de::Deserialize<'de> for Ident {
 
         impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = Ident;
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ident::parse(v).map_err(|e| E::custom(e.to_string()))
+            }
 
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where

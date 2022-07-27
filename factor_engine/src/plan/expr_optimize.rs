@@ -48,7 +48,7 @@ impl<E: ExprOptimizer> ExprOptimizer for LimitedStabilizingExprOptimizer<E> {
                     attempts += 1;
                 }
             }
-            return Some(resolved);
+            Some(resolved)
         } else {
             let mut resolved = self.inner.optimize(expr)?;
             attempts += 1;

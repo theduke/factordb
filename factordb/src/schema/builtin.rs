@@ -15,7 +15,7 @@ use crate::{
 
 use super::IndexSchema;
 
-pub const NS_FACTOR: &'static str = "factor";
+pub const NS_FACTOR: &str = "factor";
 
 // Built-in attributes.
 // Constants are kept together to see ids at a glance.
@@ -525,10 +525,7 @@ pub fn builtin_db_schema() -> super::DbSchema {
 /// Check if an [`Id`] is a builtin entity *type*.
 #[inline]
 pub fn id_is_builtin_entity_type(id: Id) -> bool {
-    match id {
-        ATTRIBUTE_ID | ENTITY_ID | INDEX_ID => true,
-        _ => false,
-    }
+    matches!(id, ATTRIBUTE_ID | ENTITY_ID | INDEX_ID)
 }
 
 /// Builds an [`Expr`] filter that excludes builtin entities.

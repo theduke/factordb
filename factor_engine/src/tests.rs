@@ -107,20 +107,20 @@ async fn test_db_with_test_schema(db: &Db) {
     );
 }
 
-const NS_TEST: &'static str = "test";
+const NS_TEST: &str = "test";
 
-const ATTR_TEXT: &'static str = "text";
-const ATTR_INT: &'static str = "int";
-const ATTR_INT_LIST: &'static str = "int_list";
-const ATTR_UINT: &'static str = "uint";
-const ATTR_FLOAT: &'static str = "float";
-const ENTITY_COMMENT: &'static str = "test/comment";
-const ATTR_REF: &'static str = "test/ref";
-const ATTR_REF_IMAGE: &'static str = "test/ref_image";
+const ATTR_TEXT: &str = "text";
+const ATTR_INT: &str = "int";
+const ATTR_INT_LIST: &str = "int_list";
+const ATTR_UINT: &str = "uint";
+const ATTR_FLOAT: &str = "float";
+const ENTITY_COMMENT: &str = "test/comment";
+const ATTR_REF: &str = "test/ref";
+const ATTR_REF_IMAGE: &str = "test/ref_image";
 
-const ENTITY_FILE: &'static str = "test/File";
-const ENTITY_IMAGE: &'static str = "test/Image";
-const ENTITY_IMAGE_JPEG: &'static str = "test/ImageJpeg";
+const ENTITY_FILE: &str = "test/File";
+const ENTITY_IMAGE: &str = "test/Image";
+const ENTITY_IMAGE_JPEG: &str = "test/ImageJpeg";
 
 async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
@@ -207,7 +207,7 @@ async fn test_attr_disallows_multiple_values(db: &Db) {
         .err()
         .unwrap()
         .is::<ValueCoercionError>();
-    assert_eq!(true, is_coercion);
+    assert!(is_coercion);
 }
 
 async fn test_ref_insert_with_id_or_ident(db: &Db) {
@@ -351,7 +351,7 @@ async fn test_attribute_create_index(db: &Db) {
         .iter()
         .find(|a| a.ident == attr_name)
         .unwrap();
-    assert_eq!(attr.unique, true);
+    assert!(attr.unique);
 
     schema
         .indexes
@@ -412,8 +412,8 @@ async fn test_attribute_create_unique_index_fails_with_duplicate_values(db: &Db)
         .iter()
         .find(|a| a.ident == attr_name)
         .unwrap();
-    assert_eq!(attr.index, false);
-    assert_eq!(attr.unique, false);
+    assert!(!attr.index);
+    assert!(!attr.unique);
 
     let index = schema
         .indexes

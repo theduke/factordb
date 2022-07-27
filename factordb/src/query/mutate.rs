@@ -227,6 +227,12 @@ impl Batch {
     }
 }
 
+impl Default for Batch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<Mutate> for Batch {
     fn from(v: Mutate) -> Self {
         Self { actions: vec![v] }

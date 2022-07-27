@@ -9,6 +9,6 @@ impl super::LogConverter for JsonConverter {
     }
 
     fn deserialize(&self, data: &[u8]) -> Result<super::LogEvent, AnyError> {
-        serde_json::from_slice(&data).map_err(Into::into)
+        serde_json::from_slice(data).map_err(Into::into)
     }
 }

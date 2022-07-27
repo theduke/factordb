@@ -88,7 +88,7 @@ impl<'a> From<de::Unexpected<'a>> for Unexpected {
 }
 
 impl Unexpected {
-    pub fn to_unexpected<'a>(&'a self) -> de::Unexpected<'a> {
+    pub fn to_unexpected(&self) -> de::Unexpected<'_> {
         match *self {
             Unexpected::Bool(v) => de::Unexpected::Bool(v),
             Unexpected::Unsigned(v) => de::Unexpected::Unsigned(v),
@@ -264,7 +264,7 @@ impl<'de> de::Visitor<'de> for ValueVisitor {
     }
 
     fn visit_i64<E>(self, value: i64) -> Result<Value, E> {
-        Ok(Value::Int(value.into()))
+        Ok(Value::Int(value))
     }
 
     fn visit_u8<E>(self, value: u8) -> Result<Value, E> {
@@ -318,7 +318,7 @@ impl<'de> de::Visitor<'de> for ValueVisitor {
                 return Ok(Value::Id(Id::from_uuid(id)));
             }
         }
-        Ok(Value::String(value.to_string()))
+        Ok(Value::String(value))
     }
 
     fn visit_unit<E>(self) -> Result<Value, E> {

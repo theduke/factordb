@@ -125,6 +125,12 @@ impl Select {
     }
 }
 
+impl Default for Select {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
@@ -206,6 +212,12 @@ impl<T> Page<T> {
             items: Vec::new(),
             next_cursor: None,
         }
+    }
+}
+
+impl<T> Default for Page<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

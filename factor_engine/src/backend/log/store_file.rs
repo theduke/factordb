@@ -42,14 +42,14 @@ impl<C: LogConverter> FileLogStore<C> {
 
 impl<C: LogConverter> super::LogStore for FileLogStore<C> {
     fn as_any(&self) -> &dyn std::any::Any {
-        &*self
+        self
     }
 
-    fn iter_events<'a>(
-        &'a self,
+    fn iter_events(
+        &self,
         from: EventId,
         until: EventId,
-    ) -> BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, AnyError>>, AnyError>> {
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<LogEvent, AnyError>>, AnyError>> {
         let f = async move {
             let file = tokio::fs::File::open(&self.path).await?;
             let buf = tokio::io::BufReader::new(file);
@@ -87,7 +87,7 @@ impl<C: LogConverter> super::LogStore for FileLogStore<C> {
         std::future::ready(Err(anyhow::anyhow!("read_event not supported"))).boxed()
     }
 
-    fn write_event<'a>(&'a mut self, event: LogEvent) -> BoxFuture<'a, Result<(), AnyError>> {
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<'_, Result<(), AnyError>> {
         async move {
             let mut converted = self.converter.serialize(&event)?;
             converted.push(b'\n');
@@ -100,7 +100,7 @@ impl<C: LogConverter> super::LogStore for FileLogStore<C> {
         .boxed()
     }
 
-    fn clear<'a>(&'a mut self) -> BoxFuture<'a, Result<(), AnyError>> {
+    fn clear(&mut self) -> BoxFuture<'_, Result<(), AnyError>> {
         async move {
             let mut file = self.file.lock().await;
             file.set_len(0).await?;
@@ -138,8 +138,7 @@ mod tests {
 
         let log = rt.block_on(async move {
             let fs = FileLogStore::open(JsonConverter, test_path).await.unwrap();
-            let log = super::super::LogDb::open(fs).await.unwrap();
-            log
+            super::super::LogDb::open(fs).await.unwrap()
         });
         crate::tests::test_backend(log, move |f| handle.block_on(f));
     }

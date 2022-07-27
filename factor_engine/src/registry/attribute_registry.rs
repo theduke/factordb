@@ -87,7 +87,7 @@ impl AttributeRegistry {
                         .allowed_entity_types
                         .iter()
                         .map(|ty| -> Result<_, EntityNotFound> {
-                            let entity = entities.must_get_by_ident(&ty)?;
+                            let entity = entities.must_get_by_ident(ty)?;
                             Ok(entity.schema.id)
                         })
                         .collect::<Result<Vec<_>, _>>()?;
@@ -104,7 +104,7 @@ impl AttributeRegistry {
                     .allowed_entity_types
                     .iter()
                     .map(|ty| -> Result<_, EntityNotFound> {
-                        let entity = entities.must_get_by_ident(&ty)?;
+                        let entity = entities.must_get_by_ident(ty)?;
                         Ok(entity.schema.id)
                     })
                     .collect::<Result<Vec<_>, _>>()?;

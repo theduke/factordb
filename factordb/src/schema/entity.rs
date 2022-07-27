@@ -139,10 +139,7 @@ impl EntitySchema {
 
     /// The title, if present, otherwise the unique name.
     pub fn pretty_name(&self) -> &str {
-        self.title
-            .as_ref()
-            .map(|t| t.as_str())
-            .unwrap_or(self.ident.as_str())
+        self.title.as_deref().unwrap_or(self.ident.as_str())
     }
 }
 

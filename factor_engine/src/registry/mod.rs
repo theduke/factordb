@@ -238,10 +238,13 @@ impl Registry {
             }
         }
         for entity in schema.entities {
-            self.register_entity(entity.clone(), true).expect(&format!(
-                "Internal error: could not register builtin entity {}",
-                entity.ident
-            ));
+            self.register_entity(entity.clone(), true)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Internal error: could not register builtin entity {}",
+                        entity.ident
+                    )
+                });
         }
         for index in schema.indexes {
             let local_id = self
@@ -461,7 +464,7 @@ impl Registry {
             // NOTE: this unwrap is fine because coerce_mut above has ensured that it is a list.
             let items = value.as_list().unwrap();
             for item in items {
-                self.build_attr_value_ops(attr, &*item_type, item, ops)?;
+                self.build_attr_value_ops(attr, item_type, item, ops)?;
             }
         } else {
             self.build_attr_value_ops(attr, &attr.schema.value_type, value, ops)?;
@@ -557,7 +560,7 @@ impl Registry {
             self.validate_entity_data(&mut data, entity, ops)?;
         } else {
             for (key, value) in &mut data.0 {
-                let attr = self.attrs.must_get_by_name(&key)?;
+                let attr = self.attrs.must_get_by_name(key)?;
                 self.validate_attr_value(attr, value, ops)?;
             }
         }
@@ -627,7 +630,7 @@ impl Registry {
         }
 
         for (attr_name, value) in old.iter() {
-            let attr = self.attr_by_name(&attr_name).unwrap();
+            let attr = self.attr_by_name(attr_name).unwrap();
             if covered_attrs.contains(&attr.local_id) {
                 continue;
             }
@@ -800,6 +803,12 @@ impl Registry {
             expected_type,
             actual_type,
         })
+    }
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

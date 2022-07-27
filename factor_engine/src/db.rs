@@ -81,7 +81,7 @@ impl Engine {
 
 impl factordb::db::DbClient for Engine {
     fn as_any(&self) -> &dyn std::any::Any {
-        &*self
+        self
     }
 
     fn schema(&self) -> DbFuture<'_, factordb::schema::DbSchema> {

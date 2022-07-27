@@ -12,7 +12,7 @@ struct StructAttrs {
     strict: bool,
 }
 
-const PROPERTY_USAGE: &'static str =
+const PROPERTY_USAGE: &str =
     "Invalid macro attribute. Expected #[factor(namespace = \"my.namespace\", value = TYPE [, name = \"theName\"])]";
 
 impl syn::parse::Parse for StructAttrs {

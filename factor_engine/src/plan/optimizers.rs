@@ -194,7 +194,7 @@ impl FilterWithIndex {
                     if let Some((attr, value)) = index_filter.as_binary_op_attr_eq_value() {
                         (attr, vec![value.clone()])
                     } else if let Some((attr, values)) = index_filter.as_in_literal_attr() {
-                        (attr, values.into_iter().cloned().collect())
+                        (attr, values.iter().cloned().collect())
                     } else {
                         // Should never happen...
                         return None;

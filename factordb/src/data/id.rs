@@ -145,13 +145,6 @@ impl IdOrIdent {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        match self {
-            IdOrIdent::Id(id) => id.to_string(),
-            IdOrIdent::Name(n) => n.to_string(),
-        }
-    }
-
     pub fn as_name(&self) -> Option<&str> {
         if let Self::Name(v) = self {
             Some(v.as_ref())

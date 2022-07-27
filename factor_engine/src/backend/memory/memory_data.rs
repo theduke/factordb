@@ -20,14 +20,16 @@ impl SharedStr {
         Self(std::sync::Arc::from(value))
     }
 
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-
     // #[inline]
     // pub fn strong_count(&self) -> usize {
     //     std::sync::Arc::strong_count(&self.0)
     // }
+}
+
+impl std::fmt::Display for SharedStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 impl PartialEq for SharedStr {
@@ -138,14 +140,14 @@ impl Ord for MemoryValue {
             }
             (MemoryValue::Int(b), MemoryValue::UInt(a)) => {
                 if let Ok(b2) = u64::try_from(*b) {
-                    b2.cmp(&a)
+                    b2.cmp(a)
                 } else {
                     Ordering::Greater
                 }
             }
             (MemoryValue::UInt(i), MemoryValue::Float(f)) => {
                 let i2 = OrderedFloat::from((*i) as f64);
-                i2.cmp(&f)
+                i2.cmp(f)
             }
             (MemoryValue::Float(f), MemoryValue::UInt(i)) => {
                 let i2 = OrderedFloat::from((*i) as f64);
@@ -153,7 +155,7 @@ impl Ord for MemoryValue {
             }
             (MemoryValue::Int(i), MemoryValue::Float(f)) => {
                 let i2 = OrderedFloat::from((*i) as f64);
-                i2.cmp(&f)
+                i2.cmp(f)
             }
             (MemoryValue::Float(f), MemoryValue::Int(i)) => {
                 let i2 = OrderedFloat::from((*i) as f64);
@@ -215,9 +217,9 @@ impl MemoryValue {
             V::Float(v) => Value::Float(*v),
             V::String(v) => Value::String(v.to_string()),
             V::Bytes(v) => Value::Bytes(v.clone()),
-            V::List(v) => Value::List(v.into_iter().map(Into::into).collect()),
+            V::List(v) => Value::List(v.iter().map(Into::into).collect()),
             V::Map(v) => Value::Map(
-                v.into_iter()
+                v.iter()
                     .map(|(key, value)| (key.into(), value.into()))
                     .collect(),
             ),

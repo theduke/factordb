@@ -204,7 +204,7 @@ impl Value {
                 Value::UInt(_) => Ok(()),
                 Value::Int(x) => {
                     if let Ok(intval) = (*x).try_into() {
-                        *self = Value::Int(intval);
+                        *self = Value::UInt(intval);
                         Ok(())
                     } else {
                         Err(ValueCoercionError {
@@ -277,12 +277,12 @@ impl Value {
                 }
                 Self::List(items) => {
                     for item in items {
-                        item.coerce_mut(&*item_type)?;
+                        item.coerce_mut(item_type)?;
                     }
                     Ok(())
                 }
                 other => {
-                    other.coerce_mut(&*item_type)?;
+                    other.coerce_mut(item_type)?;
                     let inner = other.clone();
                     *self = Self::List(vec![inner]);
                     Ok(())
@@ -498,7 +498,7 @@ impl Value {
 
     pub fn as_str(&self) -> Option<&str> {
         if let Self::String(v) = self {
-            Some(&v)
+            Some(v)
         } else {
             None
         }
@@ -506,7 +506,7 @@ impl Value {
 
     pub fn as_list(&self) -> Option<&[Value]> {
         if let Self::List(items) = self {
-            Some(&*items)
+            Some(items)
         } else {
             None
         }
@@ -571,7 +571,7 @@ impl From<u32> for Value {
 }
 impl From<u64> for Value {
     fn from(v: u64) -> Self {
-        Self::UInt(v.into())
+        Self::UInt(v)
     }
 }
 
@@ -595,7 +595,7 @@ impl From<i32> for Value {
 
 impl From<i64> for Value {
     fn from(v: i64) -> Self {
-        Self::Int(v.into())
+        Self::Int(v)
     }
 }
 

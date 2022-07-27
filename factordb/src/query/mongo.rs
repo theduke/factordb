@@ -22,7 +22,7 @@ pub fn parse_mongo_query(input: &str) -> Result<Option<Expr>, anyhow::Error> {
     let mut clauses = parsed
         .clauses
         .into_iter()
-        .map(|clause| parse_clause(clause))
+        .map(parse_clause)
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .flatten();
@@ -76,8 +76,7 @@ fn parse_clause(clause: Clause) -> Result<Option<Expr>, anyhow::Error> {
                 let exprs = tree
                     .expressions
                     .into_iter()
-                    .map(|expr| parse_expression(expr).transpose())
-                    .flatten()
+                    .filter_map(|expr| parse_expression(expr).transpose())
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(Expr::or_iter(exprs))
@@ -86,8 +85,7 @@ fn parse_clause(clause: Clause) -> Result<Option<Expr>, anyhow::Error> {
                 let exprs = tree
                     .expressions
                     .into_iter()
-                    .map(|expr| parse_expression(expr).transpose())
-                    .flatten()
+                    .filter_map(|expr| parse_expression(expr).transpose())
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(Expr::and_iter(exprs))
@@ -101,8 +99,7 @@ fn parse_expression(expr: Expression) -> Result<Option<Expr>, anyhow::Error> {
     let exprs = expr
         .clauses
         .into_iter()
-        .map(|clause| parse_clause(clause).transpose())
-        .flatten()
+        .filter_map(|clause| parse_clause(clause).transpose())
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(Expr::and_iter(exprs))
@@ -172,7 +169,7 @@ fn parse_json_value(value: serde_json::Value) -> Result<Value, anyhow::Error> {
         serde_json::Value::Array(values) => Value::List(
             values
                 .into_iter()
-                .map(|v| parse_json_value(v))
+                .map(parse_json_value)
                 .collect::<Result<_, _>>()?,
         ),
         serde_json::Value::Object(map) => {

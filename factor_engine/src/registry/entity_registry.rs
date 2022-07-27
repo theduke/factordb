@@ -102,8 +102,8 @@ impl EntityRegistry {
             local_id: LocalEntityId(0),
             schema,
             is_deleted: false,
-            namespace: namespace.to_string(),
-            plain_name: plain_name.to_string(),
+            namespace,
+            plain_name,
             extends: parent_ids,
             nested_children: FnvHashSet::default(),
             nested_attribute_names,
@@ -267,7 +267,7 @@ impl EntityRegistry {
             old.local_id
         };
 
-        let new = self.build_registered_entity(entity.clone(), attrs)?;
+        let new = self.build_registered_entity(entity, attrs)?;
         *self.items.get_mut(local_id) = new;
 
         self.add_entity_to_hierarchy(&self.items.get(local_id).clone());

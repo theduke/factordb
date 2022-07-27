@@ -182,7 +182,7 @@ impl IndexRegistry {
     pub fn attribute_indexes(&self, attr_id: LocalAttributeId) -> Vec<&RegisteredIndex> {
         self.attribute_id_map
             .get(&attr_id)
-            .map(|ids| ids.into_iter().map(|id| self.items.get(*id)).collect())
+            .map(|ids| ids.iter().map(|id| self.items.get(*id)).collect())
             .unwrap_or_default()
     }
 

@@ -192,7 +192,7 @@ impl Expr {
         let mut exprs = exprs.into_iter();
         let first = exprs.next()?;
 
-        let finished = exprs.fold(first, |left, right| Self::and(left, right));
+        let finished = exprs.fold(first, Self::and);
         Some(finished)
     }
 
@@ -200,7 +200,7 @@ impl Expr {
         let mut exprs = exprs.into_iter();
         let first = exprs.next()?;
 
-        let finished = exprs.fold(first, |left, right| Self::or(left, right));
+        let finished = exprs.fold(first, Self::or);
         Some(finished)
     }
 

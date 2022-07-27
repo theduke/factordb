@@ -61,7 +61,7 @@ impl serde::Serialize for Value {
             Value::UInt(v) => s.serialize_u64(v),
             Value::Int(v) => s.serialize_i64(v),
             Value::Float(v) => s.serialize_f64(v.into_inner()),
-            Value::String(ref v) => s.serialize_str(&v),
+            Value::String(ref v) => s.serialize_str(v),
             Value::Bytes(ref v) => s.serialize_bytes(v.as_slice()),
             Value::List(ref v) => v.serialize(s),
             Value::Map(ref v) => v.serialize(s),
@@ -121,7 +121,7 @@ impl serde::Serializer for ValueSerializer {
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::UInt(v.into()))
+        Ok(Value::UInt(v))
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {

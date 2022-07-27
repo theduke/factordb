@@ -22,12 +22,17 @@ pub struct MemoryDb {
 impl MemoryDb {
     pub fn new() -> Self {
         let registry = crate::registry::Registry::new().into_shared();
-        let s = Self {
+
+        Self {
             registry: registry.clone(),
             state: std::sync::Arc::new(std::sync::RwLock::new(store::MemoryStore::new(registry))),
-        };
+        }
+    }
+}
 
-        s
+impl Default for MemoryDb {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

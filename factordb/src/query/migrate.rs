@@ -263,6 +263,12 @@ impl Migration {
     }
 }
 
+impl Default for Migration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Convert a list of migrations into a single migration that re-creates
 /// the final state.
 pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow::Error> {

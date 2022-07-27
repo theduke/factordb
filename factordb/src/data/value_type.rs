@@ -107,10 +107,7 @@ impl ValueType {
     }
 
     pub fn is_list(&self) -> bool {
-        match self {
-            Self::List(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::List(_))
     }
 
     /// Compute the value type of this value.
@@ -145,12 +142,11 @@ impl ValueType {
             }
         }
 
-        let inner_ty = if types.len() == 1 {
+        if types.len() == 1 {
             types.pop().unwrap()
         } else {
             Self::Union(types)
-        };
-        inner_ty
+        }
     }
 }
 

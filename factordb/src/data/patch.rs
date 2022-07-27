@@ -83,6 +83,12 @@ impl Patch {
     }
 }
 
+impl Default for Patch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
@@ -265,7 +271,6 @@ impl PatchOp {
                                     other if other == &old_value => {
                                         // Value matches the given old_value, so
                                         // remove the key.
-                                        std::mem::drop(other);
                                         current_value.remove();
                                         Ok(())
                                     }

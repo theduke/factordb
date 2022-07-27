@@ -49,6 +49,11 @@ where
         self.values.len()
     }
 
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Get a reference the value for the given key.
     ///
     /// Can not fail since entries can not be removed.
@@ -78,6 +83,15 @@ where
     } */
 }
 
+impl<K, V> Default for StableMap<K, V>
+where
+    K: StableMapKey,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // TODO: Figure out how to represent this better.
 // Currently not a great abstraction because it can lead to panics.
 pub struct DerivedStableMap<K, V>(StableMap<K, V>);
@@ -96,6 +110,11 @@ where
     #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.0.values.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Get a reference the value for the given key.
@@ -148,5 +167,14 @@ where
         }
         self.0.values.push(value);
         key
+    }
+}
+
+impl<K, V> Default for DerivedStableMap<K, V>
+where
+    K: StableMapKey,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }

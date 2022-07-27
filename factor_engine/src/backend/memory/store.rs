@@ -687,7 +687,7 @@ impl MemoryStore {
 
         for entity_id in to_remove {
             let mem_entity = self.entities.get(&entity_id).unwrap();
-            let data = self.tuple_to_data_map(&mem_entity);
+            let data = self.tuple_to_data_map(mem_entity);
 
             let ops = reg.validate_delete(entity_id, data)?;
             self.apply_db_ops(ops, revert, reg)?;
@@ -750,7 +750,7 @@ impl MemoryStore {
                 },
                 DbOp::IndexPopulate(pop) => {
                     let index = reg.require_index_by_id(pop.index_id)?;
-                    self.index_populate(&reg, index, revert)?;
+                    self.index_populate(reg, index, revert)?;
                 }
                 DbOp::ValidateEntityExists(val) => {
                     if !self.ignore_index_constraints {
@@ -849,10 +849,10 @@ impl MemoryStore {
         revert: &mut RevertList,
         registry: &Registry,
     ) -> Result<(), AnyError> {
-        let old = match self.entities.get(&repl.id) {
-            Some(tuple) => Some(self.tuple_to_data_map(&tuple)),
-            None => None,
-        };
+        let old = self
+            .entities
+            .get(&repl.id)
+            .map(|tuple| self.tuple_to_data_map(tuple));
 
         let ops = self.registry.read().unwrap().validate_replace(repl, old)?;
         self.apply_db_ops(ops, revert, registry)?;
@@ -1114,7 +1114,7 @@ impl MemoryStore {
             }
         }
 
-        if let Err(err) = self.apply_db_ops(ops.clone(), &mut revert, &reg) {
+        if let Err(err) = self.apply_db_ops(ops, &mut revert, &reg) {
             self.apply_revert(revert);
             Err(err)
         } else {
@@ -1148,7 +1148,7 @@ impl MemoryStore {
         Ok(opt)
     }
 
-    fn apply_sort<'a>(items: &mut Vec<Cow<'a, MemoryTuple>>, sorts: &[Sort<MemoryExpr>]) {
+    fn apply_sort<'a>(items: &mut [Cow<'a, MemoryTuple>], sorts: &[Sort<MemoryExpr>]) {
         match sorts.len() {
             0 => {}
             1 => {
@@ -1156,14 +1156,14 @@ impl MemoryStore {
 
                 if sort.order == Order::Asc {
                     items.sort_by(|a, b| {
-                        let aval = Self::eval_expr(&a, &sort.on);
-                        let bval = Self::eval_expr(&b, &sort.on);
+                        let aval = Self::eval_expr(a, &sort.on);
+                        let bval = Self::eval_expr(b, &sort.on);
                         aval.cmp(&bval)
                     })
                 } else {
                     items.sort_by(|a, b| {
-                        let aval = Self::eval_expr(&a, &sort.on);
-                        let bval = Self::eval_expr(&b, &sort.on);
+                        let aval = Self::eval_expr(a, &sort.on);
+                        let bval = Self::eval_expr(b, &sort.on);
                         bval.cmp(&aval)
                     })
                 }
@@ -1173,8 +1173,8 @@ impl MemoryStore {
                     let mut ord = std::cmp::Ordering::Equal;
 
                     for sort in sorts {
-                        let aval = Self::eval_expr(&a, &sort.on);
-                        let bval = Self::eval_expr(&b, &sort.on);
+                        let aval = Self::eval_expr(a, &sort.on);
+                        let bval = Self::eval_expr(b, &sort.on);
 
                         ord = if sort.order == Order::Asc {
                             aval.cmp(&bval)
@@ -1192,7 +1192,7 @@ impl MemoryStore {
         }
     }
 
-    fn run_query<'a>(&'a self, op: plan::QueryPlan<MemoryValue, MemoryExpr>) -> TupleIter<'_> {
+    fn run_query(&self, op: plan::QueryPlan<MemoryValue, MemoryExpr>) -> TupleIter<'_> {
         match op {
             QueryPlan::EmptyRelation => Box::new(Vec::new().into_iter()),
             QueryPlan::SelectEntity { id } => {
@@ -1241,9 +1241,7 @@ impl MemoryStore {
                     index::Index::Multi(index) => index.range(from, until, direction),
                 };
 
-                let out = iter
-                    .map(|id| self.entities.get(&id).map(Cow::Borrowed))
-                    .flatten();
+                let out = iter.filter_map(|id| self.entities.get(&id).map(Cow::Borrowed));
                 Box::new(out)
             }
             QueryPlan::IndexScanPrefix {
@@ -1256,9 +1254,7 @@ impl MemoryStore {
                     index::Index::Multi(index) => index.range_prefix(prefix, direction),
                 };
 
-                let out = iter
-                    .map(|id| self.entities.get(&id).map(Cow::Borrowed))
-                    .flatten();
+                let out = iter.filter_map(|id| self.entities.get(&id).map(Cow::Borrowed));
                 Box::new(out)
             }
             QueryPlan::Sort { sorts, input } => {
@@ -1286,9 +1282,8 @@ impl MemoryStore {
                         .get(&value)
                         .into_iter()
                         .flatten()
-                        .filter_map(|id| self.entities.get(&id))
-                        .map(Cow::Borrowed)
-                        .into_iter();
+                        .filter_map(|id| self.entities.get(id))
+                        .map(Cow::Borrowed);
                     Box::new(out)
                 }
             },
@@ -1493,7 +1488,7 @@ impl MemoryStore {
             E::InLiteral { value, items } => {
                 let items = items
                     .into_iter()
-                    .map(|v| MemoryValue::from_value_standalone(v))
+                    .map(MemoryValue::from_value_standalone)
                     .collect();
                 Ok(MemoryExpr::InLiteral {
                     value: Box::new(self.build_memory_expr(*value, reg)?),
@@ -1515,14 +1510,14 @@ impl MemoryStore {
             E::Literal(v) => Cow::Borrowed(v),
             E::List(values) => {
                 let values = values
-                    .into_iter()
+                    .iter()
                     .map(|v| Self::eval_expr(entity, v).into_owned())
                     .collect();
                 Cow::Owned(MemoryValue::List(values))
             }
             E::Attr(local_id) => entity
                 .get(local_id)
-                .map(|attr_value| Cow::Borrowed(attr_value))
+                .map(Cow::Borrowed)
                 .unwrap_or(cowal_unit()),
             E::Ident(id) => Cow::Owned(MemoryValue::Id(*id)),
             E::UnaryOp { op, expr } => {
@@ -1538,8 +1533,7 @@ impl MemoryStore {
                     let left_flag = Self::eval_expr(entity, left);
 
                     if left_flag.is_true() {
-                        let right = Self::eval_expr(entity, right);
-                        right
+                        Self::eval_expr(entity, right)
                     } else {
                         Cow::Owned(MemoryValue::Bool(false))
                     }
@@ -1624,12 +1618,12 @@ impl MemoryStore {
                 }
             },
             E::If { value, then, or } => {
-                let flag = Self::eval_expr(entity, &*value);
+                let flag = Self::eval_expr(entity, value);
                 // TODO: handle non-boolean flag! (report warning/error)
                 if flag.is_true() {
-                    Self::eval_expr(entity, &*then)
+                    Self::eval_expr(entity, then)
                 } else {
-                    Self::eval_expr(entity, &*or)
+                    Self::eval_expr(entity, or)
                 }
             }
             E::InLiteral { value, items } => {
@@ -1667,7 +1661,7 @@ impl MemoryStore {
                 .read()
                 .unwrap()
                 .iter_indexes()
-                .map(|x| x.clone())
+                .cloned()
                 .collect::<Vec<_>>()
         };
         for index in indexes {
@@ -1773,6 +1767,6 @@ mod tests {
         };
 
         let flag = MemoryStore::eval_expr(&tuple, &expr);
-        assert_eq!(flag.as_bool_discard_other(), true);
+        assert!(flag.as_bool_discard_other());
     }
 }

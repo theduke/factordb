@@ -93,14 +93,14 @@ impl DbSchema {
         let entity = self.resolve_entity(entity)?;
 
         for parent_ident in &entity.extends {
-            let parent_entity = self.resolve_entity(&parent_ident)?;
+            let parent_entity = self.resolve_entity(parent_ident)?;
             if let Some(attr) = parent_entity
                 .attributes
                 .iter()
                 .find(|a| &a.attribute == attr)
             {
                 return Some(attr);
-            } else if let Some(attr) = self.parent_entity_attr(&parent_ident, attr) {
+            } else if let Some(attr) = self.parent_entity_attr(parent_ident, attr) {
                 return Some(attr);
             }
         }

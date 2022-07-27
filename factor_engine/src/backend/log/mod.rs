@@ -150,14 +150,8 @@ impl LogDb {
                         Vec::new()
                     }
                 }
-                Value::List(items) => items
-                    .iter()
-                    .flat_map(|item| find_ids_in_value(item))
-                    .collect(),
-                Value::Map(map) => map
-                    .values()
-                    .flat_map(|item| find_ids_in_value(item))
-                    .collect(),
+                Value::List(items) => items.iter().flat_map(find_ids_in_value).collect(),
+                Value::Map(map) => map.values().flat_map(find_ids_in_value).collect(),
                 Value::Id(id) => {
                     vec![*id]
                 }
@@ -165,9 +159,7 @@ impl LogDb {
         }
 
         fn find_ids(data: &DataMap) -> Vec<Id> {
-            data.values()
-                .flat_map(|value| find_ids_in_value(value))
-                .collect()
+            data.values().flat_map(find_ids_in_value).collect()
         }
 
         let mut stream = store.iter_events(0, EventId::MAX).await?;
@@ -314,7 +306,7 @@ impl LogDb {
                 break;
             }
             for id in &removed {
-                data.remove(&id);
+                data.remove(id);
             }
         }
 
@@ -431,7 +423,7 @@ impl LogDb {
                     .write()
                     .unwrap()
                     .revert_changes(revert_epoch)
-                    .expect(&format!("Consistency violation - could not revert changes after log write failure: {:?}", err));
+                    .unwrap_or_else(|_| panic!("Consistency violation - could not revert changes after log write failure: {:?}", err));
                 Err(err)
             }
         }
@@ -553,7 +545,7 @@ impl Backend for LogDb {
     }
 
     fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(&*self)
+        Some(self)
     }
 
     fn migrations(&self) -> BackendFuture<Vec<query::migrate::Migration>> {
@@ -582,11 +574,11 @@ pub trait LogStore {
 
     /// Iterate over the event log.
     /// use until: EventId::MAX to read until the end.
-    fn iter_events<'a>(
-        &'a self,
+    fn iter_events(
+        &self,
         from: EventId,
         until: EventId,
-    ) -> BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, AnyError>>, AnyError>>;
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<LogEvent, AnyError>>, AnyError>>;
 
     /// Read a single event.
     fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>>;
@@ -594,10 +586,10 @@ pub trait LogStore {
     /// Write an event to the log.
     /// Returns the event id.
     /// Note that this required mutable access
-    fn write_event<'a>(&'a mut self, event: LogEvent) -> BoxFuture<'a, Result<(), AnyError>>;
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<'_, Result<(), AnyError>>;
 
     /// Delete all events.
-    fn clear<'a>(&'a mut self) -> BoxFuture<'a, Result<(), AnyError>>;
+    fn clear(&mut self) -> BoxFuture<'_, Result<(), AnyError>>;
 
     /// Get the full size of the log in bytes.
     fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
@@ -756,7 +748,7 @@ mod tests {
         }
 
         let mut restored = LogDb::recover_data(mem).await.unwrap();
-        restored.sort_by(|a, b| a.get_id().unwrap().cmp(&b.get_id().unwrap()));
+        restored.sort_by_key(|a| a.get_id().unwrap());
 
         assert_eq!(3, restored.len());
         assert_eq!(id1, restored[0].get_id().unwrap());

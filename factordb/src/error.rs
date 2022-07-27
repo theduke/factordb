@@ -15,7 +15,7 @@ impl AttributeNotFound {
 
 impl std::fmt::Display for AttributeNotFound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Attribute not found: {}", self.ident.to_string())
+        write!(f, "Attribute not found: {}", self.ident)
     }
 }
 
@@ -36,7 +36,7 @@ impl IndexNotFound {
 
 impl std::fmt::Display for IndexNotFound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Index not found: {}", self.ident.to_string())
+        write!(f, "Index not found: {}", self.ident)
     }
 }
 
@@ -57,7 +57,7 @@ impl EntityNotFound {
 
 impl std::fmt::Display for EntityNotFound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Entity not found: {}", self.ident.to_string())
+        write!(f, "Entity not found: {}", self.ident)
     }
 }
 
