@@ -629,6 +629,12 @@ impl From<String> for Value {
     }
 }
 
+impl From<super::Timestamp> for Value {
+    fn from(ts: super::Timestamp) -> Self {
+        Value::UInt(ts.as_millis())
+    }
+}
+
 impl<'a> From<&'a [u8]> for Value {
     fn from(v: &'a [u8]) -> Self {
         Self::Bytes(v.into())
