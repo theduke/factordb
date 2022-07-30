@@ -43,7 +43,7 @@ pub fn schema_to_typescript(
             ty: Type::String,
         };
         let ident = Item::TypeAlias {
-            name: "EntityIdent".to_string(),
+            name: "Ident".to_string(),
             ty: Type::String,
         };
         let url = Item::TypeAlias {
@@ -464,7 +464,7 @@ fn value_to_ts_type(ty: &ValueType) -> Type {
         ValueType::DateTime => Type::Ident("Timestamp".to_string()),
         ValueType::Url => Type::Ident("Url".to_string()),
         ValueType::Ref => Type::Ident("EntityId".to_string()),
-        ValueType::Ident(_) => Type::Ident("EntityIdent".to_string()),
+        ValueType::Ident(_) => Type::Ident("Ident".to_string()),
         ValueType::RefConstrained(_) => {
             // TODO: use type alias for specific entity id if restricted to single type
             Type::Ident("EntityId".to_string())
