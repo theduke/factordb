@@ -206,7 +206,7 @@ enum Value {
 
 impl Value {
     fn render(self: &Value, indent: usize) -> String {
-        let prefix: String = std::iter::repeat(' ').take(indent).collect();
+        let prefix: String = " ".repeat(indent);
         let out = match self {
             Value::Str(value) => format!("\"{}\"", value),
             Value::Array(items) => {
@@ -218,7 +218,7 @@ impl Value {
                 format!("[\n{}\n{}]", values, prefix)
             }
             Value::Object(fields) => {
-                let field_prefix: String = std::iter::repeat(' ').take(indent + 2).collect();
+                let field_prefix: String = " ".repeat(indent + 2);
                 let fields_rendered = fields
                     .iter()
                     .map(|(name, value)| {
@@ -375,7 +375,7 @@ impl Item {
             Item::TypeAlias { name, ty } => {
                 format!("export type {} = {};", name, ty.render(0))
             }
-            Item::Newlines(count) => std::iter::repeat('\n').take(*count).collect(),
+            Item::Newlines(count) => "\n".repeat(*count),
         }
     }
 }
@@ -399,7 +399,7 @@ impl Module {
             .iter()
             .map(|item| {
                 let mut code = item.render();
-                code.push_str("\n");
+                code.push('\n');
                 code
             })
             .collect()
@@ -407,14 +407,13 @@ impl Module {
 }
 
 fn is_save_ident(value: &str) -> bool {
-    value.chars().all(|c| match c {
-        'a'..='z' | 'A'..='Z' | '_' => true,
-        _ => false,
-    })
+    value
+        .chars()
+        .all(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '_'))
 }
 
 fn make_save_ident(name: &str) -> String {
-    if is_save_ident(&name) {
+    if is_save_ident(name) {
         name.to_string()
     } else {
         format!("\"{}\"", name)

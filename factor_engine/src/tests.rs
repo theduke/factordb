@@ -230,6 +230,7 @@ async fn test_ref_insert_with_id_or_ident(db: &Db) {
     // TODO: enable!
 }
 
+#[allow(clippy::as_conversions)]
 async fn test_attr_corcions(db: &factordb::prelude::Db) {
     // int coerces to uint
     db.create(
@@ -1304,7 +1305,7 @@ async fn test_float_sort(db: &Db) {
     let mut ids = Vec::new();
     for x in -10..=10 {
         let e1 = map! {
-            "test/float": x as f64,
+            "test/float": f64::from(x),
         };
         let id = Id::random();
         db.create(id, e1.clone()).await.unwrap();

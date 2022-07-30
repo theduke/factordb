@@ -1221,7 +1221,7 @@ impl MemoryStore {
             }
             QueryPlan::Limit { limit, input } => {
                 let input = self.run_query(*input);
-                let out = input.take(limit as usize);
+                let out = input.take(limit.try_into().unwrap_or(usize::MAX));
                 Box::new(out)
             }
             QueryPlan::Merge { left, right } => {
