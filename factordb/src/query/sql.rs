@@ -29,7 +29,7 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
         bail!("Expected a `SELECT` statement")
     };
 
-    let select = match query.body {
+    let select = match *query.body {
         sqlparser::ast::SetExpr::Select(s) => s,
         sqlparser::ast::SetExpr::Query(_) => {
             bail!("subqueries are not supported");
@@ -390,7 +390,7 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
         SqlExpr::Case { .. } => {
             bail!("CASE is not supported");
         }
-        SqlExpr::Exists(_) => {
+        SqlExpr::Exists { .. } => {
             bail!("EXISTS is not supported");
         }
         SqlExpr::Subquery(_) => {
@@ -440,6 +440,9 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
         }
         SqlExpr::Position { .. } => {
             bail!("POSITION is not supported");
+        }
+        SqlExpr::AtTimeZone { .. } => {
+            bail!("AT TIME ZONE is not supported");
         }
     };
 
