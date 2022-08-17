@@ -4,9 +4,11 @@ use anyhow::{anyhow, bail, Context};
 use fnv::{FnvHashMap, FnvHashSet};
 
 use crate::util::stable_map::{StableMap, StableMapKey};
-use factordb::{
-    data::{Id, IdOrIdent},
-    error, schema, AnyError,
+
+use factor_core::{
+    data::{Id, IdOrIdent, Ident},
+    error::EntityNotFound,
+    schema,
 };
 
 use super::attribute_registry::AttributeRegistry;
@@ -80,9 +82,9 @@ impl EntityRegistry {
         &self,
         schema: schema::Class,
         attrs: &AttributeRegistry,
-    ) -> Result<RegisteredEntity, AnyError> {
-        let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
-            .map(|(a, b)| (a.to_string(), b.to_string()))?;
+    ) -> Result<RegisteredEntity, anyhow::Error> {
+        let (namespace, plain_name) =
+            Ident::parse_parts(&schema.ident).map(|(a, b)| (a.to_string(), b.to_string()))?;
 
         let mut parent_ids = FnvHashSet::<LocalEntityId>::default();
         let mut nested_attribute_names = FnvHashSet::<String>::default();
@@ -114,7 +116,7 @@ impl EntityRegistry {
         &mut self,
         schema: schema::Class,
         attrs: &AttributeRegistry,
-    ) -> Result<LocalEntityId, AnyError> {
+    ) -> Result<LocalEntityId, anyhow::Error> {
         assert!(self.items.len() < u32::MAX as usize - 1);
         assert!(!schema.id.is_nil());
 
@@ -156,10 +158,10 @@ impl EntityRegistry {
         }
     }
 
-    // pub fn must_get(&self, id: LocalEntityId) -> Result<&RegisteredEntity, error::EntityNotFound> {
+    // pub fn must_get(&self, id: LocalEntityId) -> Result<&RegisteredEntity, EntityNotFound> {
     //     let item = self.get_maybe_deleted(id);
     //     if item.is_deleted {
-    //         Err(error::EntityNotFound::new(item.schema.ident.clone().into()))
+    //         Err(EntityNotFound::new(item.schema.ident.clone().into()))
     //     } else {
     //         Ok(item)
     //     }
@@ -169,18 +171,18 @@ impl EntityRegistry {
         self.uids.get(&uid).and_then(|id| self.get(*id))
     }
 
-    pub fn must_get_by_uid(&self, uid: Id) -> Result<&RegisteredEntity, error::EntityNotFound> {
+    pub fn must_get_by_uid(&self, uid: Id) -> Result<&RegisteredEntity, EntityNotFound> {
         self.get_by_uid(uid)
-            .ok_or_else(|| error::EntityNotFound::new(uid.into()))
+            .ok_or_else(|| EntityNotFound::new(uid.into()))
     }
 
     pub fn get_by_name(&self, name: &str) -> Option<&RegisteredEntity> {
         self.names.get(name).and_then(|id| self.get(*id))
     }
 
-    pub fn must_get_by_name(&self, name: &str) -> Result<&RegisteredEntity, error::EntityNotFound> {
+    pub fn must_get_by_name(&self, name: &str) -> Result<&RegisteredEntity, EntityNotFound> {
         self.get_by_name(name)
-            .ok_or_else(|| error::EntityNotFound::new(name.into()))
+            .ok_or_else(|| EntityNotFound::new(name.into()))
     }
 
     pub fn get_by_ident(&self, ident: &IdOrIdent) -> Option<&RegisteredEntity> {
@@ -193,7 +195,7 @@ impl EntityRegistry {
     pub fn must_get_by_ident(
         &self,
         ident: &IdOrIdent,
-    ) -> Result<&RegisteredEntity, error::EntityNotFound> {
+    ) -> Result<&RegisteredEntity, EntityNotFound> {
         match ident {
             IdOrIdent::Id(id) => self.must_get_by_uid(*id),
             IdOrIdent::Name(name) => self.must_get_by_name(name),
@@ -215,7 +217,7 @@ impl EntityRegistry {
         entity: schema::Class,
         validate: bool,
         attrs: &AttributeRegistry,
-    ) -> Result<LocalEntityId, AnyError> {
+    ) -> Result<LocalEntityId, anyhow::Error> {
         entity
             .id
             .verify_non_nil()
@@ -243,7 +245,7 @@ impl EntityRegistry {
         entity: schema::Class,
         validate: bool,
         attrs: &AttributeRegistry,
-    ) -> Result<LocalEntityId, AnyError> {
+    ) -> Result<LocalEntityId, anyhow::Error> {
         entity
             .id
             .verify_non_nil()
@@ -283,8 +285,8 @@ impl EntityRegistry {
         entity: &schema::Class,
         attrs: &AttributeRegistry,
         is_new: bool,
-    ) -> Result<(), AnyError> {
-        schema::validate_namespaced_ident(&entity.ident)?;
+    ) -> Result<(), anyhow::Error> {
+        Ident::parse_parts(&entity.ident)?;
 
         if is_new {
             if self.get_by_name(&entity.ident).is_some() {
@@ -362,7 +364,7 @@ impl EntityRegistry {
         Ok(())
     }
 
-    pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
+    pub(super) fn remove(&mut self, id: Id) -> Result<(), anyhow::Error> {
         let local_id = self.must_get_by_uid(id)?.local_id;
         self.items.get_mut(local_id).is_deleted = true;
         // FIXME: need to update entity hierarchy (nested_children)

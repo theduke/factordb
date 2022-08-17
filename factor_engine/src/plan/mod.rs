@@ -5,13 +5,12 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 
-use factordb::{
+use factor_core::{
     data::{Id, IdOrIdent, Value},
     query::{
         expr::{BinaryOp, Expr, UnaryOp},
         select::{self, AggregationOp, Order, Select},
     },
-    AnyError,
 };
 
 use crate::registry::{LocalAttributeId, LocalIndexId, Registry, ATTR_TYPE_LOCAL};
@@ -376,7 +375,7 @@ fn optimize_expr(expr: ResolvedExpr) -> ResolvedExpr {
 pub fn plan_select(
     query: Select,
     reg: &Registry,
-) -> Result<QueryPlan<Value, ResolvedExpr>, AnyError> {
+) -> Result<QueryPlan<Value, ResolvedExpr>, anyhow::Error> {
     let filter_unoptimized = query
         .filter
         .clone()
@@ -457,7 +456,7 @@ pub fn plan_select(
 fn plan_sort(
     reg: &Registry,
     sorts: Vec<select::Sort>,
-) -> Result<Vec<Sort<ResolvedExpr>>, AnyError> {
+) -> Result<Vec<Sort<ResolvedExpr>>, anyhow::Error> {
     sorts
         .into_iter()
         .map(|s| {
@@ -469,7 +468,7 @@ fn plan_sort(
         .collect::<Result<Vec<_>, anyhow::Error>>()
 }
 
-pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError> {
+pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, anyhow::Error> {
     match expr {
         Expr::Literal(v) => Ok(ResolvedExpr::Literal(v)),
         Expr::List(items) => {
@@ -541,7 +540,7 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
 
 #[cfg(test)]
 mod tests {
-    use factordb::schema::{builtin::AttrId, AttributeMeta};
+    use factor_core::schema::{builtin::AttrId, AttributeMeta};
 
     use super::*;
 

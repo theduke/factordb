@@ -1,7 +1,11 @@
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use factordb::{data::Id, error, schema, AnyError};
+use factor_core::{
+    data::{Id, Ident},
+    error::IndexNotFound,
+    schema,
+};
 
 use super::{attribute_registry::AttributeRegistry, LocalAttributeId};
 use crate::util::stable_map::{StableMap, StableMapKey};
@@ -70,11 +74,11 @@ impl IndexRegistry {
         &mut self,
         schema: schema::IndexSchema,
         local_attribute_ids: Vec<LocalAttributeId>,
-    ) -> Result<LocalIndexId, AnyError> {
+    ) -> Result<LocalIndexId, anyhow::Error> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
-        let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
-            .map(|(a, b)| (a.to_string(), b.to_string()))?;
+        let (namespace, plain_name) =
+            Ident::parse_parts(&schema.ident).map(|(a, b)| (a.to_string(), b.to_string()))?;
 
         let uid = schema.id;
         let ident = schema.ident.clone();
@@ -133,18 +137,18 @@ impl IndexRegistry {
         self.uids.get(&uid).and_then(|id| self.get(*id))
     }
 
-    pub fn must_get_by_uid(&self, uid: Id) -> Result<&RegisteredIndex, error::IndexNotFound> {
+    pub fn must_get_by_uid(&self, uid: Id) -> Result<&RegisteredIndex, IndexNotFound> {
         self.get_by_uid(uid)
-            .ok_or_else(|| error::IndexNotFound::new(uid.into()))
+            .ok_or_else(|| IndexNotFound::new(uid.into()))
     }
 
     pub fn get_by_name(&self, name: &str) -> Option<&RegisteredIndex> {
         self.names.get(name).and_then(|id| self.get(*id))
     }
 
-    pub fn must_get_by_name(&self, name: &str) -> Result<&RegisteredIndex, error::IndexNotFound> {
+    pub fn must_get_by_name(&self, name: &str) -> Result<&RegisteredIndex, IndexNotFound> {
         self.get_by_name(name)
-            .ok_or_else(|| error::IndexNotFound::new(name.into()))
+            .ok_or_else(|| IndexNotFound::new(name.into()))
     }
 
     // pub fn get_by_ident(&self, ident: &Ident) -> Option<&RegisteredIndex> {
@@ -191,12 +195,12 @@ impl IndexRegistry {
         &mut self,
         index: schema::IndexSchema,
         attrs: &AttributeRegistry,
-    ) -> Result<LocalIndexId, AnyError> {
+    ) -> Result<LocalIndexId, anyhow::Error> {
         let local_attribute_ids = self.validate_schema(&index, attrs)?;
         self.add(index, local_attribute_ids)
     }
 
-    pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
+    pub(super) fn remove(&mut self, id: Id) -> Result<(), anyhow::Error> {
         let local_id = self.must_get_by_uid(id)?.local_id;
         self.items.get_mut(local_id).is_deleted = true;
         Ok(())
@@ -209,7 +213,7 @@ impl IndexRegistry {
         &self,
         index: &schema::IndexSchema,
         attrs: &AttributeRegistry,
-    ) -> Result<Vec<LocalAttributeId>, AnyError> {
+    ) -> Result<Vec<LocalAttributeId>, anyhow::Error> {
         index
             .id
             .verify_non_nil()
@@ -219,7 +223,7 @@ impl IndexRegistry {
             return Err(anyhow!("Index id already exists: '{}'", index.id));
         }
 
-        schema::validate_namespaced_ident(&index.ident)?;
+        Ident::parse_parts(&index.ident)?;
         if let Some(_old) = self.get_by_name(&index.ident) {
             return Err(anyhow!("Index ident already exists: '{}'", index.ident));
         }

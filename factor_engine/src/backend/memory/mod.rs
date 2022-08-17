@@ -3,13 +3,11 @@ mod interner;
 mod memory_data;
 pub mod store;
 
-use futures::{future::ready, FutureExt};
-
-use factordb::{
-    data,
-    prelude::DataMap,
+use factor_core::{
+    data::{self, DataMap},
     query::{self, select::Item},
 };
+use futures::{future::ready, FutureExt};
 
 use super::BackendFuture;
 

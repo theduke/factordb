@@ -1,14 +1,17 @@
 use std::collections::HashSet;
 
+use factor_core::{data, data::ValueType, schema};
+
 use anyhow::anyhow;
-use factordb::{data::ValueType, AnyError};
 use inflector::Inflector;
 
-/// Generate Typescript type definitions for a database schema.
+/**
+Generate Typescript type definitions for a database schema.
+*/
 pub fn schema_to_typescript(
-    schema: &factordb::schema::DbSchema,
+    schema: &schema::DbSchema,
     factor_import_path: Option<&str>,
-) -> Result<String, AnyError> {
+) -> Result<String, anyhow::Error> {
     let mut module = Module { items: Vec::new() };
 
     module.add(Item::Comment(
@@ -105,9 +108,9 @@ pub fn schema_to_typescript(
 }
 
 fn build_entity(
-    entity: &factordb::schema::Class,
-    schema: &factordb::schema::DbSchema,
-) -> Result<Vec<Item>, AnyError> {
+    entity: &schema::Class,
+    schema: &schema::DbSchema,
+) -> Result<Vec<Item>, anyhow::Error> {
     // find all the parent entities
     let parents = entity
         .extends
@@ -135,7 +138,7 @@ fn build_entity(
     let fields = entity
         .attributes
         .iter()
-        .map(|attr| -> Result<_, AnyError> {
+        .map(|attr| -> Result<_, anyhow::Error> {
             let s = schema
                 .resolve_attr(&attr.attribute)
                 .ok_or_else(|| anyhow!("Attribute {} not found", attr.attribute))?;
@@ -420,14 +423,11 @@ fn make_save_ident(name: &str) -> String {
     }
 }
 
-fn field_ts_type(
-    field: &factordb::schema::ClassAttribute,
-    attr: &factordb::schema::Attribute,
-) -> Type {
+fn field_ts_type(field: &schema::ClassAttribute, attr: &schema::Attribute) -> Type {
     let inner = value_to_ts_type(&attr.value_type);
     match field.cardinality {
-        factordb::schema::Cardinality::Optional => Type::Union(vec![inner, Type::Null]),
-        factordb::schema::Cardinality::Required => inner,
+        schema::Cardinality::Optional => Type::Union(vec![inner, Type::Null]),
+        schema::Cardinality::Required => inner,
     }
 }
 
@@ -474,17 +474,17 @@ fn value_to_ts_type(ty: &ValueType) -> Type {
     }
 }
 
-fn value_to_ts_value(v: &factordb::data::Value) -> Value {
+fn value_to_ts_value(v: &data::Value) -> Value {
     match v {
-        factordb::data::Value::Unit => todo!(),
-        factordb::data::Value::Bool(_) => todo!(),
-        factordb::data::Value::UInt(_) => todo!(),
-        factordb::data::Value::Int(_) => todo!(),
-        factordb::data::Value::Float(_) => todo!(),
-        factordb::data::Value::String(s) => Value::Str(s.clone()),
-        factordb::data::Value::Bytes(_) => todo!(),
-        factordb::data::Value::List(_) => todo!(),
-        factordb::data::Value::Map(_) => todo!(),
-        factordb::data::Value::Id(_) => todo!(),
+        data::Value::Unit => todo!(),
+        data::Value::Bool(_) => todo!(),
+        data::Value::UInt(_) => todo!(),
+        data::Value::Int(_) => todo!(),
+        data::Value::Float(_) => todo!(),
+        data::Value::String(s) => Value::Str(s.clone()),
+        data::Value::Bytes(_) => todo!(),
+        data::Value::List(_) => todo!(),
+        data::Value::Map(_) => todo!(),
+        data::Value::Id(_) => todo!(),
     }
 }

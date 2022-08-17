@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use factordb::{prelude::Value, query::expr::BinaryOp};
+use factor_core::{data::Value, query::expr::BinaryOp};
 
 use super::{BinaryExpr, ResolvedExpr};
 
@@ -218,7 +218,10 @@ impl OwnedExprOptimizer for BinaryToInLiteral {
 mod tests {
     use std::collections::HashSet;
 
-    use factordb::prelude::{AttrType, AttributeMeta, Expr};
+    use factor_core::{
+        query::expr::Expr,
+        schema::{builtin::AttrType, AttributeMeta},
+    };
 
     use crate::registry::{Registry, ATTR_TYPE_LOCAL};
 

@@ -1,5 +1,5 @@
-use factordb::{
-    prelude::{Id, Value},
+use factor_core::{
+    data::{Id, Value},
     query::expr::BinaryOp,
 };
 
@@ -256,7 +256,11 @@ impl PlanOptimizer for FilterWithIndex {
 
 #[cfg(test)]
 mod tests {
-    use factordb::prelude::{AttrType, AttributeMeta, Expr, Select};
+    use factor_core::{
+        query::expr::Expr,
+        query::select::Select,
+        schema::{builtin::AttrType, AttributeMeta},
+    };
 
     use crate::registry::ATTR_TYPE_LOCAL;
 

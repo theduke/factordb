@@ -8,6 +8,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+factor_core = { path = "../factor_core" }
+
 Inflector = "0.11.4"
 anyhow = "1.0.58"
-factordb = { path = "../factordb" }

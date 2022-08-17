@@ -17,5 +17,7 @@ syn = "1.0.98"
 
 [dev-dependencies]
 factordb = { path = "../factordb" }
+factor_core = { path = "../factor_core" }
+
 serde = "1.0.137"
 serde_json = "1.0.81"

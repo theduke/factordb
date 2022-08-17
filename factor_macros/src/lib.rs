@@ -3,7 +3,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 
 mod attribute;
-mod entity;
+mod class;
 
 /// Find an attribute with the format `#[factor(...)]`.
 fn find_factor_attr(attrs: &[syn::Attribute]) -> Option<&syn::Attribute> {
@@ -17,7 +17,7 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(Class, attributes(factor))]
 pub fn derive_class(tokens: TokenStream) -> TokenStream {
-    entity::derive_class(tokens)
+    class::derive_class(tokens)
 }
 
 // TODO: write an Object derive.

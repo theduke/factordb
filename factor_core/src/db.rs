@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use crate::{
     data::{patch::Patch, DataMap, Id, IdOrIdent},
-    prelude::Migration,
+    error::EntityNotFound,
     query::{
         self,
+        migrate::Migration,
         mutate::{Batch, Mutate},
     },
-    schema::ClassContainer,
-    AnyError,
+    schema::{self, ClassContainer},
 };
 
 #[derive(Clone)]
@@ -31,12 +31,12 @@ impl Db {
     }
 
     /// Retrieve the full database schema.
-    pub async fn schema(&self) -> Result<crate::schema::DbSchema, AnyError> {
+    pub async fn schema(&self) -> Result<schema::DbSchema, anyhow::Error> {
         self.client.schema().await
     }
 
     /// Select a single entity by its id or ident.
-    pub async fn entity<I>(&self, id: I) -> Result<DataMap, AnyError>
+    pub async fn entity<I>(&self, id: I) -> Result<DataMap, anyhow::Error>
     where
         I: Into<IdOrIdent>,
     {
@@ -44,23 +44,23 @@ impl Db {
 
         // FIXME: remove this once index persistence logic is implemented.
         match id.into() {
-            IdOrIdent::Id(id) => {
-                self.client.entity(id.into()).await?.ok_or_else(|| {
-                    anyhow::Error::from(crate::error::EntityNotFound::new(id.into()))
-                })
-            }
+            IdOrIdent::Id(id) => self
+                .client
+                .entity(id.into())
+                .await?
+                .ok_or_else(|| anyhow::Error::from(EntityNotFound::new(id.into()))),
             IdOrIdent::Name(name) => {
                 let sel = query::select::Select::new()
                     .with_limit(1)
                     .with_filter(Expr::eq(
-                        Expr::attr::<crate::schema::builtin::AttrIdent>(),
+                        Expr::attr::<schema::builtin::AttrIdent>(),
                         Expr::literal(name.as_ref()),
                     ));
                 let mut page = self.select(sel).await?;
                 page.items
                     .pop()
                     .map(|item| item.data)
-                    .ok_or_else(|| crate::error::EntityNotFound::new(name.as_ref().into()).into())
+                    .ok_or_else(|| EntityNotFound::new(name.as_ref().into()).into())
             }
         }
     }
@@ -69,74 +69,78 @@ impl Db {
     pub async fn select(
         &self,
         query: query::select::Select,
-    ) -> Result<query::select::Page<query::select::Item>, AnyError> {
+    ) -> Result<query::select::Page<query::select::Item>, anyhow::Error> {
         self.client.select(query).await
     }
 
-    pub async fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, AnyError> {
+    pub async fn select_map(
+        &self,
+        query: query::select::Select,
+    ) -> Result<Vec<DataMap>, anyhow::Error> {
         self.client.select_map(query).await
     }
 
     // Mutate.
 
-    pub async fn batch(&self, batch: Batch) -> Result<(), AnyError> {
+    pub async fn batch(&self, batch: Batch) -> Result<(), anyhow::Error> {
         self.client.batch(batch).await
     }
 
-    pub async fn create(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
+    pub async fn create(&self, id: Id, data: DataMap) -> Result<(), anyhow::Error> {
         self.batch(Mutate::create(id, data).into()).await
     }
 
     pub async fn create_entity<E: ClassContainer + serde::Serialize>(
         &self,
         entity: E,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let id = entity.id();
         let data = entity.into_map()?;
         self.create(id, data).await
     }
 
-    pub async fn replace(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
+    pub async fn replace(&self, id: Id, data: DataMap) -> Result<(), anyhow::Error> {
         self.batch(Mutate::replace(id, data).into()).await
     }
 
-    pub async fn merge(&self, id: Id, data: DataMap) -> Result<(), AnyError> {
+    pub async fn merge(&self, id: Id, data: DataMap) -> Result<(), anyhow::Error> {
         self.batch(Mutate::merge(id, data).into()).await
     }
 
-    pub async fn patch(&self, id: Id, patch: Patch) -> Result<(), AnyError> {
+    pub async fn patch(&self, id: Id, patch: Patch) -> Result<(), anyhow::Error> {
         self.batch(Mutate::patch(id, patch).into()).await
     }
 
-    pub async fn delete(&self, id: Id) -> Result<(), AnyError> {
+    pub async fn delete(&self, id: Id) -> Result<(), anyhow::Error> {
         self.batch(Mutate::delete(id).into()).await
     }
 
     /// Run a migration.
-    pub async fn migrate(&self, migration: query::migrate::Migration) -> Result<(), AnyError> {
+    pub async fn migrate(&self, migration: query::migrate::Migration) -> Result<(), anyhow::Error> {
         self.client.migrate(migration).await
     }
 
-    pub async fn migrations(&self) -> Result<Vec<Migration>, AnyError> {
+    pub async fn migrations(&self) -> Result<Vec<Migration>, anyhow::Error> {
         self.client.migrations().await
     }
 
-    pub async fn storage_usage(&self) -> Result<Option<u64>, AnyError> {
+    pub async fn storage_usage(&self) -> Result<Option<u64>, anyhow::Error> {
         self.client.storage_usage().await
     }
 
     /// Delete all data.
-    pub async fn purge_all_data(&self) -> Result<(), AnyError> {
+    pub async fn purge_all_data(&self) -> Result<(), anyhow::Error> {
         self.client.purge_all_data().await
     }
 }
 
-pub type DbFuture<'a, T> = futures::future::BoxFuture<'a, Result<T, anyhow::Error>>;
+pub type DbFuture<'a, T> =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, anyhow::Error>> + Send + 'a>>;
 
 pub trait DbClient {
     fn as_any(&self) -> &dyn std::any::Any;
 
-    fn schema(&self) -> DbFuture<'_, crate::schema::DbSchema>;
+    fn schema(&self) -> DbFuture<'_, schema::DbSchema>;
     fn entity(&self, id: IdOrIdent) -> DbFuture<'_, Option<DataMap>>;
 
     fn select(

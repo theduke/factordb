@@ -6,8 +6,6 @@ use futures::{
     FutureExt, StreamExt,
 };
 
-use factordb::AnyError;
-
 use super::{EventId, LogEvent};
 
 /// Mock memory log store.
@@ -37,7 +35,8 @@ impl Default for MemoryLogStore {
     }
 }
 
-type StreamFuture<'a> = BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, AnyError>>, AnyError>>;
+type StreamFuture<'a> =
+    BoxFuture<'a, Result<BoxStream<'a, Result<LogEvent, anyhow::Error>>, anyhow::Error>>;
 
 impl super::LogStore for MemoryLogStore {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -57,7 +56,7 @@ impl super::LogStore for MemoryLogStore {
         ready(res).boxed()
     }
 
-    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>> {
+    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, anyhow::Error>> {
         let res = self
             .events
             .read()
@@ -69,7 +68,7 @@ impl super::LogStore for MemoryLogStore {
         ready(res).boxed()
     }
 
-    fn write_event(&mut self, event: LogEvent) -> BoxFuture<Result<(), AnyError>> {
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<Result<(), anyhow::Error>> {
         let mut events = self.events.write().unwrap();
 
         let expected_id = events.len() as u64 + 1;
@@ -88,16 +87,16 @@ impl super::LogStore for MemoryLogStore {
         ready(res).boxed()
     }
 
-    fn clear(&mut self) -> BoxFuture<'static, Result<(), AnyError>> {
+    fn clear(&mut self) -> BoxFuture<'static, Result<(), anyhow::Error>> {
         self.events.write().unwrap().clear();
         ready(Ok(())).boxed()
     }
 
-    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>> {
+    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, anyhow::Error>> {
         ready(Ok(None)).boxed()
     }
 
-    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>> {
+    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, anyhow::Error>> {
         ready(Ok(None)).boxed()
     }
 }

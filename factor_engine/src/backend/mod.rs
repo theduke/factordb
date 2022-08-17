@@ -8,16 +8,17 @@ use crate::{
     registry::{LocalIndexId, SharedRegistry},
     util::VecSet,
 };
-use factordb::{
+
+use factor_core::{
     data::{patch::Patch, DataMap, Id, IdOrIdent, Value},
     query::{self, expr::Expr, migrate::Migration, select::Item},
-    schema, AnyError,
+    schema,
 };
 
-pub type BackendFuture<T> = futures::future::BoxFuture<'static, Result<T, AnyError>>;
+pub type BackendFuture<T> = futures::future::BoxFuture<'static, Result<T, anyhow::Error>>;
 
 pub trait Dao: Send + 'static {
-    fn get(&self, attr: &schema::Attribute) -> Result<Option<Value>, AnyError>;
+    fn get(&self, attr: &schema::Attribute) -> Result<Option<Value>, anyhow::Error>;
 
     fn get_opt(&self, attr: &schema::Attribute) -> Option<Value> {
         self.get(attr).ok().flatten()

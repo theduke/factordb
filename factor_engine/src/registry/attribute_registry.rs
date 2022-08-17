@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Context};
 use fnv::FnvHashMap;
 
-use factordb::{
-    data::{Id, IdOrIdent, ValueType},
-    error::{self, EntityNotFound},
-    schema, AnyError,
+use factor_core::{
+    data::{Id, IdOrIdent, Ident, ValueType},
+    error::{AttributeNotFound, EntityNotFound},
+    schema,
 };
 
 use crate::util::{
@@ -72,11 +72,11 @@ impl AttributeRegistry {
         &mut self,
         schema: schema::Attribute,
         entities: &EntityRegistry,
-    ) -> Result<LocalAttributeId, AnyError> {
+    ) -> Result<LocalAttributeId, anyhow::Error> {
         assert!(self.items.len() < u32::MAX as usize - 1);
 
-        let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
-            .map(|(a, b)| (a.to_string(), b.to_string()))?;
+        let (namespace, plain_name) =
+            Ident::parse_parts(&schema.ident).map(|(a, b)| (a.to_string(), b.to_string()))?;
         let uid = schema.id;
         let ident = schema.ident.clone();
 
@@ -147,10 +147,10 @@ impl AttributeRegistry {
     // pub fn must_get(
     //     &self,
     //     id: LocalAttributeId,
-    // ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    // ) -> Result<&RegisteredAttribute, AttributeNotFound> {
     //     let item = self.get_maybe_deleted(id);
     //     if item.is_deleted {
-    //         Err(error::AttributeNotFound::new(
+    //         Err(AttributeNotFound::new(
     //             item.schema.ident.clone().into(),
     //         ))
     //     } else {
@@ -162,24 +162,18 @@ impl AttributeRegistry {
         self.uids.get(&uid).and_then(|id| self.get(*id))
     }
 
-    pub fn must_get_by_uid(
-        &self,
-        uid: Id,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    pub fn must_get_by_uid(&self, uid: Id) -> Result<&RegisteredAttribute, AttributeNotFound> {
         self.get_by_uid(uid)
-            .ok_or_else(|| error::AttributeNotFound::new(uid.into()))
+            .ok_or_else(|| AttributeNotFound::new(uid.into()))
     }
 
     pub fn get_by_name(&self, name: &str) -> Option<&RegisteredAttribute> {
         self.names.get(name).and_then(|id| self.get(*id))
     }
 
-    pub fn must_get_by_name(
-        &self,
-        name: &str,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    pub fn must_get_by_name(&self, name: &str) -> Result<&RegisteredAttribute, AttributeNotFound> {
         self.get_by_name(name)
-            .ok_or_else(|| error::AttributeNotFound::new(name.into()))
+            .ok_or_else(|| AttributeNotFound::new(name.into()))
     }
 
     pub fn get_by_ident(&self, ident: &IdOrIdent) -> Option<&RegisteredAttribute> {
@@ -192,7 +186,7 @@ impl AttributeRegistry {
     pub fn must_get_by_ident(
         &self,
         ident: &IdOrIdent,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    ) -> Result<&RegisteredAttribute, AttributeNotFound> {
         match ident {
             IdOrIdent::Id(id) => self.must_get_by_uid(*id),
             IdOrIdent::Name(name) => self.must_get_by_name(name),
@@ -204,7 +198,7 @@ impl AttributeRegistry {
         &mut self,
         attr: schema::Attribute,
         entities: &EntityRegistry,
-    ) -> Result<LocalAttributeId, AnyError> {
+    ) -> Result<LocalAttributeId, anyhow::Error> {
         self.validate_schema(&attr, false)?;
         self.add(attr, entities)
     }
@@ -214,7 +208,7 @@ impl AttributeRegistry {
         &mut self,
         schema: schema::Attribute,
         validate: bool,
-    ) -> Result<LocalAttributeId, AnyError> {
+    ) -> Result<LocalAttributeId, anyhow::Error> {
         schema
             .id
             .verify_non_nil()
@@ -233,7 +227,7 @@ impl AttributeRegistry {
         &self,
         attr: &schema::Attribute,
         allow_existing: bool,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         attr.id
             .verify_non_nil()
             .context("Attribute can not have a nil Id")?;
@@ -247,7 +241,7 @@ impl AttributeRegistry {
             }
         }
 
-        schema::validate_namespaced_ident(&attr.ident)?;
+        Ident::parse_parts(&attr.ident)?;
 
         if attr.ident.len() > super::MAX_NAME_LEN {
             return Err(anyhow!(
@@ -286,7 +280,7 @@ impl AttributeRegistry {
         Ok(())
     }
 
-    pub(super) fn remove(&mut self, id: Id) -> Result<(), AnyError> {
+    pub(super) fn remove(&mut self, id: Id) -> Result<(), anyhow::Error> {
         let local_id = self.must_get_by_uid(id)?.local_id;
         self.items.get_mut(local_id).is_deleted = true;
         Ok(())

@@ -2,11 +2,13 @@
 resolver = "2"
 
 members = [
+    "factor_core",
     "factordb",
     "factor_engine",
     "factor_macros",
     "factor_tools",
     "factor_tests",
+    "./examples",
 
     # Backends
     # Disabled: not functional

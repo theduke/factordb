@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::HashSet};
 use fnv::FnvHashMap;
 use ordered_float::OrderedFloat;
 
-use factordb::{
+use factor_core::{
     data::{Id, Value},
     query::expr,
 };

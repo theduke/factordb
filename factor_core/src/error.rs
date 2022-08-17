@@ -1,6 +1,6 @@
-use crate::{data::IdOrIdent, prelude::Id};
-
 // AttributeNotFound
+
+use crate::data::{Id, IdOrIdent, Value};
 
 #[derive(Debug)]
 pub struct AttributeNotFound {
@@ -70,7 +70,7 @@ pub struct UniqueConstraintViolation {
     pub index: String,
     pub entity_id: Id,
     pub attribute: String,
-    pub value: Option<crate::data::Value>,
+    pub value: Option<Value>,
 }
 
 impl std::fmt::Display for UniqueConstraintViolation {

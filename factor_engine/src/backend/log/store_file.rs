@@ -7,8 +7,6 @@ use futures::{
 };
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use factordb::AnyError;
-
 use super::{EventId, LogConverter, LogEvent};
 
 /// Mock memory log store.
@@ -20,7 +18,7 @@ pub struct FileLogStore<C> {
 }
 
 impl<C: LogConverter> FileLogStore<C> {
-    pub async fn open(converter: C, path: impl Into<PathBuf>) -> Result<Self, AnyError> {
+    pub async fn open(converter: C, path: impl Into<PathBuf>) -> Result<Self, anyhow::Error> {
         let path = path.into();
 
         let mut file = tokio::fs::OpenOptions::new()
@@ -49,14 +47,14 @@ impl<C: LogConverter> super::LogStore for FileLogStore<C> {
         &self,
         from: EventId,
         until: EventId,
-    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<LogEvent, AnyError>>, AnyError>> {
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<LogEvent, anyhow::Error>>, anyhow::Error>> {
         let f = async move {
             let file = tokio::fs::File::open(&self.path).await?;
             let buf = tokio::io::BufReader::new(file);
             let lines = tokio_stream::wrappers::LinesStream::new(buf.lines());
 
             let stream = lines
-                .map_err(AnyError::from)
+                .map_err(anyhow::Error::from)
                 .and_then(move |line| async move {
                     let event = self.converter.clone().deserialize(line.as_bytes())?;
                     Ok(event)
@@ -83,11 +81,11 @@ impl<C: LogConverter> super::LogStore for FileLogStore<C> {
         f.boxed()
     }
 
-    fn read_event(&self, _id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>> {
+    fn read_event(&self, _id: EventId) -> BoxFuture<Result<Option<LogEvent>, anyhow::Error>> {
         std::future::ready(Err(anyhow::anyhow!("read_event not supported"))).boxed()
     }
 
-    fn write_event(&mut self, event: LogEvent) -> BoxFuture<'_, Result<(), AnyError>> {
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<'_, Result<(), anyhow::Error>> {
         async move {
             let mut converted = self.converter.serialize(&event)?;
             converted.push(b'\n');
@@ -100,7 +98,7 @@ impl<C: LogConverter> super::LogStore for FileLogStore<C> {
         .boxed()
     }
 
-    fn clear(&mut self) -> BoxFuture<'_, Result<(), AnyError>> {
+    fn clear(&mut self) -> BoxFuture<'_, Result<(), anyhow::Error>> {
         async move {
             let mut file = self.file.lock().await;
             file.set_len(0).await?;
@@ -110,11 +108,11 @@ impl<C: LogConverter> super::LogStore for FileLogStore<C> {
         .boxed()
     }
 
-    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>> {
+    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, anyhow::Error>> {
         ready(Ok(None)).boxed()
     }
 
-    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>> {
+    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, anyhow::Error>> {
         ready(Ok(None)).boxed()
     }
 }

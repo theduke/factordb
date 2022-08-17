@@ -1,4 +1,4 @@
-use factordb::data::Value;
+use factor_core::data::Value;
 
 use super::memory_data::{MemoryValue, SharedStr};
 

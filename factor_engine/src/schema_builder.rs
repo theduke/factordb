@@ -6,13 +6,13 @@ use crate::{
     backend::{DbOp, IndexPopulate, SelectOp, TupleDelete, TuplePatch, TupleRemoveAttrs},
     registry::Registry,
 };
-use factordb::{
+
+use factor_core::{
     data::{
         patch::Patch,
         value::{to_value, to_value_map},
-        Id, IdOrIdent, Value,
+        Id, IdOrIdent, Value, ValueType,
     },
-    prelude::ValueType,
     query::{
         expr::Expr,
         migrate::{self, IndexCreate, Migration, SchemaAction},
@@ -21,7 +21,6 @@ use factordb::{
         builtin::{self, NS_FACTOR},
         AttrMapExt, Attribute, AttributeMeta, Cardinality, ClassAttribute, IndexSchema,
     },
-    AnyError,
 };
 
 // TODO: remove allow
@@ -106,7 +105,7 @@ fn build_attribute_create(
     reg: &mut Registry,
     create: migrate::AttributeCreate,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let namespace = create.schema.parse_namespace()?;
     if namespace == builtin::NS_FACTOR && !is_internal {
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
@@ -158,7 +157,7 @@ fn build_attribute_upsert(
     reg: &mut Registry,
     upsert: migrate::AttributeUpsert,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let namespace = upsert.schema.parse_namespace()?;
     if namespace == builtin::NS_FACTOR && !is_internal {
         return Err(anyhow!("Invalid namespace: factor/ is reserved"));
@@ -223,7 +222,7 @@ fn build_attribute_change_type(
     reg: &mut Registry,
     action: migrate::AttributeChangeType,
     _is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let attr = reg.require_attr_by_name(&action.attribute)?;
 
     match (&attr.schema.value_type, &action.new_type) {
@@ -276,7 +275,7 @@ fn build_attribute_create_index(
     reg: &mut Registry,
     spec: migrate::AttributeCreateIndex,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let attr = reg.require_attr_by_name(&spec.attribute)?;
     let namespace = attr.schema.parse_namespace()?;
     if namespace == builtin::NS_FACTOR && !is_internal {
@@ -308,7 +307,7 @@ fn build_attribute_create_index(
 fn build_attribute_delete(
     reg: &mut Registry,
     del: migrate::AttributeDelete,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let attr = reg.require_attr_by_name(&del.name)?.clone();
 
     if attr.namespace == builtin::NS_FACTOR {
@@ -350,7 +349,7 @@ fn build_entity_create(
     reg: &mut Registry,
     mut create: migrate::EntityCreate,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let namespace = create.schema.parse_namespace()?;
     if !is_internal && namespace == builtin::NS_FACTOR {
         return Err(anyhow!(
@@ -369,7 +368,7 @@ fn build_entity_attribute_add(
     reg: &mut Registry,
     add: migrate::EntityAttributeAdd,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let attr = reg.require_attr_by_name(&add.attribute)?.clone();
     let entity = reg.require_entity_by_name_mut(&add.entity)?;
 
@@ -430,7 +429,7 @@ fn build_entity_attribute_change_cardinality(
     reg: &mut Registry,
     change: migrate::EntityAttributeChangeCardinality,
     _is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let attr = reg.require_attr_by_name(&change.attribute)?;
     let entity = reg.require_entity_by_name(&change.entity_type)?;
 
@@ -466,7 +465,7 @@ fn build_entity_attribute_remove(
     reg: &mut Registry,
     change: migrate::EntityAttributeRemove,
     _is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let attr = reg.require_attr_by_name(&change.attribute)?.clone();
     let entity = reg.require_entity_by_name(&change.entity_type)?.clone();
 
@@ -507,7 +506,7 @@ fn build_entity_upsert(
     reg: &mut Registry,
     upsert: migrate::EntityUpsert,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let namespace = upsert.schema.parse_namespace()?;
     if !is_internal && namespace == builtin::NS_FACTOR {
         bail!("Invalid entity ident: the factor/ namespace is reserved");
@@ -627,7 +626,7 @@ fn build_entity_delete(
     reg: &mut Registry,
     del: migrate::EntityDelete,
     _is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let schema = reg.require_entity_by_name(&del.name)?;
 
     let ops = if del.delete_all {
@@ -653,7 +652,7 @@ fn build_entity_delete(
 fn build_index_create(
     reg: &mut Registry,
     mut create: migrate::IndexCreate,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     // FIXME: validate namespace
     // let namespace = create.schema.parse_namespace()?;
     // if namespace == super::builtin::NS_FACTOR && !is_internal {
@@ -669,7 +668,7 @@ fn build_index_create(
 fn build_index_delete(
     reg: &mut Registry,
     del: migrate::IndexDelete,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     let id = reg.require_index_by_name(&del.name)?.schema.id;
     reg.remove_index(id)?;
 
@@ -681,7 +680,7 @@ fn build_action(
     reg: &mut Registry,
     action: SchemaAction,
     is_internal: bool,
-) -> Result<Vec<ResolvedAction>, AnyError> {
+) -> Result<Vec<ResolvedAction>, anyhow::Error> {
     match action {
         SchemaAction::AttributeCreate(create) => build_attribute_create(reg, create, is_internal),
         SchemaAction::AttributeUpsert(upsert) => build_attribute_upsert(reg, upsert, is_internal),
@@ -715,7 +714,7 @@ pub fn build_migration(
     reg: &mut Registry,
     mut mig: Migration,
     is_internal: bool,
-) -> Result<(Migration, Vec<DbOp>), AnyError> {
+) -> Result<(Migration, Vec<DbOp>), anyhow::Error> {
     let mut actions = Vec::new();
     let mut ops = Vec::new();
 

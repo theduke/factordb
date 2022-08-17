@@ -42,14 +42,14 @@ macro_rules! map {
         __map $m:expr,
         $key:literal : $value:expr
     } => {
-        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        $m.insert($key.to_string(), $crate::data::Value::from($value));
     };
 
     {
         __map $m:expr,
         $key:literal : $value:expr , $( $rest:tt )*
     } => {
-        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        $m.insert($key.to_string(), $crate::data::Value::from($value));
         map!( __map $m, $( $rest )* );
     };
 
@@ -59,14 +59,14 @@ macro_rules! map {
         __map $m:expr,
         $key:ident : $value:expr ,
     } => {
-        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        $m.insert($key.to_string(), $crate::data::Value::from($value));
     };
 
     {
         __map $m:expr,
         $key:ident : $value:expr
     } => {
-        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        $m.insert($key.to_string(), $crate::data::Value::from($value));
     };
 
 
@@ -74,7 +74,7 @@ macro_rules! map {
         __map $m:expr,
         $key:ident : $value:expr , $( $rest:tt )*
     } => {
-        $m.insert($key.to_string(), $crate::prelude::Value::from($value));
+        $m.insert($key.to_string(), $crate::data::Value::from($value));
         map!( __map $m, $( $rest )* );
     };
 

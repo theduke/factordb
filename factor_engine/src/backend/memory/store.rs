@@ -1,19 +1,17 @@
 use std::{borrow::Cow, str::FromStr};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context};
 
-use factordb::{
-    data::{patch::Patch, DataMap, Id, IdOrIdent, Value, ValueMap},
-    error::{self, EntityNotFound},
-    prelude::{Batch, Select},
+use factor_core::{
+    data::{patch::Patch, DataMap, Id, IdOrIdent, Value, ValueMap, ValueType},
+    error::{EntityNotFound, UniqueConstraintViolation},
     query::{
         self,
         expr::Expr,
         migrate::Migration,
-        mutate::EntityPatch,
-        select::{AggregationOp, Item, Order, Page},
+        mutate::{Batch, EntityPatch},
+        select::{AggregationOp, Item, Order, Page, Select},
     },
-    AnyError,
 };
 
 use crate::{
@@ -120,12 +118,9 @@ impl MemoryStore {
             .ok_or_else(|| EntityNotFound { ident: id.into() })
     }
 
-    fn must_resolve_entity(
-        &self,
-        ident: &IdOrIdent,
-    ) -> Result<&MemoryTuple, error::EntityNotFound> {
+    fn must_resolve_entity(&self, ident: &IdOrIdent) -> Result<&MemoryTuple, EntityNotFound> {
         self.resolve_entity(ident)
-            .ok_or_else(|| error::EntityNotFound::new(ident.clone()))
+            .ok_or_else(|| EntityNotFound::new(ident.clone()))
     }
 
     // fn resolve_entity_mut(&mut self, ident: &Ident) -> Option<&mut MemoryTuple> {
@@ -133,14 +128,14 @@ impl MemoryStore {
     //     self.entities.get_mut(&id)
     // }
 
-    // fn entity_ident_map(&self, ident: &Ident) -> Result<IdMap, AnyError> {
+    // fn entity_ident_map(&self, ident: &Ident) -> Result<IdMap, anyhow::Error> {
     //     let tuple = self
     //         .resolve_entity(&ident)
     //         .ok_or_else(|| anyhow!("Not found"))?;
     //     Ok(memory_to_id_map(tuple))
     // }
 
-    fn intern_data_map(&mut self, map: DataMap) -> Result<MemoryTuple, AnyError> {
+    fn intern_data_map(&mut self, map: DataMap) -> Result<MemoryTuple, anyhow::Error> {
         // TODO: fix this... pass in the registry
         let reg = self.registry.clone();
         let reg = reg.read().unwrap();
@@ -148,7 +143,7 @@ impl MemoryStore {
         let map = map
             .0
             .into_iter()
-            .map(|(key, value)| -> Result<_, AnyError> {
+            .map(|(key, value)| -> Result<_, anyhow::Error> {
                 let attr = reg.require_attr_by_name(&key)?;
                 let value = self.interner.intern_value(value);
                 Ok((attr.local_id, value))
@@ -173,7 +168,7 @@ impl MemoryStore {
         ValueMap(map)
     }
 
-    // fn persist_tuple(&mut self, tuple: TuplePersist) -> Result<Id, AnyError> {
+    // fn persist_tuple(&mut self, tuple: TuplePersist) -> Result<Id, anyhow::Error> {
     //     let ident_id = tuple
     //         .ident
     //         .as_ref()
@@ -235,7 +230,7 @@ impl MemoryStore {
     //     Ok(id)
     // }
 
-    // fn persist_multi(&mut self, tuples: Vec<TuplePersist>) -> Result<Vec<Id>, AnyError> {
+    // fn persist_multi(&mut self, tuples: Vec<TuplePersist>) -> Result<Vec<Id>, anyhow::Error> {
     //     // FIXME: rollback if any thing fails!
     //     let mut ids = Vec::new();
     //     for tuple in tuples {
@@ -245,7 +240,7 @@ impl MemoryStore {
     //     Ok(ids)
     // }
 
-    // fn apply_batch(&mut self, batch: Batch) -> Result<Vec<Id>, AnyError> {
+    // fn apply_batch(&mut self, batch: Batch) -> Result<Vec<Id>, anyhow::Error> {
     //     // FIXME: rollback if any thing fails!
     //     let mut ids = Vec::new();
     //     for op in batch.ops {
@@ -262,7 +257,7 @@ impl MemoryStore {
     //     Ok(ids)
     // }
 
-    // fn apply_assert(&mut self, assert: schema::Assert) -> Result<Id, AnyError> {
+    // fn apply_assert(&mut self, assert: schema::Assert) -> Result<Id, anyhow::Error> {
     //     let current = self.resolve_entity_mut(&assert.ident);
 
     //     let current_value = current.map(|x| memory_to_id_map(x));
@@ -277,7 +272,7 @@ impl MemoryStore {
     // }
     //
 
-    pub(super) fn index_create(&mut self, schema: &RegisteredIndex) -> Result<(), AnyError> {
+    pub(super) fn index_create(&mut self, schema: &RegisteredIndex) -> Result<(), anyhow::Error> {
         let index = if schema.schema.unique {
             index::Index::Unique(index::UniqueIndex::new())
         } else {
@@ -288,7 +283,10 @@ impl MemoryStore {
         Ok(())
     }
 
-    fn index_delete(&mut self, schema: &crate::registry::RegisteredIndex) -> Result<(), AnyError> {
+    fn index_delete(
+        &mut self,
+        schema: &crate::registry::RegisteredIndex,
+    ) -> Result<(), anyhow::Error> {
         // Since the index list is addressed by numeric local index, the index
         // is not actually removed, but just it's data is cleared to free up
         // memory.
@@ -303,7 +301,7 @@ impl MemoryStore {
         op: TupleIndexInsert,
         reverts: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let value = self.interner.intern_value(op.value);
 
         let index_id = op.index;
@@ -317,7 +315,7 @@ impl MemoryStore {
                         let index = reg
                             .index_by_local_id(index_id)
                             .expect("Invalid local index id");
-                        error::UniqueConstraintViolation {
+                        UniqueConstraintViolation {
                             index: index.schema.ident.clone(),
                             entity_id: id,
                             // TODO: add attribute name!
@@ -347,7 +345,7 @@ impl MemoryStore {
         op: TupleIndexReplace,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let value = self.interner.intern_value(op.value);
         let old_value = self.interner.intern_value(op.old_value);
 
@@ -364,7 +362,7 @@ impl MemoryStore {
                         let index = reg
                             .index_by_local_id(index_id)
                             .expect("Invalid local index id");
-                        error::UniqueConstraintViolation {
+                        UniqueConstraintViolation {
                             index: index.schema.ident.clone(),
                             entity_id: id,
                             // TODO: add attribute name!
@@ -404,7 +402,7 @@ impl MemoryStore {
         id: Id,
         op: TupleIndexRemove,
         reverts: &mut RevertList,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let value = self.interner.intern_value(op.value);
         let index_id = op.index;
 
@@ -430,7 +428,7 @@ impl MemoryStore {
         op: TupleIndexOp,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         match op {
             TupleIndexOp::Insert(op) => self.tuple_index_insert(tuple_id, op, revert, reg),
             TupleIndexOp::Replace(op) => self.tuple_index_replace(tuple_id, op, revert, reg),
@@ -444,7 +442,7 @@ impl MemoryStore {
         create: backend::TupleCreate,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         if self.entities.contains_key(&id) {
             return Err(anyhow!("Entity id already exists: '{}'", id));
         }
@@ -465,7 +463,7 @@ impl MemoryStore {
         replace: backend::TupleReplace,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         for op in replace.index_ops {
             self.apply_tuple_index_op(id, op, revert, reg)?;
         }
@@ -483,7 +481,7 @@ impl MemoryStore {
         mut update: backend::TupleMerge,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         for op in std::mem::take(&mut update.index_ops) {
             self.apply_tuple_index_op(id, op, revert, reg)?;
         }
@@ -491,7 +489,7 @@ impl MemoryStore {
         let old = self
             .entities
             .get_mut(&id)
-            .ok_or_else(|| error::EntityNotFound::new(id.into()))?;
+            .ok_or_else(|| EntityNotFound::new(id.into()))?;
 
         let reg = self.registry.read().unwrap();
 
@@ -542,7 +540,7 @@ impl MemoryStore {
         id: Id,
         mut rem: backend::TupleRemoveAttrs,
         revert: &mut RevertList,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         for op in std::mem::take(&mut rem.index_ops) {
             self.tuple_index_remove(id, op, revert)?;
         }
@@ -550,7 +548,7 @@ impl MemoryStore {
         let old = self
             .entities
             .get_mut(&id)
-            .ok_or_else(|| error::EntityNotFound::new(id.into()))?;
+            .ok_or_else(|| EntityNotFound::new(id.into()))?;
 
         let reg = self.registry.read().unwrap();
         let mut removed = Vec::new();
@@ -573,7 +571,7 @@ impl MemoryStore {
         id: Id,
         del: backend::TupleDelete,
         revert: &mut RevertList,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         for op in del.index_ops {
             self.tuple_index_remove(id, op, revert)?;
         }
@@ -583,7 +581,7 @@ impl MemoryStore {
                 revert.push(RevertOp::TupleDeleted { id, data });
                 Ok(())
             }
-            None => Err(error::EntityNotFound::new(id.into()).into()),
+            None => Err(EntityNotFound::new(id.into()).into()),
         }
     }
 
@@ -593,7 +591,7 @@ impl MemoryStore {
         patch: &Patch,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         // TODO: should there be a helper function to plan a scan directly?
         let select = Select::new().with_filter(expr.clone());
         let raw_ops = plan::plan_select(select, reg)?;
@@ -627,7 +625,7 @@ impl MemoryStore {
         rem: &backend::TupleRemoveAttrs,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         // TODO: use query logic instead of full table scan for speedup.
         // TODO: figure out how to do this in one step. Two step process
         // right now due to borrow checker errors.
@@ -673,7 +671,7 @@ impl MemoryStore {
         selector: &MemoryExpr,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         // TODO: use query logic instead of full table scan for speedup.
         // TODO: figure out how to do this in one step. Two step process
         // right now due to borrow checker errors.
@@ -704,7 +702,7 @@ impl MemoryStore {
         ops: Vec<DbOp>,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         // FIXME: implement validate_ checks via registry for all operations.
         // FIXME: guard against schema changes outside of a migration.
         for op in ops {
@@ -798,7 +796,7 @@ impl MemoryStore {
         reg: &Registry,
         index: &RegisteredIndex,
         revert: &mut RevertList,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let attrs = index
             .schema
             .attributes
@@ -837,7 +835,7 @@ impl MemoryStore {
         create: query::mutate::Create,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let ops = self.registry.read().unwrap().validate_create(create)?;
         self.apply_db_ops(ops, revert, reg)?;
         Ok(())
@@ -848,7 +846,7 @@ impl MemoryStore {
         repl: query::mutate::Replace,
         revert: &mut RevertList,
         registry: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let old = self
             .entities
             .get(&repl.id)
@@ -864,7 +862,7 @@ impl MemoryStore {
         merge: query::mutate::Merge,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         if let Some(old_tuple) = self.entities.get(&merge.id) {
             let old = self.tuple_to_data_map(old_tuple);
             let ops = self.registry.read().unwrap().validate_merge(merge, old)?;
@@ -883,7 +881,7 @@ impl MemoryStore {
         epatch: query::mutate::EntityPatch,
         revert: &mut RevertList,
         registry: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let current_entity = self.entity(epatch.id.into())?;
 
         let ops = self
@@ -900,7 +898,7 @@ impl MemoryStore {
         delete: query::mutate::Delete,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         let old = self
             .entities
             .get(&delete.id)
@@ -917,7 +915,7 @@ impl MemoryStore {
         sel: query::mutate::MutateSelect,
         revert: &mut RevertList,
         reg: &Registry,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         match sel.action {
             query::mutate::MutateSelectAction::Delete => {
                 let resolved = plan::resolve_expr(sel.filter, reg)?;
@@ -937,7 +935,7 @@ impl MemoryStore {
         &mut self,
         batch: query::mutate::Batch,
         reg: &Registry,
-    ) -> Result<RevertList, AnyError> {
+    ) -> Result<RevertList, anyhow::Error> {
         // FIXME: rollback when errors happen.
 
         let mut revert = Vec::new();
@@ -966,7 +964,7 @@ impl MemoryStore {
         Ok(revert)
     }
 
-    pub fn apply_batch(&mut self, batch: Batch) -> Result<(), AnyError> {
+    pub fn apply_batch(&mut self, batch: Batch) -> Result<(), anyhow::Error> {
         let shared_reg = self.registry().clone();
         let reg = shared_reg.read().unwrap();
         self.apply_batch_impl(batch, &reg)?;
@@ -984,7 +982,7 @@ impl MemoryStore {
     /// undoing the change.
     /// The returned [RevertEpoch] can be passed to [Self::revert_changes] to
     /// apply the revert.
-    pub fn apply_batch_revertable(&mut self, batch: Batch) -> Result<RevertEpoch, AnyError> {
+    pub fn apply_batch_revertable(&mut self, batch: Batch) -> Result<RevertEpoch, anyhow::Error> {
         let shared_reg = self.registry().clone();
         let reg = shared_reg.read().unwrap();
         let ops = self.apply_batch_impl(batch, &reg)?;
@@ -1058,7 +1056,7 @@ impl MemoryStore {
 
     /// Revert the last change to the database.
     /// Fails if the given [RevertEpoch] does not match the last change.
-    pub fn revert_changes(&mut self, epoch: RevertEpoch) -> Result<(), AnyError> {
+    pub fn revert_changes(&mut self, epoch: RevertEpoch) -> Result<(), anyhow::Error> {
         match self.revert_ops.take() {
             None => Err(anyhow!(
                 "Invalid revert epoch - epoch does not match last change"
@@ -1076,7 +1074,11 @@ impl MemoryStore {
         }
     }
 
-    fn migrate_impl(&mut self, mig: Migration, is_internal: bool) -> Result<RevertList, AnyError> {
+    fn migrate_impl(
+        &mut self,
+        mig: Migration,
+        is_internal: bool,
+    ) -> Result<RevertList, anyhow::Error> {
         let mut reg = self.registry.read().unwrap().clone();
         let (mig, ops) = crate::schema_builder::build_migration(&mut reg, mig, is_internal)?;
 
@@ -1123,25 +1125,25 @@ impl MemoryStore {
         }
     }
 
-    pub fn migrate(&mut self, mig: Migration) -> Result<(), AnyError> {
+    pub fn migrate(&mut self, mig: Migration) -> Result<(), anyhow::Error> {
         tracing::trace!(migration=?mig, "applying migration to memory store");
         self.migrate_impl(mig, false)?;
         Ok(())
     }
 
-    pub fn migrate_revertable(&mut self, mig: Migration) -> Result<RevertEpoch, AnyError> {
+    pub fn migrate_revertable(&mut self, mig: Migration) -> Result<RevertEpoch, anyhow::Error> {
         let ops = self.migrate_impl(mig, false)?;
         let epoch = self.persist_revert_epoch(ops);
         Ok(epoch)
     }
 
-    pub fn entity(&self, id: IdOrIdent) -> Result<DataMap, AnyError> {
+    pub fn entity(&self, id: IdOrIdent) -> Result<DataMap, anyhow::Error> {
         self.must_resolve_entity(&id)
-            .map_err(AnyError::from)
+            .map_err(anyhow::Error::from)
             .map(|tuple| self.tuple_to_data_map(tuple))
     }
 
-    pub fn entity_opt(&self, id: IdOrIdent) -> Result<Option<DataMap>, AnyError> {
+    pub fn entity_opt(&self, id: IdOrIdent) -> Result<Option<DataMap>, anyhow::Error> {
         let opt = self
             .resolve_entity(&id)
             .map(|tuple| self.tuple_to_data_map(tuple));
@@ -1317,7 +1319,7 @@ impl MemoryStore {
         &self,
         plan: QueryPlan<Value, ResolvedExpr>,
         reg: &Registry,
-    ) -> Result<QueryPlan<MemoryValue, MemoryExpr>, AnyError> {
+    ) -> Result<QueryPlan<MemoryValue, MemoryExpr>, anyhow::Error> {
         let plan = match plan {
             QueryPlan::EmptyRelation => QueryPlan::EmptyRelation,
             QueryPlan::SelectEntity { id } => QueryPlan::SelectEntity { id },
@@ -1356,7 +1358,7 @@ impl MemoryStore {
                 input: Box::new(self.build_query_plan(*input, reg)?),
                 sorts: sorts
                     .into_iter()
-                    .map(|s| -> Result<Sort<MemoryExpr>, AnyError> {
+                    .map(|s| -> Result<Sort<MemoryExpr>, anyhow::Error> {
                         Ok(Sort {
                             on: self.build_memory_expr(s.on, reg)?,
                             order: s.order,
@@ -1394,7 +1396,7 @@ impl MemoryStore {
     pub fn select(
         &self,
         query: query::select::Select,
-    ) -> Result<query::select::Page<Item>, AnyError> {
+    ) -> Result<query::select::Page<Item>, anyhow::Error> {
         // TODO: query validation and planning
 
         let span = tracing::debug_span!("executing select");
@@ -1425,7 +1427,7 @@ impl MemoryStore {
         })
     }
 
-    pub fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, AnyError> {
+    pub fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, anyhow::Error> {
         // TODO: query validation and planning
 
         let span = tracing::debug_span!("executing select");
@@ -1452,7 +1454,7 @@ impl MemoryStore {
         &self,
         expr: ResolvedExpr,
         reg: &Registry,
-    ) -> Result<MemoryExpr, AnyError> {
+    ) -> Result<MemoryExpr, anyhow::Error> {
         use ResolvedExpr as E;
 
         match expr {
@@ -1672,7 +1674,7 @@ impl MemoryStore {
     fn convert_attribute_type(
         &mut self,
         attr: &registry::RegisteredAttribute,
-        new_type: &factordb::prelude::ValueType,
+        new_type: &ValueType,
         revert: &mut RevertList,
     ) -> Result<(), anyhow::Error> {
         for (id, tuple) in &mut self.entities {
@@ -1745,7 +1747,7 @@ type RevertList = Vec<RevertOp>;
 
 #[cfg(test)]
 mod tests {
-    use factordb::query::expr::BinaryOp;
+    use factor_core::query::expr::BinaryOp;
 
     use super::*;
 

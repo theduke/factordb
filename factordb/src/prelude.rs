@@ -1,11 +1,10 @@
-pub use crate::{
+pub use factor_core::{
     data::{
         patch::{Patch, PatchOp},
         value::Value,
         value_type::{ObjectField, ObjectType, ValueType, ValueTypeDescriptor},
         DataMap, Id, IdOrIdent, Timestamp, ValueMap,
     },
-    db::Db,
     query::{
         expr::Expr,
         migrate::Migration,
@@ -18,5 +17,7 @@ pub use crate::{
         ClassMeta, DbSchema,
     },
 };
+
+pub use crate::db::Db;
 
 pub use factor_macros::{Attribute, Class};

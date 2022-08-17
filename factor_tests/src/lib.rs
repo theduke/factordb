@@ -1,8 +1,7 @@
+use factor_core::schema::builtin::{AttrDescription, AttrTitle};
 use factordb::{
-    db::Db,
-    prelude::{AttributeMeta, ClassMeta, DataMap, Expr, Id, Migration, Select},
-    schema::builtin::{AttrDescription, AttrTitle},
-    AnyError, Attribute, Class,
+    macros::{Attribute, Class},
+    AttributeMeta, ClassMeta, DataMap, Db, Expr, Id, Migration, Select,
 };
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +44,10 @@ impl Todo {
     }
 }
 
-pub async fn select_single_todo_with_title_eq(db: &Db, title: String) -> Result<DataMap, AnyError> {
+pub async fn select_single_todo_with_title_eq(
+    db: &Db,
+    title: String,
+) -> Result<DataMap, anyhow::Error> {
     let filter = Expr::eq(AttrTitle::expr(), title);
     let select = Select::new().with_filter(filter).with_limit(1);
 
@@ -53,7 +55,7 @@ pub async fn select_single_todo_with_title_eq(db: &Db, title: String) -> Result<
     Ok(page.items.remove(0).data)
 }
 
-pub async fn apply_schema(db: &Db) -> Result<(), AnyError> {
+pub async fn apply_schema(db: &Db) -> Result<(), anyhow::Error> {
     let mig = Migration::new()
         .attr_upsert(AttrTodoDone::schema())
         .entity_upsert(Todo::schema());

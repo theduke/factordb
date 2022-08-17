@@ -1,4 +1,4 @@
-use factordb::{data::ValueType, query::migrate::Migration, schema::Attribute};
+use factordb::{Attribute, Db, Migration, ValueType};
 
 async fn custom() {
     let backend = factor_engine::backend::log::LogDb::open(
@@ -8,7 +8,7 @@ async fn custom() {
     .unwrap();
     let engine = factor_engine::Engine::new(backend);
     // let backend = factordb::backend::memory::MemoryDb::new();
-    let db = factordb::db::Db::new(engine);
+    let db = Db::new(engine);
 
     db.migrate(
         Migration::new()

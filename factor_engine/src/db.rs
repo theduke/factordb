@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
-use data::DataMap;
+use factor_core::{
+    data::{DataMap, IdOrIdent},
+    db::{Db, DbClient, DbFuture},
+    query::{self, migrate::Migration, mutate::Batch},
+    schema,
+};
 use futures::FutureExt;
 
 use crate::backend::Backend;
-use factordb::{
-    data,
-    db::DbFuture,
-    prelude::{IdOrIdent, Migration},
-    query, schema, AnyError,
-};
 
 #[derive(Clone)]
 pub struct Engine {
@@ -23,50 +22,53 @@ impl Engine {
         }
     }
 
-    pub fn into_client(self) -> factordb::db::Db {
-        factordb::db::Db::new(self)
+    pub fn into_client(self) -> Db {
+        Db::new(self)
     }
 
     pub fn backend(&self) -> &Arc<dyn Backend + Send + Sync + 'static> {
         &self.backend
     }
 
-    pub fn schema(&self) -> Result<schema::DbSchema, AnyError> {
+    pub fn schema(&self) -> Result<schema::DbSchema, anyhow::Error> {
         let reg = {
             self.backend()
                 .registry()
                 .read()
-                .map_err(|_| AnyError::msg("Could not retrieve registry"))?
+                .map_err(|_| anyhow::Error::msg("Could not retrieve registry"))?
                 .clone()
         };
 
         Ok(reg.build_schema())
     }
 
-    pub async fn entity(&self, id: IdOrIdent) -> Result<Option<DataMap>, AnyError> {
+    pub async fn entity(&self, id: IdOrIdent) -> Result<Option<DataMap>, anyhow::Error> {
         self.backend.entity(id).await
     }
 
     pub async fn select(
         &self,
         query: query::select::Select,
-    ) -> Result<query::select::Page<query::select::Item>, AnyError> {
+    ) -> Result<query::select::Page<query::select::Item>, anyhow::Error> {
         self.backend.select(query).await
     }
 
-    pub async fn select_map(&self, query: query::select::Select) -> Result<Vec<DataMap>, AnyError> {
+    pub async fn select_map(
+        &self,
+        query: query::select::Select,
+    ) -> Result<Vec<DataMap>, anyhow::Error> {
         self.backend.select_map(query).await
     }
 
-    pub async fn batch(&self, batch: query::mutate::Batch) -> Result<(), AnyError> {
+    pub async fn batch(&self, batch: query::mutate::Batch) -> Result<(), anyhow::Error> {
         self.backend.apply_batch(batch).await
     }
 
-    pub async fn migrate(&self, migration: query::migrate::Migration) -> Result<(), AnyError> {
+    pub async fn migrate(&self, migration: query::migrate::Migration) -> Result<(), anyhow::Error> {
         self.backend.migrate(migration).await
     }
 
-    pub async fn migrations(&self) -> Result<Vec<Migration>, AnyError> {
+    pub async fn migrations(&self) -> Result<Vec<Migration>, anyhow::Error> {
         self.backend.migrations().await
     }
 
@@ -74,17 +76,17 @@ impl Engine {
         self.backend.storage_usage().await
     }
 
-    pub async fn purge_all_data(&self) -> Result<(), AnyError> {
+    pub async fn purge_all_data(&self) -> Result<(), anyhow::Error> {
         self.backend.purge_all_data().await
     }
 }
 
-impl factordb::db::DbClient for Engine {
+impl DbClient for Engine {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn schema(&self) -> DbFuture<'_, factordb::schema::DbSchema> {
+    fn schema(&self) -> DbFuture<'_, schema::DbSchema> {
         Box::pin(futures::future::ready(self.schema()))
     }
 
@@ -103,7 +105,7 @@ impl factordb::db::DbClient for Engine {
         self.select_map(query).boxed()
     }
 
-    fn batch(&self, batch: factordb::prelude::Batch) -> DbFuture<'_, ()> {
+    fn batch(&self, batch: Batch) -> DbFuture<'_, ()> {
         Box::pin(async { self.batch(batch).await })
     }
 

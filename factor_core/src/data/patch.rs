@@ -212,6 +212,25 @@ pub enum PatchOpErrorKind {
     ExistingValueMismatch { expected: Value, actual: Value },
 }
 
+impl std::fmt::Display for PatchOpErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PatchOpErrorKind::EmpthPath => write!(f, "empty path"),
+            PatchOpErrorKind::ListIndexForMap => write!(f, "list index used for map"),
+            PatchOpErrorKind::UnsupportedValue { message } => {
+                write!(f, "unsupported value: {}", message)
+            }
+            PatchOpErrorKind::ExistingValueMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "existing value mismatch: expected {:?}, actual {:?}",
+                    expected, actual
+                )
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PatchOpError {
     pub path: PatchPath,
@@ -223,6 +242,18 @@ impl PatchOpError {
         Self { kind, path }
     }
 }
+
+impl std::fmt::Display for PatchOpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.kind.fmt(f)?;
+        if !self.path.0.is_empty() {
+            write!(f, " at {}", self.path)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for PatchOpError {}
 
 impl PatchOp {
     fn apply_map(self, target: &mut DataMap) -> Result<(), PatchOpError> {

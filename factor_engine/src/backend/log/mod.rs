@@ -10,6 +10,19 @@ pub mod store_file;
 mod event;
 use anyhow::Context;
 pub use event::LogEvent;
+use factor_core::{
+    data::{self, DataMap, Id, Value},
+    query::{
+        self,
+        migrate::SchemaAction,
+        mutate::{Batch, Mutate},
+        select::Item,
+    },
+    schema::{
+        builtin::{AttrId, AttrType},
+        AttributeMeta,
+    },
+};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -20,13 +33,6 @@ use futures::{
     future::{ready, BoxFuture},
     stream::BoxStream,
     FutureExt, StreamExt,
-};
-
-use factordb::{
-    data,
-    prelude::{AttrId, AttrType, AttributeMeta, DataMap, Id, Mutate, Value},
-    query::{self, migrate::SchemaAction, mutate::Batch, select::Item},
-    AnyError,
 };
 
 use crate::registry;
@@ -92,7 +98,7 @@ impl LogDb {
         f(&*state.store)
     }
 
-    pub async fn open<S>(store: S) -> Result<Self, AnyError>
+    pub async fn open<S>(store: S) -> Result<Self, anyhow::Error>
     where
         S: LogStore + Send + Sync + 'static,
     {
@@ -131,7 +137,7 @@ impl LogDb {
     /// Build entity data from a possibly corrupted event stream.
     ///
     /// All errors or invalid operations will be ignored.
-    pub async fn recover_data<S>(store: S) -> Result<Vec<DataMap>, AnyError>
+    pub async fn recover_data<S>(store: S) -> Result<Vec<DataMap>, anyhow::Error>
     where
         S: LogStore + Send + Sync + 'static,
     {
@@ -325,8 +331,8 @@ impl LogDb {
     /// WARNING: Locks the database until all events are read!
     pub async fn export_events(
         &self,
-        mut writer: impl FnMut(LogEvent) -> Result<(), AnyError>,
-    ) -> Result<(), AnyError> {
+        mut writer: impl FnMut(LogEvent) -> Result<(), anyhow::Error>,
+    ) -> Result<(), anyhow::Error> {
         let state = self.state.mutable.lock().await;
 
         for event_id in 0..=state.current_event_id {
@@ -338,7 +344,7 @@ impl LogDb {
         Ok(())
     }
 
-    async fn restore(&self) -> Result<(), AnyError> {
+    async fn restore(&self) -> Result<(), anyhow::Error> {
         tracing::debug!("log restore started");
         let mut mutable = self.state.mutable.lock().await;
 
@@ -395,7 +401,7 @@ impl LogDb {
     /// Reset the in-memory state and rebuild from the log store.
     ///
     /// Primarily used for testing.
-    pub async fn force_rebuild(&self) -> Result<(), AnyError> {
+    pub async fn force_rebuild(&self) -> Result<(), anyhow::Error> {
         self.restore().await?;
         Ok(())
     }
@@ -404,7 +410,7 @@ impl LogDb {
         &self,
         mutable: &mut MutableState,
         event: LogEvent,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         mutable.store.write_event(event).await?;
         Ok(())
     }
@@ -414,7 +420,7 @@ impl LogDb {
         mutable: &mut MutableState,
         event: LogEvent,
         revert_epoch: RevertEpoch,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         match self.write_event(mutable, event).await {
             Ok(_) => Ok(()),
             Err(err) => {
@@ -433,7 +439,7 @@ impl LogDb {
         self,
         migration: query::migrate::Migration,
         is_internal: bool,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         if let Some(name) = &migration.name {
             // Ensure name uniqueness.
             let state = self.state.mutable.lock().await;
@@ -479,7 +485,7 @@ impl LogDb {
         Ok(())
     }
 
-    async fn apply_batch(self, batch: Batch) -> Result<(), AnyError> {
+    async fn apply_batch(self, batch: Batch) -> Result<(), anyhow::Error> {
         let mut mutable = self.state.mutable.lock().await;
         let revert_epoch = self
             .state
@@ -578,32 +584,32 @@ pub trait LogStore {
         &self,
         from: EventId,
         until: EventId,
-    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<LogEvent, AnyError>>, AnyError>>;
+    ) -> BoxFuture<'_, Result<BoxStream<'_, Result<LogEvent, anyhow::Error>>, anyhow::Error>>;
 
     /// Read a single event.
-    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, AnyError>>;
+    fn read_event(&self, id: EventId) -> BoxFuture<Result<Option<LogEvent>, anyhow::Error>>;
 
     /// Write an event to the log.
     /// Returns the event id.
     /// Note that this required mutable access
-    fn write_event(&mut self, event: LogEvent) -> BoxFuture<'_, Result<(), AnyError>>;
+    fn write_event(&mut self, event: LogEvent) -> BoxFuture<'_, Result<(), anyhow::Error>>;
 
     /// Delete all events.
-    fn clear(&mut self) -> BoxFuture<'_, Result<(), AnyError>>;
+    fn clear(&mut self) -> BoxFuture<'_, Result<(), anyhow::Error>>;
 
     /// Get the full size of the log in bytes.
-    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
+    fn size_log(&mut self) -> BoxFuture<'static, Result<Option<u64>, anyhow::Error>>;
 
     /// Get the full size of log entries.
     /// This differs from [`Self::size_log`] since it does not include log
     /// overhead or redundant/overwritten data.
-    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, AnyError>>;
+    fn size_data(&mut self) -> BoxFuture<'static, Result<Option<u64>, anyhow::Error>>;
 }
 
 /// De/serialier for a [LogStore].
 pub trait LogConverter: Clone + Send + Sync + 'static {
-    fn serialize(&self, event: &LogEvent) -> Result<Vec<u8>, AnyError>;
-    fn deserialize(&self, data: &[u8]) -> Result<LogEvent, AnyError>;
+    fn serialize(&self, event: &LogEvent) -> Result<Vec<u8>, anyhow::Error>;
+    fn deserialize(&self, data: &[u8]) -> Result<LogEvent, anyhow::Error>;
 }
 
 #[cfg(test)]
@@ -611,10 +617,9 @@ mod tests {
 
     use std::str::FromStr;
 
-    use factordb::{
+    use factor_core::{
         map,
-        prelude::{AttrMapExt, Id},
-        schema,
+        schema::{self, AttrMapExt},
     };
 
     use crate::Engine;

@@ -2,14 +2,15 @@ use futures::{future::BoxFuture, FutureExt};
 use schema::Attribute;
 
 use crate::{backend::Backend, Engine};
-use factordb::{
+
+use factor_core::{
     data::{
-        patch::Patch, value::ValueCoercionError, value_type::ConstrainedRefType, Id, Value,
-        ValueType,
+        patch::Patch, value::ValueCoercionError, value_type::ConstrainedRefType, Id, IdOrIdent,
+        Value, ValueType,
     },
-    error::{self, EntityNotFound, ReferenceConstraintViolation, UniqueConstraintViolation},
+    db::Db,
+    error::{EntityNotFound, ReferenceConstraintViolation, UniqueConstraintViolation},
     map,
-    prelude::{Batch, Db, IdOrIdent, Order},
     query::{
         self,
         expr::Expr,
@@ -17,7 +18,8 @@ use factordb::{
             AttributeCreateIndex, EntityAttributeAdd, EntityAttributeChangeCardinality, Migration,
             SchemaAction,
         },
-        select::Select,
+        mutate::Batch,
+        select::{Order, Select},
     },
     schema::{
         self,
@@ -231,7 +233,7 @@ async fn test_ref_insert_with_id_or_ident(db: &Db) {
 }
 
 #[allow(clippy::as_conversions)]
-async fn test_attr_corcions(db: &factordb::prelude::Db) {
+async fn test_attr_corcions(db: &Db) {
     // int coerces to uint
     db.create(
         Id::random(),
@@ -491,7 +493,7 @@ async fn test_entity_delete_not_found(db: &Db) {
     db.delete(id).await.unwrap();
 
     let err = db.delete(id).await.expect_err("Must fail");
-    assert!(err.is::<error::EntityNotFound>());
+    assert!(err.is::<EntityNotFound>());
 }
 
 async fn test_entity_attr_add_with_default(db: &Db) {
@@ -799,7 +801,7 @@ async fn test_assert_simple(f: &Db) {
 
     // Check that inexistant id returns EntityNotFound error.
     let err = f.entity(id).await.unwrap_err();
-    assert!(err.is::<error::EntityNotFound>());
+    assert!(err.is::<EntityNotFound>());
 
     // Check that a query returns nothing.
     let page = f.select(Select::new()).await.unwrap();
@@ -840,7 +842,7 @@ async fn test_assert_simple(f: &Db) {
 
     // Ensure entity is gone.
     let err = f.entity(id).await.unwrap_err();
-    assert!(err.is::<error::EntityNotFound>());
+    assert!(err.is::<EntityNotFound>());
 }
 
 async fn test_select(db: &Db) {

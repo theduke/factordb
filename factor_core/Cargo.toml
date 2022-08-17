@@ -1,5 +1,5 @@
 [package]
-name = "factordb"
+name = "factor_core"
 version = "0.1.0"
 authors = ["Christoph Herzog <chris@theduke.at>"]
 edition = "2018"
@@ -7,10 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["sql", "mongodb-query", "unstable"]
+default = ["sql", "unstable"]
 
 sql = ["sqlparser"]
-mongodb-query = ["mongodb-language-model"]
 
 jsonschema = ["schemars"]
 typescript-schema = ["ts-rs"]
@@ -18,13 +17,8 @@ typescript-schema = ["ts-rs"]
 unstable = []
 
 [dependencies]
-factor_core = { version = "0.1", path = "../factor_core"}
-factor_macros = { version = "0.1", path = "../factor_macros" }
-
-anyhow = { version = "1.0.58", features = ["backtrace"] }
 chrono = { version = "0.4.19", features = ["serde"] }
 fnv = "1.0.7"
-futures = "0.3.21"
 ordered-float = { version = "3.0.0", features = ["serde"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = "1.0.81"
@@ -36,7 +30,7 @@ sqlparser = { version = "0.19.0", optional = true }
 schemars = { version = "0.8.10", features = ["chrono", "uuid1", "url", "ordered-float"], optional = true, git = "https://github.com/theduke/schemars", branch = "ordered-float" }
 # FIXME: use normal crate once https://github.com/Aleph-Alpha/ts-rs/pull/97 is merged upstream.
 ts-rs = { version = "6.1.2", features = ["chrono-impl", "uuid-impl", "ordered-float-impl"], optional = true, git = "https://github.com/theduke/ts-rs", branch = "theduke" }
-mongodb-language-model = { version = "0.1.6", optional = true}
+anyhow = "1.0.62"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.11", features = ["fmt"] }

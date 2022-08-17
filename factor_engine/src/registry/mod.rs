@@ -8,13 +8,15 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{anyhow, bail, Context};
 
-use factordb::{
+use factor_core::{
     data::{DataMap, Id, IdMap, IdOrIdent, Value, ValueType},
-    error::{self, EntityNotFound},
-    prelude::AttrType,
+    error::{AttributeNotFound, EntityNotFound, IndexNotFound, ReferenceConstraintViolation},
     query,
-    schema::{self, builtin::AttrId, AttrMapExt, AttributeMeta, Cardinality, DbSchema},
-    AnyError,
+    schema::{
+        self,
+        builtin::{AttrId, AttrType},
+        AttrMapExt, AttributeMeta, Cardinality, DbSchema,
+    },
 };
 
 use crate::backend::{
@@ -110,7 +112,7 @@ impl Registry {
     }
 
     #[inline]
-    pub fn require_attr(&self, id: Id) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    pub fn require_attr(&self, id: Id) -> Result<&RegisteredAttribute, AttributeNotFound> {
         self.attrs.must_get_by_uid(id)
     }
 
@@ -165,15 +167,12 @@ impl Registry {
     pub fn require_attr_by_name(
         &self,
         name: &str,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    ) -> Result<&RegisteredAttribute, AttributeNotFound> {
         self.attrs.must_get_by_name(name)
     }
 
     #[inline]
-    pub fn require_attr_by_id(
-        &self,
-        id: Id,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    pub fn require_attr_by_id(&self, id: Id) -> Result<&RegisteredAttribute, AttributeNotFound> {
         self.attrs.must_get_by_uid(id)
     }
 
@@ -181,7 +180,7 @@ impl Registry {
     pub fn require_attr_by_ident(
         &self,
         ident: &IdOrIdent,
-    ) -> Result<&RegisteredAttribute, error::AttributeNotFound> {
+    ) -> Result<&RegisteredAttribute, AttributeNotFound> {
         self.attrs.must_get_by_ident(ident)
     }
 
@@ -197,14 +196,11 @@ impl Registry {
         self.indexes.get_by_name(name)
     }
 
-    pub fn require_index_by_id(&self, id: Id) -> Result<&RegisteredIndex, error::IndexNotFound> {
+    pub fn require_index_by_id(&self, id: Id) -> Result<&RegisteredIndex, IndexNotFound> {
         self.indexes.must_get_by_uid(id)
     }
 
-    pub fn require_index_by_name(
-        &self,
-        name: &str,
-    ) -> Result<&RegisteredIndex, error::IndexNotFound> {
+    pub fn require_index_by_name(&self, name: &str) -> Result<&RegisteredIndex, IndexNotFound> {
         self.indexes.must_get_by_name(name)
     }
 
@@ -219,7 +215,7 @@ impl Registry {
     pub fn indexes_for_attribute_id(
         &self,
         attribute_id: Id,
-    ) -> Result<Vec<&RegisteredIndex>, error::AttributeNotFound> {
+    ) -> Result<Vec<&RegisteredIndex>, AttributeNotFound> {
         let attr = self.attrs.must_get_by_uid(attribute_id)?;
         Ok(self.indexes_for_attribute(attr.local_id))
     }
@@ -260,10 +256,10 @@ impl Registry {
         }
     }
 
-    pub fn id_to_data_map(&self, map: IdMap) -> Result<DataMap, AnyError> {
+    pub fn id_to_data_map(&self, map: IdMap) -> Result<DataMap, anyhow::Error> {
         let ident_map = map
             .into_iter()
-            .map(|(id, value)| -> Result<_, AnyError> {
+            .map(|(id, value)| -> Result<_, anyhow::Error> {
                 let ident = self.attrs.must_get_by_uid(id)?.schema.ident.to_string();
                 Ok((ident, value))
             })
@@ -271,11 +267,11 @@ impl Registry {
         Ok(ident_map)
     }
 
-    pub fn data_to_id_map(&self, map: DataMap) -> Result<IdMap, AnyError> {
+    pub fn data_to_id_map(&self, map: DataMap) -> Result<IdMap, anyhow::Error> {
         let data_map = map
             .into_inner()
             .into_iter()
-            .map(|(name, value)| -> Result<_, AnyError> {
+            .map(|(name, value)| -> Result<_, anyhow::Error> {
                 let attr = self.attrs.must_get_by_name(&name)?;
                 Ok((attr.schema.id, value))
             })
@@ -287,7 +283,7 @@ impl Registry {
     // pub fn validate_remove_attr(
     //     &mut self,
     //     id: Id,
-    // ) -> Result<schema::Attribute, AnyError> {
+    // ) -> Result<schema::Attribute, anyhow::Error> {
 
     //     let attr = self
     //         .attrs
@@ -306,7 +302,7 @@ impl Registry {
     pub fn register_attribute(
         &mut self,
         attr: schema::Attribute,
-    ) -> Result<LocalAttributeId, AnyError> {
+    ) -> Result<LocalAttributeId, anyhow::Error> {
         self.attrs.register(attr, &self.entities)
     }
 
@@ -314,12 +310,12 @@ impl Registry {
         &mut self,
         schema: schema::Attribute,
         validate: bool,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         self.attrs.update(schema, validate)?;
         Ok(())
     }
 
-    pub fn remove_attribute(&mut self, id: Id) -> Result<(), AnyError> {
+    pub fn remove_attribute(&mut self, id: Id) -> Result<(), anyhow::Error> {
         let attr = self.require_attr_by_id(id)?;
 
         // Validate that attribute is not used by any entity.
@@ -355,16 +351,20 @@ impl Registry {
         &mut self,
         entity: schema::Class,
         validate: bool,
-    ) -> Result<LocalEntityId, AnyError> {
+    ) -> Result<LocalEntityId, anyhow::Error> {
         self.entities.register(entity, validate, &self.attrs)
     }
 
-    pub fn update_class(&mut self, entity: schema::Class, validate: bool) -> Result<(), AnyError> {
+    pub fn update_class(
+        &mut self,
+        entity: schema::Class,
+        validate: bool,
+    ) -> Result<(), anyhow::Error> {
         self.entities.update(entity, validate, &self.attrs)?;
         Ok(())
     }
 
-    pub fn remove_class(&mut self, id: Id) -> Result<(), AnyError> {
+    pub fn remove_class(&mut self, id: Id) -> Result<(), anyhow::Error> {
         let entity = self.require_entity_by_id(id)?;
 
         // Validate that entity is not extended by any other entity.
@@ -394,11 +394,14 @@ impl Registry {
         Ok(())
     }
 
-    pub fn register_index(&mut self, index: schema::IndexSchema) -> Result<LocalIndexId, AnyError> {
+    pub fn register_index(
+        &mut self,
+        index: schema::IndexSchema,
+    ) -> Result<LocalIndexId, anyhow::Error> {
         self.indexes.register(index, &self.attrs)
     }
 
-    pub fn remove_index(&mut self, id: Id) -> Result<(), AnyError> {
+    pub fn remove_index(&mut self, id: Id) -> Result<(), anyhow::Error> {
         self.indexes.remove(id)?;
         Ok(())
     }
@@ -411,7 +414,7 @@ impl Registry {
         ty: &ValueType,
         value: &Value,
         ops: &mut Vec<DbOp>,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         debug_assert!({
             let mut v = value.clone();
             v.coerce_mut(ty).unwrap();
@@ -451,7 +454,7 @@ impl Registry {
         attr: &RegisteredAttribute,
         value: &mut Value,
         ops: &mut Vec<DbOp>,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         value
             .coerce_mut(&attr.schema.value_type)
             .context(format!("Invalid value for attribute {}", attr.schema.ident))?;
@@ -473,7 +476,7 @@ impl Registry {
     //     &self,
     //     map: IdentifiableMap,
     //     validate: bool,
-    // ) -> Result<FnvHashMap<Id, Value>, AnyError> {
+    // ) -> Result<FnvHashMap<Id, Value>, anyhow::Error> {
     //     map.into_iter()
     //         .map(|(key, mut value)| {
     //             let attr = self.must_resolve_attr(&key)?;
@@ -491,7 +494,7 @@ impl Registry {
         data: &mut DataMap,
         entity: &RegisteredEntity,
         ops: &mut Vec<DbOp>,
-    ) -> Result<(), AnyError> {
+    ) -> Result<(), anyhow::Error> {
         for field in &entity.schema.attributes {
             // TODO: create a static list of fields for each entity so that
             // we don't have to do this lookup each time.
@@ -550,7 +553,7 @@ impl Registry {
         &self,
         mut data: DataMap,
         ops: &mut Vec<DbOp>,
-    ) -> Result<DataMap, AnyError> {
+    ) -> Result<DataMap, anyhow::Error> {
         if let Some(ty) = data.get_type() {
             let entity = self.entities.must_get_by_ident(&ty)?;
             self.validate_entity_data(&mut data, entity, ops)?;
@@ -565,7 +568,10 @@ impl Registry {
     }
 
     /// Build the index operations for a entity persist.
-    fn build_index_ops_create(&self, attrs: &DataMap) -> Result<Vec<TupleIndexInsert>, AnyError> {
+    fn build_index_ops_create(
+        &self,
+        attrs: &DataMap,
+    ) -> Result<Vec<TupleIndexInsert>, anyhow::Error> {
         let mut ops = Vec::new();
 
         for (attr_name, value) in attrs.iter() {
@@ -591,7 +597,7 @@ impl Registry {
         &self,
         attrs: &DataMap,
         old: &DataMap,
-    ) -> Result<Vec<TupleIndexOp>, AnyError> {
+    ) -> Result<Vec<TupleIndexOp>, anyhow::Error> {
         let mut ops = Vec::new();
 
         let mut covered_attrs = fnv::FnvHashSet::<LocalAttributeId>::default();
@@ -647,7 +653,10 @@ impl Registry {
     }
 
     /// Build the index operations for an entity deletion.
-    fn build_index_ops_delete(&self, attrs: &DataMap) -> Result<Vec<TupleIndexRemove>, AnyError> {
+    fn build_index_ops_delete(
+        &self,
+        attrs: &DataMap,
+    ) -> Result<Vec<TupleIndexRemove>, anyhow::Error> {
         let mut ops = Vec::new();
 
         for (attr_name, value) in attrs.iter() {
@@ -666,7 +675,10 @@ impl Registry {
         Ok(ops)
     }
 
-    pub fn validate_create(&self, create: query::mutate::Create) -> Result<Vec<DbOp>, AnyError> {
+    pub fn validate_create(
+        &self,
+        create: query::mutate::Create,
+    ) -> Result<Vec<DbOp>, anyhow::Error> {
         let id = create.id.non_nil_or_randomize();
 
         let mut ops = Vec::new();
@@ -686,7 +698,7 @@ impl Registry {
         &self,
         replace: query::mutate::Replace,
         old_opt: Option<DataMap>,
-    ) -> Result<Vec<DbOp>, AnyError> {
+    ) -> Result<Vec<DbOp>, anyhow::Error> {
         let old = if let Some(old) = old_opt {
             old
         } else {
@@ -718,7 +730,7 @@ impl Registry {
         &self,
         epatch: query::mutate::EntityPatch,
         current_entity: DataMap,
-    ) -> Result<Vec<DbOp>, AnyError> {
+    ) -> Result<Vec<DbOp>, anyhow::Error> {
         debug_assert_eq!(Some(epatch.id), current_entity.get_id());
 
         let new_entity = epatch.patch.apply_map(current_entity.clone())?;
@@ -741,7 +753,7 @@ impl Registry {
         &self,
         merge: query::mutate::Merge,
         old: DataMap,
-    ) -> Result<Vec<DbOp>, AnyError> {
+    ) -> Result<Vec<DbOp>, anyhow::Error> {
         let id = merge.id.non_nil_or_randomize();
 
         // TODO: Avoid clone
@@ -765,7 +777,7 @@ impl Registry {
         Ok(ops)
     }
 
-    pub fn validate_delete(&self, id: Id, old: DataMap) -> Result<Vec<DbOp>, AnyError> {
+    pub fn validate_delete(&self, id: Id, old: DataMap) -> Result<Vec<DbOp>, anyhow::Error> {
         let mut ops = Vec::new();
         let index_ops = self.build_index_ops_delete(&old)?;
         ops.push(DbOp::Tuple(TupleOp::new(id, TupleDelete { index_ops })));
@@ -777,7 +789,7 @@ impl Registry {
         entity_id: Id,
         val: &ValidateEntityType,
         ty: Option<Id>,
-    ) -> Result<(), factordb::error::ReferenceConstraintViolation> {
+    ) -> Result<(), ReferenceConstraintViolation> {
         if let Some(ty) = ty {
             if val.allowed_types.contains(&ty) {
                 return Ok(());
@@ -792,7 +804,7 @@ impl Registry {
 
         let actual_type = ty.and_then(|t| self.entity_by_id(t).map(|e| e.schema.ident.clone()));
 
-        Err(factordb::error::ReferenceConstraintViolation {
+        Err(ReferenceConstraintViolation {
             entity: entity_id,
             // TODO: add attribute!
             attribute: "?".to_string(),

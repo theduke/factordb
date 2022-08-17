@@ -1,8 +1,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use anyhow::Result;
-
-use factordb::{data::Id, prelude::Order};
+use factor_core::{data::Id, query::select::Order};
 
 use crate::{registry::LocalIndexId, util::stable_map::DerivedStableMap};
 

@@ -1,7 +1,6 @@
 use factordb::{
-    prelude::{Expr, Id, Select},
-    schema::{AttributeMeta, ClassMeta},
-    AnyError, Attribute, Class,
+    macros::{Attribute, Class},
+    AttributeMeta, ClassMeta, Db, Expr, Id, Migration, Select,
 };
 use serde::{Deserialize, Serialize};
 
@@ -29,13 +28,13 @@ struct Todo {
     pub done: bool,
 }
 
-async fn run() -> Result<(), AnyError> {
+async fn run() -> Result<(), anyhow::Error> {
     let backend = factor_engine::backend::memory::MemoryDb::new();
     let engine = factor_engine::Engine::new(backend);
-    let db = factordb::db::Db::new(engine);
+    let db = Db::new(engine);
 
     // Run a migration with **upserts**. This can be re-run at will.
-    let migration = factordb::query::migrate::Migration::new()
+    let migration = Migration::new()
         .attr_upsert(AttrTitle::schema())
         .attr_upsert(AttrDone::schema())
         .entity_upsert(Todo::schema());

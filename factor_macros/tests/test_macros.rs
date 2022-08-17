@@ -1,8 +1,7 @@
 use factor_macros::{Attribute, Class};
-use factordb::{
-    data::{Id, ValueType},
-    schema::{builtin::AttrDescription, AttributeMeta, ClassAttribute, ClassMeta},
-};
+use factordb::{AttributeMeta, ClassAttribute, ClassMeta, Id, ValueType};
+
+use factor_core::schema::builtin::AttrDescription;
 
 #[derive(Attribute)]
 #[factor(namespace = "test")]
@@ -40,8 +39,10 @@ struct Child {
 
 #[test]
 fn test_attr_derive() {
+    use factordb::Attribute;
+
     assert_eq!(
-        factordb::schema::Attribute {
+        Attribute {
             id: Id::nil(),
             ident: "test/some_title".into(),
             description: None,
@@ -58,7 +59,7 @@ fn test_attr_derive() {
 #[test]
 fn test_entity_derive() {
     assert_eq!(
-        factordb::schema::Class {
+        factordb::Class {
             id: Id::nil(),
             ident: "test/Entity1".into(),
             title: Some("Entity1".to_string()),
@@ -66,15 +67,15 @@ fn test_entity_derive() {
             attributes: vec![
                 ClassAttribute {
                     attribute: AttrSomeTitle::IDENT,
-                    cardinality: factordb::schema::Cardinality::Required,
+                    cardinality: factordb::Cardinality::Required,
                 },
                 ClassAttribute {
                     attribute: AttrDescription::IDENT,
-                    cardinality: factordb::schema::Cardinality::Optional,
+                    cardinality: factordb::Cardinality::Optional,
                 },
                 ClassAttribute {
                     attribute: AttrLength::IDENT,
-                    cardinality: factordb::schema::Cardinality::Required,
+                    cardinality: factordb::Cardinality::Required,
                 },
             ],
             extends: Vec::new(),
