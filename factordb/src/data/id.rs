@@ -8,7 +8,7 @@ use crate::AnyError;
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
 #[cfg_attr(feature = "typescript-schema", ts(export))]
-pub struct Id(uuid::Uuid);
+pub struct Id(pub uuid::Uuid);
 
 impl From<uuid::Uuid> for Id {
     fn from(id: uuid::Uuid) -> Self {
@@ -138,6 +138,14 @@ impl IdOrIdent {
         Self::Name(CowStr::Borrowed(value))
     }
 
+    pub fn new_str(value: &str) -> Self {
+        if let Ok(id) = uuid::Uuid::from_str(value) {
+            Self::Id(Id(id))
+        } else {
+            Self::Name(value.to_string().into())
+        }
+    }
+
     pub fn split(self) -> (Option<Id>, Option<CowStr>) {
         match self {
             Self::Id(v) => (Some(v), None),
@@ -168,14 +176,6 @@ impl IdOrIdent {
     /// Returns `true` if the ident is [`Name`].
     pub fn is_name(&self) -> bool {
         matches!(self, Self::Name(..))
-    }
-
-    pub fn from_str(value: &str) -> Self {
-        if let Ok(id) = uuid::Uuid::from_str(value) {
-            Self::Id(Id(id))
-        } else {
-            Self::Name(value.to_string().into())
-        }
     }
 
     pub fn from_string(value: String) -> Self {

@@ -14,9 +14,9 @@ pub use crate::{
     },
     schema::{
         builtin::{AttrId, AttrIdent, AttrType},
-        AttrMapExt, AttributeDescriptor, AttributeSchema, Cardinality, DbSchema, EntityAttribute,
-        EntityContainer, EntityDescriptor, EntitySchema,
+        AttrMapExt, Attribute, AttributeMeta, Cardinality, Class, ClassAttribute, ClassContainer,
+        ClassMeta, DbSchema,
     },
 };
 
-pub use factor_macros::{Attribute, Entity};
+pub use factor_macros::{Attribute, Class};

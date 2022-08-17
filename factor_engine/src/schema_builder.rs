@@ -19,8 +19,7 @@ use factordb::{
     },
     schema::{
         builtin::{self, NS_FACTOR},
-        AttrMapExt, AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute,
-        IndexSchema,
+        AttrMapExt, Attribute, AttributeMeta, Cardinality, ClassAttribute, IndexSchema,
     },
     AnyError,
 };
@@ -28,8 +27,8 @@ use factordb::{
 // TODO: remove allow
 #[allow(dead_code)]
 enum EntityAttributePatch {
-    Added(EntityAttribute),
-    Removed(EntityAttribute),
+    Added(ClassAttribute),
+    Removed(ClassAttribute),
     CardinalityChanged {
         old: Cardinality,
         new: Cardinality,
@@ -37,7 +36,7 @@ enum EntityAttributePatch {
     },
 }
 
-fn diff_attributes(old: &[EntityAttribute], new: &[EntityAttribute]) -> Vec<EntityAttributePatch> {
+fn diff_attributes(old: &[ClassAttribute], new: &[ClassAttribute]) -> Vec<EntityAttributePatch> {
     let mut patches = Vec::new();
 
     for old_attr in old {
@@ -66,7 +65,7 @@ fn diff_attributes(old: &[EntityAttribute], new: &[EntityAttribute]) -> Vec<Enti
     patches
 }
 
-fn build_attribute_ident(attr: &AttributeSchema) -> String {
+fn build_attribute_ident(attr: &Attribute) -> String {
     let unique_marker = if attr.unique { "_unique" } else { "" };
     // WARNING: DO NOT CHANGE THIS!
     // Changing this computation would be a backwards-compatability breaking
@@ -78,7 +77,7 @@ fn build_attribute_ident(attr: &AttributeSchema) -> String {
     )
 }
 
-fn build_attribute_index(attr: &AttributeSchema) -> IndexSchema {
+fn build_attribute_index(attr: &Attribute) -> IndexSchema {
     IndexSchema {
         id: Id::random(),
         ident: build_attribute_ident(attr),
@@ -360,7 +359,7 @@ fn build_entity_create(
     }
 
     create.schema.id = create.schema.id.non_nil_or_randomize();
-    reg.register_entity(create.schema.clone(), true)?;
+    reg.register_class(create.schema.clone(), true)?;
 
     let action = ResolvedAction::new(SchemaAction::EntityCreate(create));
     Ok(vec![action])
@@ -415,7 +414,7 @@ fn build_entity_attribute_add(
         vec![]
     };
 
-    entity.schema.attributes.push(EntityAttribute {
+    entity.schema.attributes.push(ClassAttribute {
         attribute: attr.schema.ident.into(),
         cardinality: add.cardinality,
     });
@@ -483,7 +482,7 @@ fn build_entity_attribute_remove(
     new_entity
         .attributes
         .retain(|a| a.attribute != attr.schema.ident());
-    reg.entity_update(new_entity, true)?;
+    reg.update_class(new_entity, true)?;
 
     let ops = if change.delete_values {
         vec![DbOp::Select(SelectOp::new(
@@ -613,12 +612,12 @@ fn build_entity_upsert(
 
         let new_attrs_value = to_value(new_attrs)?;
         merge.insert(
-            builtin::AttrAttributes::QUALIFIED_NAME.into(),
+            builtin::AttrClassAttributes::QUALIFIED_NAME.into(),
             new_attrs_value,
         );
     }
 
-    reg.entity_update(schema.clone(), true)?;
+    reg.update_class(schema.clone(), true)?;
 
     let action = ResolvedAction::new(SchemaAction::EntityUpsert(migrate::EntityUpsert { schema }));
     Ok(vec![action])

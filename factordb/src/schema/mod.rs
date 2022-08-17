@@ -1,12 +1,10 @@
 pub mod builtin;
 
 mod attribute;
-pub use self::attribute::{AttrMapExt, AttributeDescriptor, AttributeSchema};
+pub use self::attribute::{AttrMapExt, Attribute, AttributeMeta};
 
 mod entity;
-pub use self::entity::{
-    Cardinality, EntityAttribute, EntityContainer, EntityDescriptor, EntitySchema,
-};
+pub use self::entity::{Cardinality, Class, ClassAttribute, ClassContainer, ClassMeta};
 
 mod index;
 pub use self::index::IndexSchema;
@@ -53,8 +51,8 @@ pub fn validate_namespaced_ident(value: &str) -> Result<(&str, &str), crate::Any
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SchemaItem {
-    Attribute(AttributeSchema),
-    Entity(EntitySchema),
+    Attribute(Attribute),
+    Entity(Class),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq, Eq)]
@@ -64,20 +62,20 @@ pub enum SchemaItem {
 pub struct DbSchema {
     // FIXME: make these private and provide accessors.
     // They should no tbe pub because of the sentinel 0 id.
-    pub attributes: Vec<AttributeSchema>,
-    pub entities: Vec<EntitySchema>,
+    pub attributes: Vec<Attribute>,
+    pub entities: Vec<Class>,
     pub indexes: Vec<IndexSchema>,
 }
 
 impl DbSchema {
-    pub fn resolve_attr(&self, ident: &IdOrIdent) -> Option<&AttributeSchema> {
+    pub fn resolve_attr(&self, ident: &IdOrIdent) -> Option<&Attribute> {
         self.attributes.iter().find(|attr| match &ident {
             IdOrIdent::Id(id) => attr.id == *id,
             IdOrIdent::Name(name) => attr.ident.as_str() == name,
         })
     }
 
-    pub fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&EntitySchema> {
+    pub fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&Class> {
         self.entities.iter().find(|entity| match &ident {
             IdOrIdent::Id(id) => entity.id == *id,
             IdOrIdent::Name(name) => entity.ident.as_str() == name,
@@ -89,7 +87,7 @@ impl DbSchema {
         &self,
         entity: &IdOrIdent,
         attr: &IdOrIdent,
-    ) -> Option<&EntityAttribute> {
+    ) -> Option<&ClassAttribute> {
         let entity = self.resolve_entity(entity)?;
 
         for parent_ident in &entity.extends {

@@ -2,13 +2,13 @@ use std::convert::TryFrom;
 
 use crate::data::{Id, IdOrIdent, Value, ValueMap, ValueType};
 
-use super::EntityContainer;
+use super::ClassContainer;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
 #[cfg_attr(feature = "typescript-schema", ts(export))]
-pub struct AttributeSchema {
+pub struct Attribute {
     #[serde(rename = "factor/id")]
     pub id: Id,
     #[serde(rename = "factor/ident")]
@@ -24,12 +24,12 @@ pub struct AttributeSchema {
     #[serde(rename = "factor/index")]
     pub index: bool,
     /// If an attribute is set to strict, this attribute can only be used
-    /// in entities with a schema that specifies the attribute.
+    /// in entities with a class that specifies the attribute.
     #[serde(rename = "factor/isStrict")]
     pub strict: bool,
 }
 
-impl AttributeSchema {
+impl Attribute {
     pub fn new(ident: impl Into<String>, value_type: ValueType) -> Self {
         Self {
             id: Id::nil(),
@@ -95,7 +95,7 @@ impl AttributeSchema {
 /// This trait should generally not be implemented manually.
 /// A custom derive proc macro is available.
 /// See [`crate::Attribute`] for how to use the derive.
-pub trait AttributeDescriptor {
+pub trait AttributeMeta {
     /// The namespace fo the attribute.
     const NAMESPACE: &'static str;
     /// The name of the attribute.
@@ -111,7 +111,7 @@ pub trait AttributeDescriptor {
     type Type;
 
     /// Build the schema for this attribute.
-    fn schema() -> AttributeSchema;
+    fn schema() -> Attribute;
 
     /// Build an expression that selects this attribute.
     fn expr() -> crate::query::expr::Expr {
@@ -126,23 +126,23 @@ pub trait AttrMapExt {
     fn get_type(&self) -> Option<IdOrIdent>;
     fn get_type_name(&self) -> Option<&str>;
 
-    fn has_attr<A: AttributeDescriptor>(&self) -> bool;
-    fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
+    fn has_attr<A: AttributeMeta>(&self) -> bool;
+    fn get_attr<A: AttributeMeta>(&self) -> Option<A::Type>
     where
         A::Type: TryFrom<Value>;
 
-    fn get_attr_vec<A: AttributeDescriptor>(&self) -> Option<Vec<A::Type>>
+    fn get_attr_vec<A: AttributeMeta>(&self) -> Option<Vec<A::Type>>
     where
         A::Type: TryFrom<Value>;
 
-    fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
+    fn insert_attr<A: AttributeMeta>(&mut self, value: A::Type)
     where
         A::Type: Into<Value>;
 
     fn try_into_entity<E>(self) -> Result<E, crate::data::value::ValueDeserializeError>
     where
         Self: Sized,
-        E: EntityContainer + serde::de::DeserializeOwned;
+        E: ClassContainer + serde::de::DeserializeOwned;
 }
 
 impl AttrMapExt for ValueMap<String> {
@@ -175,11 +175,11 @@ impl AttrMapExt for ValueMap<String> {
             })
     }
 
-    fn has_attr<A: AttributeDescriptor>(&self) -> bool {
+    fn has_attr<A: AttributeMeta>(&self) -> bool {
         self.0.contains_key(A::QUALIFIED_NAME)
     }
 
-    fn get_attr<A: AttributeDescriptor>(&self) -> Option<A::Type>
+    fn get_attr<A: AttributeMeta>(&self) -> Option<A::Type>
     where
         A::Type: TryFrom<Value>,
     {
@@ -187,7 +187,7 @@ impl AttrMapExt for ValueMap<String> {
         TryFrom::try_from(value).ok()
     }
 
-    fn get_attr_vec<A: AttributeDescriptor>(&self) -> Option<Vec<A::Type>>
+    fn get_attr_vec<A: AttributeMeta>(&self) -> Option<Vec<A::Type>>
     where
         A::Type: TryFrom<Value>,
     {
@@ -204,7 +204,7 @@ impl AttrMapExt for ValueMap<String> {
         }
     }
 
-    fn insert_attr<A: AttributeDescriptor>(&mut self, value: A::Type)
+    fn insert_attr<A: AttributeMeta>(&mut self, value: A::Type)
     where
         A::Type: Into<Value>,
     {
@@ -214,7 +214,7 @@ impl AttrMapExt for ValueMap<String> {
     fn try_into_entity<E>(self) -> Result<E, crate::data::value::ValueDeserializeError>
     where
         Self: Sized,
-        E: EntityContainer + serde::de::DeserializeOwned,
+        E: ClassContainer + serde::de::DeserializeOwned,
     {
         crate::data::value::from_value_map(self)
     }

@@ -1,7 +1,7 @@
-use factor_macros::{Attribute, Entity};
+use factor_macros::{Attribute, Class};
 use factordb::{
     data::{Id, ValueType},
-    schema::{builtin::AttrDescription, AttributeDescriptor, EntityAttribute, EntityDescriptor},
+    schema::{builtin::AttrDescription, AttributeMeta, ClassAttribute, ClassMeta},
 };
 
 #[derive(Attribute)]
@@ -16,7 +16,7 @@ struct AttrLength(Vec<u64>);
 #[factor(namespace = "test")]
 struct AttrFlag(bool);
 
-#[derive(Entity, serde::Serialize, serde::Deserialize)]
+#[derive(Class, serde::Serialize, serde::Deserialize)]
 #[factor(namespace = "test")]
 struct Entity1 {
     #[factor(attr = AttrId)]
@@ -29,7 +29,7 @@ struct Entity1 {
     pub length: Vec<u64>,
 }
 
-#[derive(Entity, serde::Serialize, serde::Deserialize)]
+#[derive(Class, serde::Serialize, serde::Deserialize)]
 #[factor(namespace = "test")]
 struct Child {
     #[factor(attr = AttrFlag)]
@@ -41,7 +41,7 @@ struct Child {
 #[test]
 fn test_attr_derive() {
     assert_eq!(
-        factordb::schema::AttributeSchema {
+        factordb::schema::Attribute {
             id: Id::nil(),
             ident: "test/some_title".into(),
             description: None,
@@ -58,21 +58,21 @@ fn test_attr_derive() {
 #[test]
 fn test_entity_derive() {
     assert_eq!(
-        factordb::schema::EntitySchema {
+        factordb::schema::Class {
             id: Id::nil(),
             ident: "test/Entity1".into(),
             title: Some("Entity1".to_string()),
             description: None,
             attributes: vec![
-                EntityAttribute {
+                ClassAttribute {
                     attribute: AttrSomeTitle::IDENT,
                     cardinality: factordb::schema::Cardinality::Required,
                 },
-                EntityAttribute {
+                ClassAttribute {
                     attribute: AttrDescription::IDENT,
                     cardinality: factordb::schema::Cardinality::Optional,
                 },
-                EntityAttribute {
+                ClassAttribute {
                     attribute: AttrLength::IDENT,
                     cardinality: factordb::schema::Cardinality::Required,
                 },

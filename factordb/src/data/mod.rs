@@ -1,6 +1,9 @@
 mod id;
 pub use id::{Id, IdOrIdent};
 
+mod reference;
+pub use self::reference::Ref;
+
 mod ident;
 pub use ident::{Ident, InvalidIdentError};
 

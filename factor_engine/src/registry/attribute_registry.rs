@@ -26,7 +26,7 @@ impl LocalAttributeId {
 #[derive(Clone, Debug)]
 pub struct RegisteredAttribute {
     pub local_id: LocalAttributeId,
-    pub schema: schema::AttributeSchema,
+    pub schema: schema::Attribute,
     pub is_deleted: bool,
     pub namespace: String,
     pub plain_name: String,
@@ -70,7 +70,7 @@ impl AttributeRegistry {
 
     fn add(
         &mut self,
-        schema: schema::AttributeSchema,
+        schema: schema::Attribute,
         entities: &EntityRegistry,
     ) -> Result<LocalAttributeId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
@@ -202,7 +202,7 @@ impl AttributeRegistry {
     // NOTE: Only pub(super) because [Registry] might do additional validation.
     pub(super) fn register(
         &mut self,
-        attr: schema::AttributeSchema,
+        attr: schema::Attribute,
         entities: &EntityRegistry,
     ) -> Result<LocalAttributeId, AnyError> {
         self.validate_schema(&attr, false)?;
@@ -212,7 +212,7 @@ impl AttributeRegistry {
     /// Update an existing entity.
     pub(super) fn update(
         &mut self,
-        schema: schema::AttributeSchema,
+        schema: schema::Attribute,
         validate: bool,
     ) -> Result<LocalAttributeId, AnyError> {
         schema
@@ -231,7 +231,7 @@ impl AttributeRegistry {
 
     fn validate_schema(
         &self,
-        attr: &schema::AttributeSchema,
+        attr: &schema::Attribute,
         allow_existing: bool,
     ) -> Result<(), AnyError> {
         attr.id

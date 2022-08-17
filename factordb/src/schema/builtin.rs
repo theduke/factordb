@@ -6,11 +6,8 @@
 //! which are statically defined.
 
 use crate::{
-    data::{value_type::ConstrainedRefType, Id, IdOrIdent, ValueType},
-    schema::{
-        AttributeDescriptor, AttributeSchema, Cardinality, EntityAttribute, EntityDescriptor,
-        EntitySchema,
-    },
+    data::{value_type::ConstrainedRefType, Id, IdOrIdent, Ident, ValueType},
+    schema::{Attribute, AttributeMeta, Cardinality, Class, ClassAttribute, ClassMeta},
 };
 
 use super::IndexSchema;
@@ -33,6 +30,8 @@ const ATTR_EXTEND: Id = Id::from_u128(11);
 const ATTR_ISRELATION: Id = Id::from_u128(12);
 const ATTR_INDEX_ATTRIBUTES: Id = Id::from_u128(13);
 pub const ATTR_COUNT: Id = Id::from_u128(14);
+pub const ATTR_ATTRIBUTE: Id = Id::from_u128(15);
+pub const ATTR_REQUIRED: Id = Id::from_u128(16);
 
 // Built-in entity types.
 // Constants are kept together to see ids at a glance.
@@ -47,14 +46,14 @@ pub const INDEX_IDENT: Id = Id::from_u128(2002);
 
 pub struct AttrId;
 
-impl AttributeDescriptor for AttrId {
+impl AttributeMeta for AttrId {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "id";
     const QUALIFIED_NAME: &'static str = "factor/id";
     type Type = IdOrIdent;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_ID,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Id".into()),
@@ -69,14 +68,14 @@ impl AttributeDescriptor for AttrId {
 
 pub struct AttrIdent;
 
-impl AttributeDescriptor for AttrIdent {
+impl AttributeMeta for AttrIdent {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "ident";
     const QUALIFIED_NAME: &'static str = "factor/ident";
     type Type = String;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_IDENT,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Ident".into()),
@@ -91,14 +90,14 @@ impl AttributeDescriptor for AttrIdent {
 
 pub struct AttrTitle;
 
-impl AttributeDescriptor for AttrTitle {
+impl AttributeMeta for AttrTitle {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "title";
     const QUALIFIED_NAME: &'static str = "factor/title";
     type Type = String;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_TITLE,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Title".into()),
@@ -113,20 +112,20 @@ impl AttributeDescriptor for AttrTitle {
 
 pub struct AttrType;
 
-impl AttributeDescriptor for AttrType {
+impl AttributeMeta for AttrType {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "type";
     const QUALIFIED_NAME: &'static str = "factor/type";
     type Type = IdOrIdent;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_TYPE,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Type".into()),
             description: None,
             value_type: ValueType::Ident(ConstrainedRefType {
-                allowed_entity_types: vec![EntitySchemaType::IDENT],
+                allowed_entity_types: vec![Class::IDENT],
             }),
             unique: false,
             index: true,
@@ -137,14 +136,14 @@ impl AttributeDescriptor for AttrType {
 
 pub struct AttrValueType;
 
-impl AttributeDescriptor for AttrValueType {
+impl AttributeMeta for AttrValueType {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "valueType";
     const QUALIFIED_NAME: &'static str = "factor/valueType";
     type Type = String;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_VALUETYPE,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Value Type".into()),
@@ -159,14 +158,14 @@ impl AttributeDescriptor for AttrValueType {
 
 pub struct AttrUnique;
 
-impl AttributeDescriptor for AttrUnique {
+impl AttributeMeta for AttrUnique {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "unique";
     const QUALIFIED_NAME: &'static str = "factor/unique";
     type Type = bool;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_UNIQUE,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Unique".into()),
@@ -181,14 +180,14 @@ impl AttributeDescriptor for AttrUnique {
 
 pub struct AttrIndex;
 
-impl AttributeDescriptor for AttrIndex {
+impl AttributeMeta for AttrIndex {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "index";
     const QUALIFIED_NAME: &'static str = "factor/index";
     type Type = bool;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_INDEX,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Index".into()),
@@ -203,14 +202,14 @@ impl AttributeDescriptor for AttrIndex {
 
 pub struct AttrDescription;
 
-impl AttributeDescriptor for AttrDescription {
+impl AttributeMeta for AttrDescription {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "description";
     const QUALIFIED_NAME: &'static str = "factor/description";
     type Type = String;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_DESCRIPTION,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Description".into()),
@@ -225,14 +224,14 @@ impl AttributeDescriptor for AttrDescription {
 
 pub struct AttrStrict;
 
-impl AttributeDescriptor for AttrStrict {
+impl AttributeMeta for AttrStrict {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "isStrict";
     const QUALIFIED_NAME: &'static str = "factor/isStrict";
     type Type = bool;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_STRICT,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Strict".into()),
@@ -245,15 +244,13 @@ impl AttributeDescriptor for AttrStrict {
     }
 }
 
-pub struct AttributeSchemaType;
-
-impl EntityDescriptor for AttributeSchemaType {
+impl ClassMeta for super::Attribute {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "Attribute";
     const QUALIFIED_NAME: &'static str = "factor/Attribute";
 
-    fn schema() -> EntitySchema {
-        EntitySchema {
+    fn schema() -> Class {
+        Class {
             id: ATTRIBUTE_ID,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Attribute".into()),
@@ -261,8 +258,8 @@ impl EntityDescriptor for AttributeSchemaType {
             attributes: vec![
                 ATTR_ID.into(),
                 ATTR_IDENT.into(),
-                EntityAttribute::from(ATTR_TITLE).into_optional(),
-                EntityAttribute::from(ATTR_DESCRIPTION).into_optional(),
+                ClassAttribute::from(ATTR_TITLE).into_optional(),
+                ClassAttribute::from(ATTR_DESCRIPTION).into_optional(),
                 ATTR_VALUETYPE.into(),
                 ATTR_UNIQUE.into(),
                 ATTR_INDEX.into(),
@@ -274,18 +271,64 @@ impl EntityDescriptor for AttributeSchemaType {
     }
 }
 
+pub struct AttrAttribute;
+
+impl AttributeMeta for AttrAttribute {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "attribute";
+    const QUALIFIED_NAME: &'static str = "factor/attribute";
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
+    type Type = Ident;
+
+    fn schema() -> Attribute {
+        Attribute {
+            id: ATTR_ATTRIBUTE,
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Attribute".to_string()),
+            description: Some("Reference to an attribute.".to_string()),
+            value_type: ValueType::RefConstrained(ConstrainedRefType::new(vec![Attribute::IDENT])),
+            unique: false,
+            index: false,
+            strict: false,
+        }
+    }
+}
+
+pub struct AttrRequired;
+
+impl AttributeMeta for AttrRequired {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "required";
+    const QUALIFIED_NAME: &'static str = "factor/required";
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
+    type Type = bool;
+
+    fn schema() -> Attribute {
+        Attribute {
+            id: ATTR_REQUIRED,
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Required".to_string()),
+            description: None,
+            value_type: ValueType::Bool,
+            unique: false,
+            index: false,
+            strict: false,
+        }
+    }
+}
+
 // EntitySchema attributes and entity type.
 
-pub struct AttrAttributes;
+pub struct AttrClassAttributes;
 
-impl AttributeDescriptor for AttrAttributes {
+impl AttributeMeta for AttrClassAttributes {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "entityAttributes";
-    const QUALIFIED_NAME: &'static str = "factor/entityAttributes";
-    type Type = Vec<EntityAttribute>;
+    const QUALIFIED_NAME: &'static str = "factor/classAttributes";
+    type Type = Vec<ClassAttribute>;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_ATTRIBUTES,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Entity Attributes".into()),
@@ -297,7 +340,7 @@ impl AttributeDescriptor for AttrAttributes {
                         crate::data::value_type::ObjectField {
                             name: "attribute".to_string(),
                             value_type: ValueType::Ident(ConstrainedRefType {
-                                allowed_entity_types: vec![AttributeSchemaType::IDENT],
+                                allowed_entity_types: vec![Attribute::IDENT],
                             }),
                         },
                         crate::data::value_type::ObjectField {
@@ -319,20 +362,20 @@ impl AttributeDescriptor for AttrAttributes {
 
 pub struct AttrExtend;
 
-impl AttributeDescriptor for AttrExtend {
+impl AttributeMeta for AttrExtend {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "extend";
     const QUALIFIED_NAME: &'static str = "factor/extend";
     type Type = Option<IdOrIdent>;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_EXTEND,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Extends".into()),
             description: None,
             value_type: ValueType::List(Box::new(ValueType::Ident(ConstrainedRefType {
-                allowed_entity_types: vec![EntitySchemaType::IDENT],
+                allowed_entity_types: vec![Class::IDENT],
             }))),
             unique: false,
             index: false,
@@ -343,14 +386,14 @@ impl AttributeDescriptor for AttrExtend {
 
 pub struct AttrIsRelation;
 
-impl AttributeDescriptor for AttrIsRelation {
+impl AttributeMeta for AttrIsRelation {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "isRelation";
     const QUALIFIED_NAME: &'static str = "factor/isRelation";
     type Type = bool;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_ISRELATION,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Is Relation".into()),
@@ -363,31 +406,29 @@ impl AttributeDescriptor for AttrIsRelation {
     }
 }
 
-pub struct EntitySchemaType;
-
-impl EntityDescriptor for EntitySchemaType {
+impl ClassMeta for super::Class {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "Entity";
-    const QUALIFIED_NAME: &'static str = "factor/Entity";
+    const QUALIFIED_NAME: &'static str = "factor/Class";
 
-    fn schema() -> EntitySchema {
-        EntitySchema {
+    fn schema() -> Class {
+        Class {
             id: ENTITY_ID,
             ident: Self::QUALIFIED_NAME.to_string(),
-            title: Some("Entity".into()),
+            title: Some("Class".into()),
             description: None,
             attributes: vec![
                 ATTR_ID.into(),
                 ATTR_IDENT.into(),
-                EntityAttribute::from(ATTR_TITLE).into_optional(),
-                EntityAttribute::from(ATTR_DESCRIPTION).into_optional(),
+                ClassAttribute::from(ATTR_TITLE).into_optional(),
+                ClassAttribute::from(ATTR_DESCRIPTION).into_optional(),
                 ATTR_STRICT.into(),
                 ATTR_ISRELATION.into(),
-                EntityAttribute {
+                ClassAttribute {
                     attribute: ATTR_EXTEND.into(),
                     cardinality: Cardinality::Required,
                 },
-                EntityAttribute {
+                ClassAttribute {
                     attribute: ATTR_ATTRIBUTES.into(),
                     cardinality: Cardinality::Required,
                 },
@@ -400,14 +441,14 @@ impl EntityDescriptor for EntitySchemaType {
 
 pub struct AttrCount;
 
-impl AttributeDescriptor for AttrCount {
+impl AttributeMeta for AttrCount {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "count";
     const QUALIFIED_NAME: &'static str = "factor/count";
     type Type = u64;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_COUNT,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Count".into()),
@@ -424,14 +465,14 @@ impl AttributeDescriptor for AttrCount {
 
 pub struct AttrIndexAttributes;
 
-impl AttributeDescriptor for AttrIndexAttributes {
+impl AttributeMeta for AttrIndexAttributes {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "index_attributes";
     const QUALIFIED_NAME: &'static str = "factor/index_attributes";
     type Type = Vec<Id>;
 
-    fn schema() -> AttributeSchema {
-        AttributeSchema {
+    fn schema() -> Attribute {
+        Attribute {
             id: ATTR_INDEX_ATTRIBUTES,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Indexed Attributes".into()),
@@ -446,13 +487,13 @@ impl AttributeDescriptor for AttrIndexAttributes {
 
 pub struct IndexSchemaType;
 
-impl EntityDescriptor for IndexSchemaType {
+impl ClassMeta for IndexSchemaType {
     const NAMESPACE: &'static str = "factor";
     const PLAIN_NAME: &'static str = "Index";
     const QUALIFIED_NAME: &'static str = "factor/Index";
 
-    fn schema() -> EntitySchema {
-        EntitySchema {
+    fn schema() -> Class {
+        Class {
             id: INDEX_ID,
             ident: Self::QUALIFIED_NAME.to_string(),
             title: Some("Index".into()),
@@ -460,9 +501,9 @@ impl EntityDescriptor for IndexSchemaType {
             attributes: vec![
                 ATTR_ID.into(),
                 ATTR_IDENT.into(),
-                EntityAttribute::from(ATTR_TITLE).into_optional(),
-                EntityAttribute::from(ATTR_DESCRIPTION).into_optional(),
-                EntityAttribute {
+                ClassAttribute::from(ATTR_TITLE).into_optional(),
+                ClassAttribute::from(ATTR_DESCRIPTION).into_optional(),
+                ClassAttribute {
                     attribute: ATTR_INDEX_ATTRIBUTES.into(),
                     cardinality: Cardinality::Required,
                 },
@@ -507,15 +548,15 @@ pub fn builtin_db_schema() -> super::DbSchema {
             AttrUnique::schema(),
             AttrIndex::schema(),
             AttrStrict::schema(),
-            AttrAttributes::schema(),
+            AttrClassAttributes::schema(),
             AttrExtend::schema(),
             AttrIsRelation::schema(),
             AttrIndexAttributes::schema(),
             AttrCount::schema(),
         ],
         entities: vec![
-            AttributeSchemaType::schema(),
-            EntitySchemaType::schema(),
+            Attribute::schema(),
+            Class::schema(),
             IndexSchemaType::schema(),
         ],
         indexes: vec![index_entity_type(), index_ident()],
@@ -534,8 +575,8 @@ pub fn id_is_builtin_entity_filter() -> crate::query::expr::Expr {
     Expr::not(Expr::in_(
         Expr::attr::<AttrType>(),
         vec![
-            AttributeSchemaType::QUALIFIED_NAME,
-            EntitySchemaType::QUALIFIED_NAME,
+            Attribute::QUALIFIED_NAME,
+            Class::QUALIFIED_NAME,
             IndexSchemaType::QUALIFIED_NAME,
         ],
     ))

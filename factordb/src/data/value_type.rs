@@ -27,10 +27,11 @@ pub enum ValueType {
     // Custom types.
     // NOTE: these types may not be directly represented by [`Value`], but
     // rather take the canonical underlying representation.
+    /// Represented as Uint.
     DateTime,
     /// Represented as Value::String
     Url,
-    /// Reference to an entity id.
+    /// Reference to an entity id (uuid).
     Ref,
     /// Reference to an entity using it's ident.
     Ident(ConstrainedRefType),
@@ -38,7 +39,7 @@ pub enum ValueType {
     /// Reference to entities with a constrained type.
     // TODO: merge with Ref variant on next format breaking change
     RefConstrained(ConstrainedRefType),
-
+    EmbeddedEntity,
     Const(Value),
 }
 
@@ -48,6 +49,14 @@ pub enum ValueType {
 #[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct ConstrainedRefType {
     pub allowed_entity_types: Vec<IdOrIdent>,
+}
+
+impl ConstrainedRefType {
+    pub fn new(allowed_entity_types: Vec<IdOrIdent>) -> Self {
+        Self {
+            allowed_entity_types,
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
@@ -99,10 +108,10 @@ impl ValueType {
                 // TODO: this is probably not the right thing to do...
                 true
             }
-            Self::Object(_) => false,
             Self::Union(inner) => inner.iter().all(|t| t.is_scalar()),
-            Self::Any | Self::Unit | Self::List(_) => false,
             Self::Const(val) => val.value_type().is_scalar(),
+            Self::Any | Self::Unit | Self::List(_) | Self::EmbeddedEntity => false,
+            Self::Object(_) => false,
         }
     }
 

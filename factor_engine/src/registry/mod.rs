@@ -13,7 +13,7 @@ use factordb::{
     error::{self, EntityNotFound},
     prelude::AttrType,
     query,
-    schema::{self, builtin::AttrId, AttrMapExt, AttributeDescriptor, Cardinality, DbSchema},
+    schema::{self, builtin::AttrId, AttrMapExt, AttributeMeta, Cardinality, DbSchema},
     AnyError,
 };
 
@@ -238,7 +238,7 @@ impl Registry {
             }
         }
         for entity in schema.entities {
-            self.register_entity(entity.clone(), true)
+            self.register_class(entity.clone(), true)
                 .unwrap_or_else(|_| {
                     panic!(
                         "Internal error: could not register builtin entity {}",
@@ -287,7 +287,7 @@ impl Registry {
     // pub fn validate_remove_attr(
     //     &mut self,
     //     id: Id,
-    // ) -> Result<schema::AttributeSchema, AnyError> {
+    // ) -> Result<schema::Attribute, AnyError> {
 
     //     let attr = self
     //         .attrs
@@ -305,14 +305,14 @@ impl Registry {
 
     pub fn register_attribute(
         &mut self,
-        attr: schema::AttributeSchema,
+        attr: schema::Attribute,
     ) -> Result<LocalAttributeId, AnyError> {
         self.attrs.register(attr, &self.entities)
     }
 
     pub fn attribute_update(
         &mut self,
-        schema: schema::AttributeSchema,
+        schema: schema::Attribute,
         validate: bool,
     ) -> Result<(), AnyError> {
         self.attrs.update(schema, validate)?;
@@ -351,24 +351,20 @@ impl Registry {
         Ok(())
     }
 
-    pub fn register_entity(
+    pub fn register_class(
         &mut self,
-        entity: schema::EntitySchema,
+        entity: schema::Class,
         validate: bool,
     ) -> Result<LocalEntityId, AnyError> {
         self.entities.register(entity, validate, &self.attrs)
     }
 
-    pub fn entity_update(
-        &mut self,
-        entity: schema::EntitySchema,
-        validate: bool,
-    ) -> Result<(), AnyError> {
+    pub fn update_class(&mut self, entity: schema::Class, validate: bool) -> Result<(), AnyError> {
         self.entities.update(entity, validate, &self.attrs)?;
         Ok(())
     }
 
-    pub fn remove_entity(&mut self, id: Id) -> Result<(), AnyError> {
+    pub fn remove_class(&mut self, id: Id) -> Result<(), AnyError> {
         let entity = self.require_entity_by_id(id)?;
 
         // Validate that entity is not extended by any other entity.

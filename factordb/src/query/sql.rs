@@ -452,7 +452,7 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        prelude::AttributeDescriptor,
+        prelude::AttributeMeta,
         schema::builtin::{AttrIdent, AttrTitle, AttrType},
     };
 

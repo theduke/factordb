@@ -299,11 +299,11 @@ impl std::ops::DerefMut for MemoryTuple {
 }
 
 // impl crate::backend::Dao for MemoryTuple {
-//     fn get(&self, attr: &schema::AttributeSchema) -> Result<Option<Value>, AnyError> {
+//     fn get(&self, attr: &schema::Attribute) -> Result<Option<Value>, AnyError> {
 //         Ok(self.0.get(&attr.id).map(|v| v.into()))
 //     }
 
-//     fn set(&mut self, _attr: &schema::AttributeSchema, _value: Value) {
+//     fn set(&mut self, _attr: &schema::Attribute, _value: Value) {
 //         todo!()
 //     }
 // }

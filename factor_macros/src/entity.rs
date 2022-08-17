@@ -192,7 +192,7 @@ fn is_vec(ty: &syn::Type) -> bool {
 //     }
 // }
 
-pub fn derive_entity(tokens: TokenStream) -> TokenStream {
+pub fn derive_class(tokens: TokenStream) -> TokenStream {
     let input: syn::DeriveInput = syn::parse(tokens).unwrap();
 
     let struct_body = match &input.data {
@@ -254,7 +254,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             }
             extends_field = Some((*field_name).clone());
             schema_extends.push(quote! {
-                <#field_ty as factordb::schema::EntityDescriptor>::IDENT.into(),
+                <#field_ty as factordb::schema::ClassMeta>::IDENT.into(),
             });
         } else if field_attrs.is_relation {
             todo!()
@@ -277,7 +277,7 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                     // TODO: use custom attr to signal Vec = optional?
                     quote!({
                         assert_eq!(
-                            <#prop as factordb::schema::AttributeDescriptor>::schema().value_type,
+                            <#prop as factordb::schema::AttributeMeta>::schema().value_type,
                             <#ty as factordb::prelude::ValueTypeDescriptor>::value_type(),
                             "an entity field with type Vec<_> must point to an attribute that is a List ( ValueType::List<INNER_TYPE> )"
                         );
@@ -291,15 +291,15 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
                 have_id = true;
             } else {
                 schema_attributes.push(quote! {
-                    factordb::schema::EntityAttribute {
-                        attribute: <#prop as factordb::schema::AttributeDescriptor>::IDENT,
+                    factordb::schema::ClassAttribute {
+                        attribute: <#prop as factordb::schema::AttributeMeta>::IDENT,
                         cardinality: #cardinality,
                     },
                 });
 
                 serialize_fields.push(quote! {
                     map.serialize_entry(
-                        <#prop as factordb::schema::AttributeDescriptor>::QUALIFIED_NAME,
+                        <#prop as factordb::schema::AttributeMeta>::QUALIFIED_NAME,
                         &self.#field_name,
                     )?;
                 });
@@ -320,14 +320,14 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
     let full_name = format!("{}/{}", namespace, entity_name);
 
     TokenStream::from(quote! {
-        impl factordb::schema::EntityDescriptor for #struct_ident {
+        impl factordb::schema::ClassMeta for #struct_ident {
             const NAMESPACE: &'static str = #namespace;
             const PLAIN_NAME: &'static str = #entity_name;
             const QUALIFIED_NAME: &'static str = #full_name;
             const IDENT: factordb::data::IdOrIdent = factordb::data::IdOrIdent::new_static(Self::QUALIFIED_NAME);
 
-            fn schema() -> factordb::schema::EntitySchema {
-                factordb::schema::EntitySchema{
+            fn schema() -> factordb::schema::Class {
+                factordb::schema::Class {
                     id: factordb::data::Id::nil(),
                     ident: #full_name.to_string(),
                     title: Some(#title.to_string()),
@@ -343,13 +343,13 @@ pub fn derive_entity(tokens: TokenStream) -> TokenStream {
             }
         }
 
-        impl factordb::schema::EntityContainer for #struct_ident {
+        impl factordb::schema::ClassContainer for #struct_ident {
             fn id(&self) -> factordb::data::Id {
                 *#id_accessor
             }
 
             fn entity_type(&self) -> factordb::data::IdOrIdent {
-                <Self as factordb::schema::EntityDescriptor>::IDENT
+                <Self as factordb::schema::ClassMeta>::IDENT
             }
         }
 

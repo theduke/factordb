@@ -9,4 +9,4 @@ pub mod prelude;
 
 pub mod db;
 
-pub use factor_macros::{Attribute, Entity};
+pub use factor_macros::{Attribute, Class};

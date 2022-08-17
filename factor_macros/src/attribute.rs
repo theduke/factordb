@@ -129,15 +129,15 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
     let full_name = format!("{}/{}", namespace, name);
 
     let out = quote! {
-        impl factordb::schema::AttributeDescriptor for #ident {
+        impl factordb::schema::AttributeMeta for #ident {
             const NAMESPACE: &'static str = #namespace;
             const PLAIN_NAME: &'static str = #name;
             const QUALIFIED_NAME: &'static str = #full_name;
             const IDENT: factordb::data::IdOrIdent = factordb::data::IdOrIdent::new_static(Self::QUALIFIED_NAME);
             type Type = #type_;
 
-            fn schema() -> factordb::schema::AttributeSchema {
-                factordb::schema::AttributeSchema {
+            fn schema() -> factordb::schema::Attribute {
+                factordb::schema::Attribute {
                     id: factordb::data::Id::nil(),
                     ident: #full_name.to_string(),
                     title: #title,

@@ -1,3 +1,5 @@
+use super::value_type::{ConstrainedRefType, ValueTypeDescriptor};
+
 #[derive(Clone)]
 pub struct Ident {
     value: String,
@@ -178,6 +180,12 @@ impl<'de> serde::de::Deserialize<'de> for Ident {
         }
 
         deserializer.deserialize_string(Visitor)
+    }
+}
+
+impl ValueTypeDescriptor for Ident {
+    fn value_type() -> super::ValueType {
+        super::ValueType::Ident(ConstrainedRefType::new(vec![]))
     }
 }
 

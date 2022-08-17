@@ -1,5 +1,5 @@
 use futures::{future::BoxFuture, FutureExt};
-use schema::AttributeSchema;
+use schema::Attribute;
 
 use crate::{backend::Backend, Engine};
 use factordb::{
@@ -22,7 +22,7 @@ use factordb::{
     schema::{
         self,
         builtin::{AttrId, AttrTitle},
-        AttrMapExt, AttributeDescriptor, EntityAttribute, EntitySchema,
+        AttrMapExt, AttributeMeta, Class, ClassAttribute,
     },
 };
 
@@ -124,55 +124,55 @@ const ENTITY_IMAGE_JPEG: &str = "test/ImageJpeg";
 
 async fn apply_test_schema(db: &Db) {
     let mig = query::migrate::Migration::new()
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, ATTR_TEXT),
             ValueType::String,
         ))
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, ATTR_INT),
             ValueType::Int,
         ))
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, ATTR_INT_LIST),
             ValueType::new_list(ValueType::Int),
         ))
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, ATTR_UINT),
             ValueType::UInt,
         ))
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, ATTR_FLOAT),
             ValueType::Float,
         ))
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, "ref"),
             ValueType::Ref,
         ))
-        .entity_create(EntitySchema {
+        .entity_create(Class {
             id: Id::nil(),
             ident: ENTITY_COMMENT.into(),
             title: Some("Comment".into()),
             description: None,
-            attributes: vec![EntityAttribute {
+            attributes: vec![ClassAttribute {
                 attribute: "test/int_list".into(),
                 cardinality: schema::Cardinality::Optional,
             }],
             extends: Vec::new(),
             strict: false,
         })
-        .entity_create(EntitySchema {
+        .entity_create(Class {
             id: Id::nil(),
             ident: ENTITY_FILE.into(),
             title: Some("File".into()),
             description: None,
-            attributes: vec![EntityAttribute {
+            attributes: vec![ClassAttribute {
                 attribute: "test/int_list".into(),
                 cardinality: schema::Cardinality::Optional,
             }],
             extends: Vec::new(),
             strict: false,
         })
-        .entity_create(EntitySchema {
+        .entity_create(Class {
             id: Id::nil(),
             ident: ENTITY_IMAGE.into(),
             title: Some("Image".into()),
@@ -181,7 +181,7 @@ async fn apply_test_schema(db: &Db) {
             extends: vec![ENTITY_FILE.into()],
             strict: false,
         })
-        .entity_create(EntitySchema {
+        .entity_create(Class {
             id: Id::nil(),
             ident: ENTITY_IMAGE_JPEG.into(),
             title: Some("Jpeg Image".into()),
@@ -190,7 +190,7 @@ async fn apply_test_schema(db: &Db) {
             extends: vec![ENTITY_IMAGE.into()],
             strict: false,
         })
-        .attr_create(AttributeSchema::new(
+        .attr_create(Attribute::new(
             format!("{}/{}", NS_TEST, "ref_image"),
             ValueType::RefConstrained(ConstrainedRefType {
                 allowed_entity_types: vec!["test/Image".into()],
@@ -305,7 +305,7 @@ async fn test_schema_contains_builtins(db: &Db) {
 
 async fn test_attribute_create_index(db: &Db) {
     let attr_name = "test/add_schema".to_string();
-    db.migrate(Migration::new().attr_create(AttributeSchema {
+    db.migrate(Migration::new().attr_create(Attribute {
         id: Id::nil(),
         ident: attr_name.clone(),
         title: None,
@@ -363,7 +363,7 @@ async fn test_attribute_create_index(db: &Db) {
 
 async fn test_attribute_create_unique_index_fails_with_duplicate_values(db: &Db) {
     let attr_name = "test/add_index_unique_fails".to_string();
-    db.migrate(Migration::new().attr_create(AttributeSchema {
+    db.migrate(Migration::new().attr_create(Attribute {
         id: Id::nil(),
         ident: attr_name.clone(),
         title: None,
@@ -426,7 +426,7 @@ async fn test_attribute_create_unique_index_fails_with_duplicate_values(db: &Db)
 async fn test_attr_union_add_variant(db: &Db) {
     let attr_name = "test/union_change_type".to_string();
     // Create union attribute.
-    db.migrate(Migration::new().attr_create(AttributeSchema {
+    db.migrate(Migration::new().attr_create(Attribute {
         id: Id::nil(),
         ident: attr_name.clone(),
         title: None,
@@ -496,12 +496,12 @@ async fn test_entity_delete_not_found(db: &Db) {
 
 async fn test_entity_attr_add_with_default(db: &Db) {
     let ty = "t/AddTest";
-    db.migrate(Migration::new().entity_create(EntitySchema {
+    db.migrate(Migration::new().entity_create(Class {
         id: Id::nil(),
         ident: ty.to_string(),
         title: None,
         description: None,
-        attributes: vec![EntityAttribute {
+        attributes: vec![ClassAttribute {
             attribute: AttrTitle::IDENT.clone(),
             cardinality: schema::Cardinality::Required,
         }],
@@ -585,7 +585,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
 async fn test_entity_attr_change_cardinality_from_required_to_optional(f: &Db) {
     f.migrate(
         Migration::new()
-            .attr_create(AttributeSchema {
+            .attr_create(Attribute {
                 id: Id::nil(),
                 ident: "test/tochange".into(),
                 title: None,
@@ -595,12 +595,12 @@ async fn test_entity_attr_change_cardinality_from_required_to_optional(f: &Db) {
                 index: false,
                 strict: false,
             })
-            .entity_create(EntitySchema {
+            .entity_create(Class {
                 id: Id::nil(),
                 ident: "test/MutableEntity".into(),
                 title: None,
                 description: None,
-                attributes: vec![EntityAttribute {
+                attributes: vec![ClassAttribute {
                     attribute: "test/tochange".into(),
                     cardinality: schema::Cardinality::Required,
                 }],
@@ -771,7 +771,7 @@ async fn test_create_attribute(f: &Db) {
         name: None,
         actions: vec![query::migrate::SchemaAction::AttributeCreate(
             query::migrate::AttributeCreate {
-                schema: schema::AttributeSchema::new(
+                schema: schema::Attribute::new(
                     format!("{}/{}", NS_TEST, "text"),
                     ValueType::String,
                 ),
@@ -1026,7 +1026,7 @@ async fn test_query_contains_with_two_lists(db: &Db) {
 
 async fn test_remove_attr(db: &Db) {
     // Create new attribute.
-    let mig = Migration::new().attr_create(AttributeSchema::new(
+    let mig = Migration::new().attr_create(Attribute::new(
         format!("{}/{}", NS_TEST, "removeAttr"),
         ValueType::String,
     ));
@@ -1071,7 +1071,7 @@ async fn test_assert_fails_with_incorrect_value_type(f: &Db) {
 async fn test_index_unique(db: &Db) {
     db.migrate(
         query::migrate::Migration::new().attr_create(
-            AttributeSchema::new(
+            Attribute::new(
                 format!("{}/{}", NS_TEST, "indexed_unique"),
                 ValueType::String,
             )
@@ -1099,12 +1099,9 @@ async fn test_index_unique(db: &Db) {
 }
 
 async fn test_index_non_unique(db: &Db) {
-    db.migrate(
-        query::migrate::Migration::new().attr_create(
-            AttributeSchema::new(format!("{}/{}", NS_TEST, "indexed"), ValueType::String)
-                .with_indexed(true),
-        ),
-    )
+    db.migrate(query::migrate::Migration::new().attr_create(
+        Attribute::new(format!("{}/{}", NS_TEST, "indexed"), ValueType::String).with_indexed(true),
+    ))
     .await
     .unwrap();
 
@@ -1589,7 +1586,7 @@ async fn test_reference_validation_constrained_type(db: &Db) {
 }
 
 async fn test_attr_type_list(db: &Db) {
-    db.migrate(Migration::new().attr_create(AttributeSchema {
+    db.migrate(Migration::new().attr_create(Attribute {
         id: Id::nil(),
         ident: "test/list".into(),
         title: None,
@@ -1623,7 +1620,7 @@ async fn test_attr_type_list(db: &Db) {
 }
 
 async fn test_convert_attr_to_list(db: &Db) {
-    db.migrate(Migration::new().attr_create(AttributeSchema {
+    db.migrate(Migration::new().attr_create(Attribute {
         id: Id::nil(),
         ident: "test/int_to_list".to_string(),
         title: None,

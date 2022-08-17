@@ -1,7 +1,7 @@
 use factordb::{
     prelude::{Expr, Id, Select},
-    schema::{AttributeDescriptor, EntityDescriptor},
-    AnyError, Attribute, Entity,
+    schema::{AttributeMeta, ClassMeta},
+    AnyError, Attribute, Class,
 };
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +13,7 @@ pub struct AttrTitle(String);
 #[factor(namespace = "todo")]
 pub struct AttrDone(bool);
 
-#[derive(Serialize, Deserialize, Entity, Clone, Debug)]
+#[derive(Serialize, Deserialize, Class, Clone, Debug)]
 #[factor(namespace = "semantic")]
 struct Todo {
     #[factor(attr = AttrId)]

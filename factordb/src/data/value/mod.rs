@@ -399,6 +399,14 @@ impl Value {
                     }),
                 }
             }
+            ValueType::EmbeddedEntity => match self {
+                Value::Map(_) => Ok(()),
+                other => Err(ValueCoercionError {
+                    expected_type: ValueType::EmbeddedEntity,
+                    actual_type: other.value_type(),
+                    path: None,
+                }),
+            },
             ValueType::Const(const_val) => {
                 if self == const_val {
                     Ok(())

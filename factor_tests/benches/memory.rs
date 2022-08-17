@@ -5,7 +5,7 @@ use factor_tests::Todo;
 
 use factordb::{
     prelude::{Db, Expr, Id, Select},
-    schema::{builtin::AttrTitle, AttributeDescriptor},
+    schema::{builtin::AttrTitle, AttributeMeta},
 };
 
 async fn select_single_with_title_eq(db: &Db) {

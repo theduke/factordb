@@ -1,6 +1,6 @@
 use crate::{
     data::{IdOrIdent, Value},
-    schema::{builtin::AttrType, AttributeDescriptor, EntityDescriptor},
+    schema::{builtin::AttrType, AttributeMeta, ClassMeta},
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -82,7 +82,7 @@ impl Expr {
         Box::new(self)
     }
 
-    pub fn attr<A: AttributeDescriptor>() -> Self {
+    pub fn attr<A: AttributeMeta>() -> Self {
         Self::Attr(A::IDENT)
     }
 
@@ -282,7 +282,7 @@ impl Expr {
         Self::neq(expr, Self::Literal(Value::Unit))
     }
 
-    pub fn is_entity<T: EntityDescriptor>() -> Self {
+    pub fn is_entity<T: ClassMeta>() -> Self {
         Self::eq(Expr::attr::<AttrType>(), T::QUALIFIED_NAME)
     }
 
@@ -290,7 +290,7 @@ impl Expr {
         Self::eq(Expr::attr::<AttrType>(), name.to_string())
     }
 
-    pub fn is_entity_nested<T: EntityDescriptor>() -> Self {
+    pub fn is_entity_nested<T: ClassMeta>() -> Self {
         Self::InheritsEntityType(T::QUALIFIED_NAME.to_string())
     }
 }

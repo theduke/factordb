@@ -1,6 +1,6 @@
 use serde::de::DeserializeOwned;
 
-use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent};
+use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent, Ident};
 
 use super::AttrMapExt;
 
@@ -24,21 +24,42 @@ impl Cardinality {
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
 #[cfg_attr(feature = "typescript-schema", ts(export))]
-pub struct EntityAttribute {
+pub struct ClassAttribute {
     pub attribute: IdOrIdent,
     pub cardinality: Cardinality,
 }
 
-impl EntityAttribute {
+impl ClassAttribute {
+    pub fn new_optional(attribute: impl Into<IdOrIdent>) -> Self {
+        Self {
+            attribute: attribute.into(),
+            cardinality: Cardinality::Optional,
+        }
+    }
+
+    pub fn new_required(attribute: impl Into<IdOrIdent>) -> Self {
+        Self {
+            attribute: attribute.into(),
+            cardinality: Cardinality::Required,
+        }
+    }
+
     pub fn into_optional(self) -> Self {
         Self {
             attribute: self.attribute,
             cardinality: Cardinality::Optional,
         }
     }
+
+    pub fn into_required(self) -> Self {
+        Self {
+            attribute: self.attribute,
+            cardinality: Cardinality::Required,
+        }
+    }
 }
 
-impl From<Id> for EntityAttribute {
+impl From<Id> for ClassAttribute {
     fn from(id: Id) -> Self {
         Self {
             attribute: id.into(),
@@ -47,11 +68,39 @@ impl From<Id> for EntityAttribute {
     }
 }
 
+impl From<Ident> for ClassAttribute {
+    fn from(ident: Ident) -> Self {
+        Self {
+            attribute: IdOrIdent::new_str(ident.as_ref()),
+            cardinality: Cardinality::Required,
+        }
+    }
+}
+
+impl ClassMeta for ClassAttribute {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "ClassAttribute";
+    const QUALIFIED_NAME: &'static str = "factor/ClassAttribute";
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
+
+    fn schema() -> Class {
+        Class {
+            id: Id::nil(),
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("ClassAttribute".to_string()),
+            description: Some("A single attribute on a class.".to_string()),
+            attributes: vec![],
+            extends: vec![],
+            strict: false,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
 #[cfg_attr(feature = "typescript-schema", ts(export))]
-pub struct EntitySchema {
+pub struct Class {
     #[serde(rename = "factor/id")]
     pub id: Id,
     #[serde(rename = "factor/ident")]
@@ -61,7 +110,7 @@ pub struct EntitySchema {
     #[serde(rename = "factor/description")]
     pub description: Option<String>,
     #[serde(rename = "factor/entityAttributes")]
-    pub attributes: Vec<EntityAttribute>,
+    pub attributes: Vec<ClassAttribute>,
     #[serde(rename = "factor/extend")]
     pub extends: Vec<IdOrIdent>,
     /// If a schema is set to strict, additional attributes not specified
@@ -77,7 +126,7 @@ pub struct EntitySchema {
     // pub to: Option<Ident>,
 }
 
-impl EntitySchema {
+impl Class {
     pub fn new(ident: impl Into<String>) -> Self {
         Self {
             id: Id::nil(),
@@ -94,7 +143,7 @@ impl EntitySchema {
         IdOrIdent::Name(self.ident.clone().into())
     }
 
-    pub fn attribute(&self, name: &str) -> Option<&EntityAttribute> {
+    pub fn attribute(&self, name: &str) -> Option<&ClassAttribute> {
         self.attributes
             .iter()
             .find(|a| a.attribute.as_name() == Some(name))
@@ -111,14 +160,14 @@ impl EntitySchema {
     }
 
     pub fn with_attribute(mut self, attr: impl Into<IdOrIdent>, cardinality: Cardinality) -> Self {
-        self.attributes.push(EntityAttribute {
+        self.attributes.push(ClassAttribute {
             attribute: attr.into(),
             cardinality,
         });
         self
     }
 
-    pub fn with_attributes(mut self, attributes: Vec<EntityAttribute>) -> Self {
+    pub fn with_attributes(mut self, attributes: Vec<ClassAttribute>) -> Self {
         self.attributes.extend(attributes);
         self
     }
@@ -144,7 +193,7 @@ impl EntitySchema {
 }
 
 /// Trait that provides a static metadata for an entity.
-pub trait EntityDescriptor {
+pub trait ClassMeta {
     /// The namespace.
     const NAMESPACE: &'static str;
     /// The plain attribute name without the namespace.
@@ -155,10 +204,10 @@ pub trait EntityDescriptor {
     /// runtime.
     const QUALIFIED_NAME: &'static str;
     const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
-    fn schema() -> EntitySchema;
+    fn schema() -> Class;
 }
 
-pub trait EntityContainer {
+pub trait ClassContainer {
     fn id(&self) -> Id;
     fn entity_type(&self) -> IdOrIdent;
 

@@ -24,7 +24,7 @@ use futures::{
 
 use factordb::{
     data,
-    prelude::{AttrId, AttrType, AttributeDescriptor, DataMap, Id, Mutate, Value},
+    prelude::{AttrId, AttrType, AttributeMeta, DataMap, Id, Mutate, Value},
     query::{self, migrate::SchemaAction, mutate::Batch, select::Item},
     AnyError,
 };
@@ -643,7 +643,7 @@ mod tests {
             name: None,
             actions: vec![query::migrate::SchemaAction::AttributeCreate(
                 query::migrate::AttributeCreate {
-                    schema: schema::AttributeSchema::new("test/text", data::ValueType::String),
+                    schema: schema::Attribute::new("test/text", data::ValueType::String),
                 },
             )],
         };

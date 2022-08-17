@@ -541,7 +541,7 @@ pub fn resolve_expr(expr: Expr, reg: &Registry) -> Result<ResolvedExpr, AnyError
 
 #[cfg(test)]
 mod tests {
-    use factordb::schema::{builtin::AttrId, AttributeDescriptor};
+    use factordb::schema::{builtin::AttrId, AttributeMeta};
 
     use super::*;
 

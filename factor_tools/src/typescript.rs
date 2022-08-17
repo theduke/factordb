@@ -105,7 +105,7 @@ pub fn schema_to_typescript(
 }
 
 fn build_entity(
-    entity: &factordb::schema::EntitySchema,
+    entity: &factordb::schema::Class,
     schema: &factordb::schema::DbSchema,
 ) -> Result<Vec<Item>, AnyError> {
     // find all the parent entities
@@ -421,8 +421,8 @@ fn make_save_ident(name: &str) -> String {
 }
 
 fn field_ts_type(
-    field: &factordb::schema::EntityAttribute,
-    attr: &factordb::schema::AttributeSchema,
+    field: &factordb::schema::ClassAttribute,
+    attr: &factordb::schema::Attribute,
 ) -> Type {
     let inner = value_to_ts_type(&attr.value_type);
     match field.cardinality {
@@ -470,6 +470,7 @@ fn value_to_ts_type(ty: &ValueType) -> Type {
             Type::Ident("EntityId".to_string())
         }
         ValueType::Const(v) => Type::Constant(value_to_ts_value(v)),
+        ValueType::EmbeddedEntity => todo!(),
     }
 }
 

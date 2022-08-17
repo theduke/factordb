@@ -218,7 +218,7 @@ impl OwnedExprOptimizer for BinaryToInLiteral {
 mod tests {
     use std::collections::HashSet;
 
-    use factordb::prelude::{AttrType, AttributeDescriptor, Expr};
+    use factordb::prelude::{AttrType, AttributeMeta, Expr};
 
     use crate::registry::{Registry, ATTR_TYPE_LOCAL};
 

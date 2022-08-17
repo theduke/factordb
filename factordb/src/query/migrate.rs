@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail};
-use schema::{AttributeSchema, EntitySchema};
+use schema::{Attribute, Class};
 
 use crate::{
     data::Value,
@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeCreate {
-    pub schema: schema::AttributeSchema,
+    pub schema: schema::Attribute,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -42,7 +42,7 @@ pub struct EntityAttributeRemove {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AttributeUpsert {
-    pub schema: schema::AttributeSchema,
+    pub schema: schema::Attribute,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -64,12 +64,12 @@ pub struct AttributeDelete {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct EntityCreate {
-    pub schema: schema::EntitySchema,
+    pub schema: schema::Class,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct EntityUpsert {
-    pub schema: schema::EntitySchema,
+    pub schema: schema::Class,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -209,7 +209,7 @@ impl Migration {
         self
     }
 
-    pub fn attr_create(mut self, attr: schema::AttributeSchema) -> Self {
+    pub fn attr_create(mut self, attr: schema::Attribute) -> Self {
         self.actions
             .push(SchemaAction::AttributeCreate(AttributeCreate {
                 schema: attr,
@@ -217,7 +217,7 @@ impl Migration {
         self
     }
 
-    pub fn attr_upsert(mut self, attr: schema::AttributeSchema) -> Self {
+    pub fn attr_upsert(mut self, attr: schema::Attribute) -> Self {
         self.actions
             .push(SchemaAction::AttributeUpsert(AttributeUpsert {
                 schema: attr,
@@ -242,13 +242,13 @@ impl Migration {
         self
     }
 
-    pub fn entity_create(mut self, entity: schema::EntitySchema) -> Self {
+    pub fn entity_create(mut self, entity: schema::Class) -> Self {
         self.actions
             .push(SchemaAction::EntityCreate(EntityCreate { schema: entity }));
         self
     }
 
-    pub fn entity_upsert(mut self, entity: schema::EntitySchema) -> Self {
+    pub fn entity_upsert(mut self, entity: schema::Class) -> Self {
         self.actions
             .push(SchemaAction::EntityUpsert(EntityUpsert { schema: entity }));
         self
@@ -272,8 +272,8 @@ impl Default for Migration {
 /// Convert a list of migrations into a single migration that re-creates
 /// the final state.
 pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow::Error> {
-    let mut attributes = Vec::<AttributeSchema>::new();
-    let mut entities = Vec::<EntitySchema>::new();
+    let mut attributes = Vec::<Attribute>::new();
+    let mut entities = Vec::<Class>::new();
     let mut indexes = Vec::<IndexSchema>::new();
 
     for mig in migrations {
@@ -349,7 +349,7 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
                     if let Some(old) = old_attr {
                         old.cardinality = add.cardinality;
                     } else {
-                        entity.attributes.push(schema::EntityAttribute {
+                        entity.attributes.push(schema::ClassAttribute {
                             attribute: add.attribute.clone().into(),
                             cardinality: add.cardinality,
                         });

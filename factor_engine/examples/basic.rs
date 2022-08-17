@@ -1,4 +1,4 @@
-use factordb::{data::ValueType, query::migrate::Migration, schema::AttributeSchema};
+use factordb::{data::ValueType, query::migrate::Migration, schema::Attribute};
 
 async fn custom() {
     let backend = factor_engine::backend::log::LogDb::open(
@@ -12,7 +12,7 @@ async fn custom() {
 
     db.migrate(
         Migration::new()
-            .attr_create(AttributeSchema::new("test/unique", ValueType::String).with_unique(true)),
+            .attr_create(Attribute::new("test/unique", ValueType::String).with_unique(true)),
     )
     .await
     .unwrap();

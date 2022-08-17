@@ -256,7 +256,7 @@ impl PlanOptimizer for FilterWithIndex {
 
 #[cfg(test)]
 mod tests {
-    use factordb::prelude::{AttrType, AttributeDescriptor, Expr, Select};
+    use factordb::prelude::{AttrType, AttributeMeta, Expr, Select};
 
     use crate::registry::ATTR_TYPE_LOCAL;
 

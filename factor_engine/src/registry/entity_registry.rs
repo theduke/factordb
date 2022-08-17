@@ -17,7 +17,7 @@ pub struct LocalEntityId(u32);
 #[derive(Clone, Debug)]
 pub struct RegisteredEntity {
     pub local_id: LocalEntityId,
-    pub schema: schema::EntitySchema,
+    pub schema: schema::Class,
     pub is_deleted: bool,
     pub namespace: String,
     pub plain_name: String,
@@ -78,7 +78,7 @@ impl EntityRegistry {
 
     fn build_registered_entity(
         &self,
-        schema: schema::EntitySchema,
+        schema: schema::Class,
         attrs: &AttributeRegistry,
     ) -> Result<RegisteredEntity, AnyError> {
         let (namespace, plain_name) = schema::validate_namespaced_ident(&schema.ident)
@@ -112,7 +112,7 @@ impl EntityRegistry {
 
     fn add(
         &mut self,
-        schema: schema::EntitySchema,
+        schema: schema::Class,
         attrs: &AttributeRegistry,
     ) -> Result<LocalEntityId, AnyError> {
         assert!(self.items.len() < u32::MAX as usize - 1);
@@ -212,7 +212,7 @@ impl EntityRegistry {
     // NOTE: Only pub(super) because [Registry] might do additional validation.
     pub(super) fn register(
         &mut self,
-        entity: schema::EntitySchema,
+        entity: schema::Class,
         validate: bool,
         attrs: &AttributeRegistry,
     ) -> Result<LocalEntityId, AnyError> {
@@ -240,7 +240,7 @@ impl EntityRegistry {
     // NOTE: Only pub(super) because [Registry] might do additional validation.
     pub(super) fn update(
         &mut self,
-        entity: schema::EntitySchema,
+        entity: schema::Class,
         validate: bool,
         attrs: &AttributeRegistry,
     ) -> Result<LocalEntityId, AnyError> {
@@ -280,7 +280,7 @@ impl EntityRegistry {
 
     fn validate_schema(
         &self,
-        entity: &schema::EntitySchema,
+        entity: &schema::Class,
         attrs: &AttributeRegistry,
         is_new: bool,
     ) -> Result<(), AnyError> {
@@ -306,7 +306,7 @@ impl EntityRegistry {
         let mut extended_ids = HashSet::<Id>::new();
         // All extended fields.
         // Used for ensuring that extends do not differ in type.
-        let mut extended_fields = HashMap::<Id, schema::EntityAttribute>::new();
+        let mut extended_fields = HashMap::<Id, schema::ClassAttribute>::new();
 
         for parent_ident in &entity.extends {
             let parent = self

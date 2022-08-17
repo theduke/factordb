@@ -17,13 +17,13 @@ use factordb::{
 pub type BackendFuture<T> = futures::future::BoxFuture<'static, Result<T, AnyError>>;
 
 pub trait Dao: Send + 'static {
-    fn get(&self, attr: &schema::AttributeSchema) -> Result<Option<Value>, AnyError>;
+    fn get(&self, attr: &schema::Attribute) -> Result<Option<Value>, AnyError>;
 
-    fn get_opt(&self, attr: &schema::AttributeSchema) -> Option<Value> {
+    fn get_opt(&self, attr: &schema::Attribute) -> Option<Value> {
         self.get(attr).ok().flatten()
     }
 
-    fn set(&mut self, attr: &schema::AttributeSchema, value: Value);
+    fn set(&mut self, attr: &schema::Attribute, value: Value);
 
     // fn into_data_map(self) -> DataMap;
 }

@@ -7,7 +7,7 @@ use crate::{
         self,
         mutate::{Batch, Mutate},
     },
-    schema::EntityContainer,
+    schema::ClassContainer,
     AnyError,
 };
 
@@ -87,7 +87,7 @@ impl Db {
         self.batch(Mutate::create(id, data).into()).await
     }
 
-    pub async fn create_entity<E: EntityContainer + serde::Serialize>(
+    pub async fn create_entity<E: ClassContainer + serde::Serialize>(
         &self,
         entity: E,
     ) -> Result<(), AnyError> {

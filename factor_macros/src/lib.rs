@@ -15,9 +15,9 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
     attribute::derive_attribute(tokens)
 }
 
-#[proc_macro_derive(Entity, attributes(factor))]
-pub fn derive_entity(tokens: TokenStream) -> TokenStream {
-    entity::derive_entity(tokens)
+#[proc_macro_derive(Class, attributes(factor))]
+pub fn derive_class(tokens: TokenStream) -> TokenStream {
+    entity::derive_class(tokens)
 }
 
 // TODO: write an Object derive.
