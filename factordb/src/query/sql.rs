@@ -1,8 +1,6 @@
 use std::{collections::HashMap, convert::TryInto};
 
-use anyhow::{bail, Context};
-
-use crate::{data::Value, query::select::Aggregation, AnyError};
+use crate::{data::Value, query::select::Aggregation};
 
 use super::{
     expr::{BinaryOp, Expr},
@@ -10,15 +8,55 @@ use super::{
 };
 use sqlparser::ast::{Expr as SqlExpr, SelectItem, Value as SqlValue};
 
-pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
+#[derive(Debug)]
+pub struct SqlParseError {
+    message: String,
+    cause: Option<sqlparser::parser::ParserError>,
+}
+
+impl SqlParseError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            cause: None,
+        }
+    }
+}
+
+impl std::fmt::Display for SqlParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Could not parse SQL query: {}", self.message)?;
+        if let Some(cause) = &self.cause {
+            write!(f, ": {}", cause)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for SqlParseError {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        if let Some(err) = &self.cause {
+            Some(err)
+        } else {
+            None
+        }
+    }
+}
+
+pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
     use sqlparser::ast::Statement;
 
     let statements =
-        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql)?;
+        sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql).map_err(
+            |err| SqlParseError {
+                message: "invalid SQL".to_string(),
+                cause: Some(err),
+            },
+        )?;
     let stmt = if statements.is_empty() {
-        bail!("No statement detected");
+        return Err(SqlParseError::new("No statement detected"));
     } else if statements.len() > 1 {
-        bail!("Only a single statement is allowed");
+        return Err(SqlParseError::new("Only a single statement is allowed"));
     } else {
         statements.into_iter().next().unwrap()
     };
@@ -26,57 +64,60 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
     let query = if let Statement::Query(q) = stmt {
         q
     } else {
-        bail!("Expected a `SELECT` statement")
+        return Err(SqlParseError::new("Expected a `SELECT` statement"));
     };
 
     let select = match *query.body {
         sqlparser::ast::SetExpr::Select(s) => s,
         sqlparser::ast::SetExpr::Query(_) => {
-            bail!("subqueries are not supported");
+            return Err(SqlParseError::new("subqueries are not supported"));
         }
         sqlparser::ast::SetExpr::SetOperation { .. } => {
-            bail!("set operations (union/intersect/...) are not supported");
+            return Err(SqlParseError::new(
+                "set operations (union/intersect/...) are not supported",
+            ));
         }
         sqlparser::ast::SetExpr::Values(_) => {
-            bail!("literal value select not supported");
+            return Err(SqlParseError::new("literal value select not supported"));
         }
         sqlparser::ast::SetExpr::Insert(_) => {
-            bail!("INSERT not supported");
+            return Err(SqlParseError::new("INSERT not supported"));
         }
     };
 
-    dbg!(&select);
-
     if select.distinct {
-        bail!("DISTINCT is not supported");
+        return Err(SqlParseError::new("DISTINCT is not supported"));
     }
     if select.top.is_some() {
-        bail!("MysQL TOP syntax is not supported");
+        return Err(SqlParseError::new("MysQL TOP syntax is not supported"));
     }
     if !select.lateral_views.is_empty() {
-        bail!("LATERAL VIEWS is not supported");
+        return Err(SqlParseError::new("LATERAL VIEWS is not supported"));
     }
 
     let filter = select
         .selection
         .map(build_expr)
         .transpose()
-        .context("Invalid WHERE clause")?;
+        .map_err(|mut err| {
+            err.message = format!("Invalid WHERE clause: {}", err.message);
+            err
+        })?;
 
     if !select.group_by.is_empty() {
-        bail!("GROUP BY is not supported");
+        return Err(SqlParseError::new("GROUP BY is not supported"));
     }
     if !select.cluster_by.is_empty() {
-        bail!("CLUSTER BY is not supported");
+        return Err(SqlParseError::new("CLUSTER BY is not supported"));
     }
     if !select.distribute_by.is_empty() {
-        bail!("DISTRIBUTE BY is not supported");
+        return Err(SqlParseError::new("DISTRIBUTE BY is not supported"));
     }
     if select.having.is_some() {
-        bail!("HAVING is not supported");
+        return Err(SqlParseError::new("HAVING is not supported"));
     }
     if !select.sort_by.is_empty() {
-        bail!("SORT BY is not supported");
+        return Err(SqlParseError::new("SORT BY is not supported"));
     }
 
     let mut aggregate = Vec::<Aggregation>::new();
@@ -95,13 +136,15 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
                     op: crate::query::select::AggregationOp::Count,
                 });
             } else {
-                bail!("Unsupported SQL projection: {proj:?}");
+                return Err(SqlParseError::new("Unsupported SQL projection: {proj:?}"));
             }
         }
     }
 
     if select.from.len() != 1 {
-        bail!("must select from the entities table: SELECT * FROM entities");
+        return Err(SqlParseError::new(
+            "must select from the entities/e table: SELECT * FROM entities / SELECT * FROM e",
+        ));
     }
     let table_with_joins = select.from[0].clone();
     match table_with_joins.relation {
@@ -112,42 +155,56 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
             with_hints,
         } => {
             if name.0.len() != 1 || name.0[0].value != "entities" {
-                bail!("must select from the entities table: SELECT * FROM entities");
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
             }
             if alias.is_some() {
-                bail!("must select from the entities table: SELECT * FROM entities");
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
             }
             if args.is_some() {
-                bail!("must select from the entities table: SELECT * FROM entities");
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
             }
             if !with_hints.is_empty() {
-                bail!("must select from the entities table: SELECT * FROM entities");
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
             }
         }
         _other => {
-            bail!("must select from the entities table: SELECT * FROM entities");
+            return Err(SqlParseError::new(
+                "must select from the entities table: SELECT * FROM entities",
+            ));
         }
     };
 
     if !table_with_joins.joins.is_empty() {
-        bail!("JOINs are not supported");
+        return Err(SqlParseError::new("JOINs are not supported"));
     }
 
     let limit = match query.limit {
-        Some(SqlExpr::Value(SqlValue::Number(num, _))) => num
-            .parse::<u64>()
-            .context("Unsupported LIMIT: only constant numbers are supported")?,
+        Some(SqlExpr::Value(SqlValue::Number(num, _))) => num.parse::<u64>().map_err(|_| {
+            SqlParseError::new("Unsupported LIMIT: only constant numbers are supported")
+        })?,
         Some(_other) => {
-            bail!("Unsupported LIMIT: only constant numbers are supported")
+            return Err(SqlParseError::new(
+                "Unsupported LIMIT: only constant numbers are supported",
+            ))
         }
         None => 0,
     };
     let offset = match query.offset.map(|o| o.value) {
-        Some(SqlExpr::Value(SqlValue::Number(num, _))) => num
-            .parse::<u64>()
-            .context("Unsupported LIMIT: only constant numbers are supported")?,
+        Some(SqlExpr::Value(SqlValue::Number(num, _))) => num.parse::<u64>().map_err(|_err| {
+            SqlParseError::new("Unsupported LIMIT: number must be a positive integer")
+        })?,
         Some(_other) => {
-            bail!("Unsupported LIMIT: only constant numbers are supported")
+            return Err(SqlParseError::new(
+                "Unsupported LIMIT: only constant numbers are supported",
+            ))
         }
         None => 0,
     };
@@ -165,7 +222,7 @@ pub fn parse_select(sql: &str) -> Result<Select, anyhow::Error> {
                 },
             })
         })
-        .collect::<Result<Vec<_>, AnyError>>()?;
+        .collect::<Result<Vec<_>, SqlParseError>>()?;
 
     Ok(Select {
         filter,
@@ -205,19 +262,21 @@ fn select_item_as_count(item: &SelectItem) -> (bool, Option<String>) {
     }
 }
 
-fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
+fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
     let e = match expr {
         SqlExpr::Identifier(ident) => Expr::Attr(ident.value.into()),
         SqlExpr::CompoundIdentifier(_) => {
-            bail!("compound identifier not implemented yet")
+            return Err(SqlParseError::new(
+                "compound identifier not implemented yet",
+            ));
         }
         SqlExpr::IsNull(e) => Expr::is_null(build_expr(*e)?),
         SqlExpr::IsNotNull(e) => Expr::not(Expr::is_null(build_expr(*e)?)),
         SqlExpr::IsDistinctFrom(_, _) => {
-            bail!("IS DISTINCT is not supported")
+            return Err(SqlParseError::new("IS DISTINCT is not supported"));
         }
         SqlExpr::IsNotDistinctFrom(_, _) => {
-            bail!("IS NOT DISTINCT is not supported")
+            return Err(SqlParseError::new("IS NOT DISTINCT is not supported"));
         }
         SqlExpr::InList {
             expr,
@@ -244,10 +303,10 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
             subquery: _,
             negated: _,
         } => {
-            bail!("subqueries are not supported")
+            return Err(SqlParseError::new("subqueries are not supported"));
         }
         SqlExpr::Between { .. } => {
-            bail!("BETWEEN not supported")
+            return Err(SqlParseError::new("BETWEEN not supported"));
         }
         SqlExpr::BinaryOp { left, op, right } => match (*left, *right) {
             (SqlExpr::AnyOp(any), other) | (other, SqlExpr::AnyOp(any)) => {
@@ -255,7 +314,7 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
                 let target = match *any {
                     SqlExpr::Identifier(ident) => Expr::Attr(ident.value.into()),
                     other => {
-                        bail!("Unsupported ANY operator {:?}: ANY(_) is only supported with an identifer, like ANY(\"my/attribute\")", other);
+                        return Err(SqlParseError::new(format!("Unsupported ANY operator {:?}: ANY(_) is only supported with an identifer, like ANY(\"my/attribute\")", other)));
                     }
                 };
 
@@ -263,10 +322,12 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
 
                 match op {
                     sqlparser::ast::BinaryOperator::Eq => Expr::in_(value, target),
-                    _ => bail!(
-                        "Unsupported ANY operator {:?}: ANY(_) is only supported with =, like ",
-                        op
-                    ),
+                    _ => {
+                        return Err(SqlParseError::new(format!(
+                            "Unsupported ANY operator {:?}: ANY(_) is only supported with =, like ",
+                            op
+                        )));
+                    }
                 }
             }
             (left, right) => {
@@ -306,7 +367,10 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
                         BinaryOp::RegexMatchCaseInsensitive
                     }
                     other => {
-                        bail!("Comparison operator {} not supported", other);
+                        return Err(SqlParseError::new(format!(
+                            "Comparison operator {} not supported",
+                            other
+                        )));
                     }
                 };
 
@@ -318,33 +382,36 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
             match op {
                 sqlparser::ast::UnaryOperator::Not => Expr::not(expr),
                 other => {
-                    bail!("Unary operator '{}' not supported", other);
+                    return Err(SqlParseError::new(format!(
+                        "Unary operator '{}' not supported",
+                        other
+                    )));
                 }
             }
         }
         SqlExpr::Cast { .. } => {
-            bail!("CAST not supported");
+            return Err(SqlParseError::new("CAST not supported"));
         }
         SqlExpr::TryCast { .. } => {
-            bail!("TRY_CAST not supported");
+            return Err(SqlParseError::new("TRY_CAST not supported"));
         }
         SqlExpr::Extract { .. } => {
-            bail!("EXTRACT not supported");
+            return Err(SqlParseError::new("EXTRACT not supported"));
         }
         SqlExpr::Substring { .. } => {
-            bail!("SUBSTRING not supported");
+            return Err(SqlParseError::new("SUBSTRING not supported"));
         }
         SqlExpr::Trim { .. } => {
-            bail!("TRIM not supported");
+            return Err(SqlParseError::new("TRIM not supported"));
         }
         SqlExpr::Collate { .. } => {
-            bail!("COLLATE not supported");
+            return Err(SqlParseError::new("COLLATE not supported"));
         }
         SqlExpr::Nested(e) => build_expr(*e)?,
         SqlExpr::Value(v) => {
             let value = match v {
                 SqlValue::Placeholder(_) => {
-                    bail!("Placeholder is not supported");
+                    return Err(SqlParseError::new("Placeholder is not supported"));
                 }
                 SqlValue::Number(num, _) => {
                     if let Ok(v) = num.parse::<i64>() {
@@ -356,93 +423,101 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
                     } else if let Ok(v) = num.parse::<f64>() {
                         Value::Float(v.into())
                     } else {
-                        bail!("Invalid number: '{}'", num);
+                        return Err(SqlParseError::new(format!("Invalid number: '{}'", num)));
                     }
                 }
                 SqlValue::SingleQuotedString(s) => Value::String(s),
                 SqlValue::DoubleQuotedString(s) => Value::String(s),
                 SqlValue::NationalStringLiteral(_) => {
-                    bail!("national string literal not supported");
+                    return Err(SqlParseError::new("national string literal not supported"));
                 }
                 SqlValue::HexStringLiteral(_) => {
-                    bail!("hex literals not supported");
+                    return Err(SqlParseError::new(format!("hex literals not supported")));
                 }
                 SqlValue::Boolean(v) => Value::Bool(v),
                 SqlValue::Interval { .. } => {
-                    bail!("INTERVAL not supported");
+                    return Err(SqlParseError::new(format!("INTERVAL not supported")));
                 }
                 SqlValue::Null => Value::Unit,
                 SqlValue::EscapedStringLiteral(_) => {
-                    bail!("escaped string literal not supported");
+                    return Err(SqlParseError::new(format!(
+                        "escaped string literal not supported"
+                    )));
                 }
             };
             Expr::Literal(value)
         }
         SqlExpr::TypedString { .. } => {
-            bail!("no types strings are supported");
+            return Err(SqlParseError::new(format!(
+                "no types strings are supported"
+            )));
         }
         SqlExpr::MapAccess { .. } => {
-            bail!("map accessors not supported");
+            return Err(SqlParseError::new(format!("map accessors not supported")));
         }
         SqlExpr::Function(_) => {
-            bail!("functions not supported");
+            return Err(SqlParseError::new(format!("functions not supported")));
         }
         SqlExpr::Case { .. } => {
-            bail!("CASE is not supported");
+            return Err(SqlParseError::new(format!("CASE is not supported")));
         }
         SqlExpr::Exists { .. } => {
-            bail!("EXISTS is not supported");
+            return Err(SqlParseError::new(format!("EXISTS is not supported")));
         }
         SqlExpr::Subquery(_) => {
-            bail!("subqueries are not supported");
+            return Err(SqlParseError::new(format!("subqueries are not supported")));
         }
         SqlExpr::ListAgg(_) => {
-            bail!("LISTAGG is not supported");
+            return Err(SqlParseError::new(format!("LISTAGG is not supported")));
         }
         SqlExpr::GroupingSets(_) => {
-            bail!("GROUPTING SETS are not supported");
+            return Err(SqlParseError::new(format!(
+                "GROUPTING SETS are not supported"
+            )));
         }
         SqlExpr::Cube(_) => {
-            bail!("CUBE is not supported");
+            return Err(SqlParseError::new(format!("CUBE is not supported")));
         }
         SqlExpr::Rollup(_) => {
-            bail!("ROLLUP is not supported");
+            return Err(SqlParseError::new(format!("ROLLUP is not supported")));
         }
         SqlExpr::Tuple(_) => {
-            bail!("ROW/TUPLE is not supported");
+            return Err(SqlParseError::new(format!("ROW/TUPLE is not supported")));
         }
         SqlExpr::ArrayIndex { .. } => {
-            bail!("Array Index is not supported");
+            return Err(SqlParseError::new(format!("Array Index is not supported")));
         }
         SqlExpr::Array(_) => {
-            bail!("Array Index is not supported");
+            return Err(SqlParseError::new(format!("Array Index is not supported")));
         }
         SqlExpr::InUnnest { .. } => {
-            bail!("UNNEST is not supported");
+            return Err(SqlParseError::new(format!("UNNEST is not supported")));
         }
         SqlExpr::JsonAccess { .. } => {
-            bail!("json accessors not supported");
+            return Err(SqlParseError::new(format!("json accessors not supported")));
         }
         SqlExpr::CompositeAccess { .. } => {
-            bail!("composite accessors not supported");
+            return Err(SqlParseError::new(format!(
+                "composite accessors not supported"
+            )));
         }
         SqlExpr::IsFalse(_) => {
-            bail!("IS FALSE is not supported");
+            return Err(SqlParseError::new(format!("IS FALSE is not supported")));
         }
         SqlExpr::IsTrue(_) => {
-            bail!("IS TRUE is not supported");
+            return Err(SqlParseError::new(format!("IS TRUE is not supported")));
         }
         SqlExpr::AnyOp(_) => {
-            bail!("ANY(x) is not supported");
+            return Err(SqlParseError::new(format!("ANY(x) is not supported")));
         }
         SqlExpr::AllOp(_) => {
-            bail!("ALL(x) is not supported");
+            return Err(SqlParseError::new(format!("ALL(x) is not supported")));
         }
         SqlExpr::Position { .. } => {
-            bail!("POSITION is not supported");
+            return Err(SqlParseError::new(format!("POSITION is not supported")));
         }
         SqlExpr::AtTimeZone { .. } => {
-            bail!("AT TIME ZONE is not supported");
+            return Err(SqlParseError::new(format!("AT TIME ZONE is not supported")));
         }
     };
 
@@ -451,9 +526,9 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, AnyError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        prelude::AttributeMeta,
-        schema::builtin::{AttrIdent, AttrTitle, AttrType},
+    use crate::schema::{
+        builtin::{AttrIdent, AttrTitle, AttrType},
+        AttributeMeta,
     };
 
     use super::*;

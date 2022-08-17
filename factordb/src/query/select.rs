@@ -87,7 +87,7 @@ impl Select {
     }
 
     #[cfg(feature = "sql")]
-    pub fn parse_sql(sql: &str) -> Result<Self, anyhow::Error> {
+    pub fn parse_sql(sql: &str) -> Result<Self, super::sql::SqlParseError> {
         super::sql::parse_select(sql)
     }
 
