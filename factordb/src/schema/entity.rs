@@ -1,6 +1,6 @@
 use serde::de::DeserializeOwned;
 
-use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent, Ident};
+use crate::data::{value::ValueDeserializeError, DataMap, Id, IdOrIdent, Ident, InvalidIdentError};
 
 use super::AttrMapExt;
 
@@ -178,11 +178,11 @@ impl Class {
     }
 
     /// Split the ident into (namespace, name)
-    pub fn parse_split_ident(&self) -> Result<(&str, &str), crate::AnyError> {
-        super::validate_namespaced_ident(&self.ident)
+    pub fn parse_split_ident(&self) -> Result<(&str, &str), InvalidIdentError> {
+        crate::data::Ident::parse_parts(&self.ident)
     }
 
-    pub fn parse_namespace(&self) -> Result<&str, crate::AnyError> {
+    pub fn parse_namespace(&self) -> Result<&str, InvalidIdentError> {
         self.parse_split_ident().map(|x| x.0)
     }
 

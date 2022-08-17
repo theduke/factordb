@@ -1,7 +1,5 @@
 use std::{borrow::Cow, str::FromStr};
 
-use crate::AnyError;
-
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]
@@ -79,12 +77,53 @@ impl Id {
         }
     }
 
-    pub fn verify_non_nil(self) -> Result<(), AnyError> {
+    pub fn verify_non_nil(self) -> Result<(), NilIdError> {
         if self.is_nil() {
-            Err(anyhow::anyhow!("Id is nil"))
+            Err(NilIdError::new())
         } else {
             Ok(())
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct NilIdError {
+    message: Option<String>,
+    backtrace: std::backtrace::Backtrace,
+}
+
+impl NilIdError {
+    #[track_caller]
+    pub fn new() -> Self {
+        Self {
+            message: None,
+            backtrace: std::backtrace::Backtrace::capture(),
+        }
+    }
+
+    #[track_caller]
+    pub fn with_message(msg: impl Into<String>) -> Self {
+        Self {
+            message: Some(msg.into()),
+            backtrace: std::backtrace::Backtrace::capture(),
+        }
+    }
+}
+
+impl std::fmt::Display for NilIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id is nil")?;
+        if let Some(msg) = &self.message {
+            write!(f, ": {}", msg)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for NilIdError {
+    #[cfg(feature = "unstable")]
+    fn provide<'a>(&'a self, req: &mut std::any::Demand<'a>) {
+        req.provide_ref(&self.backtrace);
     }
 }
 
@@ -146,6 +185,14 @@ impl IdOrIdent {
         }
     }
 
+    pub fn new_string(value: String) -> Self {
+        if let Ok(id) = uuid::Uuid::from_str(&value) {
+            Self::Id(Id(id))
+        } else {
+            Self::Name(value.into())
+        }
+    }
+
     pub fn split(self) -> (Option<Id>, Option<CowStr>) {
         match self {
             Self::Id(v) => (Some(v), None),
@@ -177,14 +224,6 @@ impl IdOrIdent {
     pub fn is_name(&self) -> bool {
         matches!(self, Self::Name(..))
     }
-
-    pub fn from_string(value: String) -> Self {
-        if let Ok(id) = uuid::Uuid::from_str(&value) {
-            Self::Id(Id(id))
-        } else {
-            Self::Name(value.into())
-        }
-    }
 }
 
 impl From<Id> for IdOrIdent {
@@ -195,12 +234,12 @@ impl From<Id> for IdOrIdent {
 
 impl From<String> for IdOrIdent {
     fn from(v: String) -> Self {
-        Self::Name(CowStr::from(v))
+        Self::new_string(v)
     }
 }
 
 impl<'a> From<&'a str> for IdOrIdent {
     fn from(v: &'a str) -> Self {
-        Self::Name(Cow::from(v.to_string()))
+        Self::new_str(v)
     }
 }

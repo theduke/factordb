@@ -1,7 +1,6 @@
 //! This module contains types for representing data stored in a FactorDB.
 
 mod serde_deserialize;
-use anyhow::bail;
 pub use serde_serialize::{to_value, to_value_map, ValueSerializeError};
 
 mod serde_serialize;
@@ -14,7 +13,7 @@ use std::{
 
 use ordered_float::OrderedFloat;
 
-use crate::{data::patch::PatchPathElem, AnyError};
+use crate::data::patch::PatchPathElem;
 
 use super::{patch::PatchPath, Id, IdOrIdent, ValueMap, ValueType};
 
@@ -76,6 +75,23 @@ pub struct ValueCoercionError {
     /// Specifies the nested path to the element that failed the coersion.
     /// This is relevant for nested data structures like lists and maps.
     pub(crate) path: Option<PatchPath>,
+    pub(crate) message: Option<String>,
+}
+
+impl ValueCoercionError {
+    pub fn new(
+        expected_type: ValueType,
+        actual_type: ValueType,
+        path: Option<PatchPath>,
+        message: Option<String>,
+    ) -> Self {
+        Self {
+            expected_type,
+            actual_type,
+            path,
+            message,
+        }
+    }
 }
 
 impl std::fmt::Display for ValueCoercionError {
@@ -89,7 +105,9 @@ impl std::fmt::Display for ValueCoercionError {
         if let Some(p) = &self.path {
             write!(f, " at {}", p)?;
         }
-
+        if let Some(msg) = &self.message {
+            write!(f, ": {}", msg)?;
+        }
         Ok(())
     }
 }
@@ -122,6 +140,7 @@ impl Value {
                         expected_type: ty.clone(),
                         actual_type,
                         path: None,
+                        message: None,
                     })
                 }
             }
@@ -139,16 +158,19 @@ impl Value {
                                     expected_type: ValueType::Bytes,
                                     actual_type: ValueType::Int,
                                     path: Some(PatchPath(vec![PatchPathElem::ListIndex(index)])),
+                                    message: None,
                                 }),
                                 Self::UInt(x) => x.try_into().map_err(|_| ValueCoercionError {
                                     expected_type: ValueType::Bytes,
                                     actual_type: ValueType::UInt,
                                     path: Some(PatchPath(vec![PatchPathElem::ListIndex(index)])),
+                                    message: None,
                                 }),
                                 other => Err(ValueCoercionError {
                                     expected_type: ValueType::Bytes,
                                     actual_type: other.value_type(),
                                     path: Some(PatchPath(vec![PatchPathElem::ListIndex(index)])),
+                                    message: None,
                                 }),
                             }
                         })
@@ -161,6 +183,7 @@ impl Value {
                     expected_type: ValueType::Bytes,
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
             ValueType::Map(_t) => {
@@ -177,6 +200,7 @@ impl Value {
                             expected_type: ValueType::Int,
                             actual_type: ValueType::Unit,
                             path: None,
+                            message: None,
                         })
                     }
                 }
@@ -191,6 +215,7 @@ impl Value {
                             expected_type: ValueType::Int,
                             actual_type: ValueType::Float,
                             path: None,
+                            message: None,
                         })
                     }
                 }
@@ -198,6 +223,7 @@ impl Value {
                     expected_type: ValueType::Int,
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
             ValueType::UInt => match self {
@@ -211,6 +237,7 @@ impl Value {
                             expected_type: ValueType::Int,
                             actual_type: ValueType::Unit,
                             path: None,
+                            message: None,
                         })
                     }
                 }
@@ -225,6 +252,7 @@ impl Value {
                             expected_type: ValueType::Int,
                             actual_type: ValueType::Float,
                             path: None,
+                            message: None,
                         })
                     }
                 }
@@ -232,6 +260,7 @@ impl Value {
                     expected_type: ValueType::Int,
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
             ValueType::Float => match self {
@@ -248,6 +277,7 @@ impl Value {
                     expected_type: ValueType::Float,
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
             ValueType::String => match self {
@@ -268,6 +298,7 @@ impl Value {
                     expected_type: ValueType::String,
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
             ValueType::List(item_type) => match &mut *self {
@@ -303,6 +334,7 @@ impl Value {
                     expected_type: ty.clone(),
                     actual_type: self.value_type(),
                     path: None,
+                    message: None,
                 })
             }
             ValueType::Object(_obj) => {
@@ -315,6 +347,7 @@ impl Value {
                         expected_type: ty.clone(),
                         actual_type: self.value_type(),
                         path: None,
+                        message: None,
                     })
                 }
             }
@@ -328,6 +361,7 @@ impl Value {
                             expected_type: ValueType::DateTime,
                             actual_type: self.value_type(),
                             path: None,
+                            message: None,
                         })?;
 
                         *self = Value::UInt(x2);
@@ -345,6 +379,7 @@ impl Value {
                                 expected_type: ValueType::DateTime,
                                 actual_type: self.value_type(),
                                 path: None,
+                                message: None,
                             })
                         }
                     }
@@ -352,6 +387,7 @@ impl Value {
                         expected_type: ValueType::DateTime,
                         actual_type: other.value_type(),
                         path: None,
+                        message: None,
                     }),
                 }
             }
@@ -364,6 +400,7 @@ impl Value {
                                 expected_type: ValueType::Url,
                                 actual_type: ValueType::String,
                                 path: None,
+                                message: None,
                             })
                         } else {
                             Ok(())
@@ -373,6 +410,7 @@ impl Value {
                         expected_type: ValueType::Url,
                         actual_type: other.value_type(),
                         path: None,
+                        message: None,
                     }),
                 }
             }
@@ -388,6 +426,7 @@ impl Value {
                                 expected_type: ValueType::Ref,
                                 actual_type: ValueType::String,
                                 path: None,
+                                message: None,
                             })
                         }
                     }
@@ -396,6 +435,7 @@ impl Value {
                         expected_type: ValueType::Ref,
                         actual_type: other.value_type(),
                         path: None,
+                        message: None,
                     }),
                 }
             }
@@ -405,6 +445,7 @@ impl Value {
                     expected_type: ValueType::EmbeddedEntity,
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
             ValueType::Const(const_val) => {
@@ -415,6 +456,7 @@ impl Value {
                         expected_type: ty.clone(),
                         actual_type: self.value_type(),
                         path: None,
+                        message: None,
                     })
                 }
             }
@@ -428,6 +470,7 @@ impl Value {
                     expected_type: ty.clone(),
                     actual_type: other.value_type(),
                     path: None,
+                    message: None,
                 }),
             },
         }
@@ -520,18 +563,19 @@ impl Value {
         }
     }
 
-    pub fn try_into_list<T>(self) -> Result<Vec<T>, anyhow::Error>
+    pub fn try_into_list<T>(self) -> Result<Vec<T>, ValueCoercionError>
     where
-        T: TryFrom<Value>,
-        T::Error: std::error::Error + Send + Sync + 'static,
+        T: TryFrom<Value, Error = ValueCoercionError>,
     {
         if let Self::List(items) = self {
-            items
-                .into_iter()
-                .map(|x| T::try_from(x).map_err(anyhow::Error::from))
-                .collect()
+            items.into_iter().map(|x| T::try_from(x)).collect()
         } else {
-            bail!("expected list, got {:?}", self.value_type());
+            Err(ValueCoercionError {
+                expected_type: ValueType::List(Box::new(ValueType::Any)),
+                actual_type: self.value_type(),
+                path: None,
+                message: None,
+            })
         }
     }
 
@@ -722,6 +766,7 @@ impl TryFrom<Value> for u64 {
                 expected_type: ValueType::UInt,
                 actual_type: value.value_type(),
                 path: None,
+                message: None,
             }),
         }
     }
@@ -738,6 +783,7 @@ impl TryFrom<Value> for i64 {
                 expected_type: ValueType::UInt,
                 actual_type: value.value_type(),
                 path: None,
+                message: None,
             }),
         }
     }
@@ -753,43 +799,65 @@ impl TryFrom<Value> for bool {
                 expected_type: ValueType::Bool,
                 actual_type: value.value_type(),
                 path: None,
+                message: None,
             }),
         }
     }
 }
 
 impl TryFrom<Value> for Id {
-    type Error = AnyError;
+    type Error = ValueCoercionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         if let Value::Id(v) = value {
             Ok(v)
         } else {
-            Err(anyhow::anyhow!("Invalid type: expected a Value::Id"))
+            // FIXME: this should say ValueType::Id/Uid, which doesn't exist yet.
+            Err(ValueCoercionError::new(
+                ValueType::String,
+                value.value_type(),
+                None,
+                Some("Expected a valid UUID".to_string()),
+            ))
         }
     }
 }
 
 impl TryFrom<Value> for String {
-    type Error = AnyError;
+    type Error = ValueCoercionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         if let Value::String(v) = value {
             Ok(v)
         } else {
-            Err(anyhow::anyhow!("Invalid type: expected a Value::String"))
+            Err(ValueCoercionError {
+                expected_type: ValueType::String,
+                actual_type: value.value_type(),
+                path: None,
+                message: None,
+            })
         }
     }
 }
 
 impl TryFrom<Value> for url::Url {
-    type Error = AnyError;
+    type Error = ValueCoercionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         if let Value::String(v) = value {
-            v.parse().map_err(Into::into)
+            v.parse::<url::Url>().map_err(|err| ValueCoercionError {
+                expected_type: ValueType::Url,
+                actual_type: ValueType::String,
+                path: None,
+                message: Some(err.to_string()),
+            })
         } else {
-            Err(anyhow::anyhow!("Invalid type: expected a Value::String"))
+            Err(ValueCoercionError {
+                expected_type: ValueType::Url,
+                actual_type: value.value_type(),
+                path: None,
+                message: None,
+            })
         }
     }
 }

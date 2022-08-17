@@ -7,13 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["sql", "mongodb-query"]
+default = ["sql", "mongodb-query", "unstable"]
 
 sql = ["sqlparser"]
 mongodb-query = ["mongodb-language-model"]
 
 jsonschema = ["schemars"]
 typescript-schema = ["ts-rs"]
+
+unstable = []
 
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }

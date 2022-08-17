@@ -7,7 +7,7 @@ pub struct Ident {
 }
 
 impl Ident {
-    fn parse_parts(value: &str) -> Result<(&str, &str), InvalidIdentError> {
+    pub fn parse_parts(value: &str) -> Result<(&str, &str), InvalidIdentError> {
         let s = value;
         let (ns, name) = s.split_once('/').ok_or_else(|| {
             InvalidIdentError::new(s, "missing namespace separator '/'".to_string())
@@ -187,6 +187,19 @@ impl ValueTypeDescriptor for Ident {
     fn value_type() -> super::ValueType {
         super::ValueType::Ident(ConstrainedRefType::new(vec![]))
     }
+}
+
+pub fn validate_name(value: &str) -> Result<(), InvalidIdentError> {
+    if value.is_empty() {
+        return Err(InvalidIdentError::new(value, "namespace is empty"));
+    }
+    if is_valid_name(value) {
+        return Err(InvalidIdentError::new(
+            value,
+            "namespace contains invalid characters (allowed: [a-zA-Z0-9._])",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

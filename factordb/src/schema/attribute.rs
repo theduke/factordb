@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::data::{Id, IdOrIdent, Value, ValueMap, ValueType};
+use crate::data::{Id, IdOrIdent, InvalidIdentError, Value, ValueMap, ValueType};
 
 use super::ClassContainer;
 
@@ -73,11 +73,11 @@ impl Attribute {
     }
 
     /// Split the ident into (namespace, name)
-    pub fn parse_split_ident(&self) -> Result<(&str, &str), crate::AnyError> {
-        super::validate_namespaced_ident(&self.ident)
+    pub fn parse_split_ident(&self) -> Result<(&str, &str), InvalidIdentError> {
+        crate::data::Ident::parse_parts(&self.ident)
     }
 
-    pub fn parse_namespace(&self) -> Result<&str, crate::AnyError> {
+    pub fn parse_namespace(&self) -> Result<&str, InvalidIdentError> {
         self.parse_split_ident().map(|x| x.0)
     }
 }

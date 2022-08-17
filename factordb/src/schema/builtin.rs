@@ -32,6 +32,7 @@ const ATTR_INDEX_ATTRIBUTES: Id = Id::from_u128(13);
 pub const ATTR_COUNT: Id = Id::from_u128(14);
 pub const ATTR_ATTRIBUTE: Id = Id::from_u128(15);
 pub const ATTR_REQUIRED: Id = Id::from_u128(16);
+pub const ATTR_CLASSES: Id = Id::from_u128(17);
 
 // Built-in entity types.
 // Constants are kept together to see ids at a glance.
@@ -240,6 +241,77 @@ impl AttributeMeta for AttrStrict {
             unique: false,
             index: false,
             strict: true,
+        }
+    }
+}
+
+pub struct AttributeConstraint;
+
+impl ClassMeta for AttributeConstraint {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "AttributeConstraint";
+    const QUALIFIED_NAME: &'static str = "factor/AttributeConstraint";
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
+
+    fn schema() -> Class {
+        Class {
+            id: Id::nil(),
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Attribute constraint".into()),
+            description: None,
+            attributes: vec![],
+            extends: vec![],
+            strict: false,
+        }
+    }
+}
+
+pub struct AttrClasses;
+
+impl AttributeMeta for AttrClasses {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "classes";
+    const QUALIFIED_NAME: &'static str = "factor/classes";
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
+
+    type Type = Vec<Ident>;
+
+    fn schema() -> Attribute {
+        Attribute {
+            id: ATTR_CLASSES,
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Classes".into()),
+            description: None,
+            value_type: ValueType::List(Box::new(ValueType::Ref)),
+            unique: false,
+            index: false,
+            strict: false,
+        }
+    }
+}
+
+pub struct AttributeConstraintReferenceClasses {
+    pub classes: Vec<Ident>,
+}
+
+impl ClassMeta for AttributeConstraintReferenceClasses {
+    const NAMESPACE: &'static str = "factor";
+    const PLAIN_NAME: &'static str = "AttributeConstraintReferenceClasses";
+    const QUALIFIED_NAME: &'static str = "factor/AttributeConstraintReferenceClasses";
+    const IDENT: IdOrIdent = IdOrIdent::new_static(Self::QUALIFIED_NAME);
+
+    fn schema() -> Class {
+        Class {
+            id: Id::nil(),
+            ident: Self::QUALIFIED_NAME.to_string(),
+            title: Some("Reference classes constraint".into()),
+            description: None,
+            attributes: vec![ClassAttribute {
+                attribute: AttrClasses::IDENT,
+                cardinality: Cardinality::Required,
+            }],
+            extends: vec![],
+            strict: false,
         }
     }
 }
@@ -567,17 +639,4 @@ pub fn builtin_db_schema() -> super::DbSchema {
 #[inline]
 pub fn id_is_builtin_entity_type(id: Id) -> bool {
     matches!(id, ATTRIBUTE_ID | ENTITY_ID | INDEX_ID)
-}
-
-/// Builds an [`Expr`] filter that excludes builtin entities.
-pub fn id_is_builtin_entity_filter() -> crate::query::expr::Expr {
-    use crate::query::expr::Expr;
-    Expr::not(Expr::in_(
-        Expr::attr::<AttrType>(),
-        vec![
-            Attribute::QUALIFIED_NAME,
-            Class::QUALIFIED_NAME,
-            IndexSchemaType::QUALIFIED_NAME,
-        ],
-    ))
 }

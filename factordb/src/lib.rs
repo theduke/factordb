@@ -1,3 +1,8 @@
+#![cfg_attr(
+    feature = "unstable",
+    feature(provide_any, error_generic_member_access)
+)]
+
 pub type AnyError = anyhow::Error;
 
 pub mod data;

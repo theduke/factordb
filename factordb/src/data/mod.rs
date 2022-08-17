@@ -1,5 +1,5 @@
 mod id;
-pub use id::{Id, IdOrIdent};
+pub use id::{Id, IdOrIdent, NilIdError};
 
 mod reference;
 pub use self::reference::Ref;

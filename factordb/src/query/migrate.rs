@@ -1,9 +1,9 @@
-use anyhow::{anyhow, bail};
+use std::backtrace::Backtrace;
+
 use schema::{Attribute, Class};
 
 use crate::{
-    data::Value,
-    prelude::ValueType,
+    data::{Value, ValueType},
     schema::{self, Cardinality, IndexSchema},
 };
 
@@ -269,9 +269,37 @@ impl Default for Migration {
     }
 }
 
+#[derive(Debug)]
+pub struct UnifyMigrationsError {
+    message: String,
+    backtrace: Backtrace,
+}
+
+impl std::fmt::Display for UnifyMigrationsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl UnifyMigrationsError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            backtrace: Backtrace::capture(),
+        }
+    }
+}
+
+impl std::error::Error for UnifyMigrationsError {
+    #[cfg(feature = "unstable")]
+    fn provide<'a>(&'a self, req: &mut std::any::Demand<'a>) {
+        req.provide_ref(&self.backtrace);
+    }
+}
+
 /// Convert a list of migrations into a single migration that re-creates
 /// the final state.
-pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow::Error> {
+pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, UnifyMigrationsError> {
     let mut attributes = Vec::<Attribute>::new();
     let mut entities = Vec::<Class>::new();
     let mut indexes = Vec::<IndexSchema>::new();
@@ -284,7 +312,10 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
 
                     if let Some(old) = attr {
                         if old != &create.schema {
-                            bail!("Duplicate AttributeCreate action for attr {} - merging multiple creates is not supported yet", create.schema.ident);
+                            return Err(UnifyMigrationsError::new(format!(
+                                "Duplicate AttributeCreate action for attr {} - merging multiple creates is not supported yet",
+                                create.schema.ident,
+                            )));
                         }
                     } else {
                         attributes.push(create.schema);
@@ -295,10 +326,10 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
 
                     if let Some(old) = attr {
                         if old != &upsert.schema {
-                            bail!(
+                            return Err(UnifyMigrationsError::new(format!(
                                 "Unsupported AttributeUpsert action for attr {} - merging upsert with previous create is not supported yet", 
                                   upsert.schema.ident
-                            );
+                            )));
                         }
                     } else {
                         attributes.push(upsert.schema);
@@ -308,14 +339,17 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
                     let attr = attributes
                         .iter_mut()
                         .find(|c| c.ident == change.attribute)
-                        .ok_or_else(|| anyhow!("Invalid AttributeChangeType action for attr {}: attribute not created yet", change.attribute))?;
+                        .ok_or_else(|| UnifyMigrationsError::new(format!(
+                            "Invalid AttributeChangeType action for attr {}: attribute not created yet",
+                            change.attribute,
+                        )))?;
 
                     attr.value_type = change.new_type;
                 }
                 SchemaAction::AttributeCreateIndex(cindex) => {
                     let attr = attributes
                         .iter_mut().find(|a| a.ident == cindex.attribute)
-                        .ok_or_else(|| anyhow!("Invalid AttributeChangeType action for attr {}: attribute not created yet", cindex.attribute))?;
+                        .ok_or_else(|| UnifyMigrationsError::new(format!("Invalid AttributeChangeType action for attr {}: attribute not created yet", cindex.attribute)))?;
 
                     if cindex.unique {
                         attr.unique = true;
@@ -331,7 +365,10 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
 
                     if let Some(old) = entity {
                         if old != &create.schema {
-                            bail!("Duplicate EntityCreate action for attr {} - merging multiple creates is not supported yet", create.schema.ident);
+                            return Err(UnifyMigrationsError::new(format!(
+                                "Duplicate EntityCreate action for attr {} - merging multiple creates is not supported yet",
+                                create.schema.ident,
+                            )));
                         }
                     } else {
                         entities.push(create.schema);
@@ -339,7 +376,7 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
                 }
                 SchemaAction::EntityAttributeAdd(add) => {
                     let entity = entities.iter_mut().find(|e| e.ident == add.entity)
-                    .ok_or_else(|| anyhow!("Invalid EntityAttributeAdd action for attr {}: entity not created yet", add.attribute))?;
+                    .ok_or_else(|| UnifyMigrationsError::new(format!("Invalid EntityAttributeAdd action for attr {}: entity not created yet", add.attribute)))?;
 
                     let old_attr = entity
                         .attributes
@@ -357,19 +394,19 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
                 }
                 SchemaAction::EntityAttributeChangeCardinality(change) => {
                     let entity = entities.iter_mut().find(|e| e.ident == change.entity_type)
-                    .ok_or_else(|| anyhow!("Invalid EntityAttributeAdd action for attr {}: entity not created yet", change.attribute))?;
+                    .ok_or_else(|| UnifyMigrationsError::new(format!("Invalid EntityAttributeAdd action for attr {}: entity not created yet", change.attribute)))?;
 
                     let old_attr = entity
                         .attributes
                         .iter_mut()
                         .find(|a| a.attribute == change.attribute.clone().into())
-                        .ok_or_else(|| anyhow!("Invalid EntityAttributeChangeCardinality action for attr {}: attribute not added yet", change.attribute))?;
+                        .ok_or_else(|| UnifyMigrationsError::new(format!("Invalid EntityAttributeChangeCardinality action for attr {}: attribute not added yet", change.attribute)))?;
 
                     old_attr.cardinality = change.new_cardinality;
                 }
                 SchemaAction::EntityAttributeRemove(remove) => {
                     let entity = entities.iter_mut().find(|e| e.ident == remove.entity_type)
-                    .ok_or_else(|| anyhow!("Invalid EntityAttributeRemove action for attr {}: entity not created yet", remove.attribute))?;
+                    .ok_or_else(|| UnifyMigrationsError::new(format!("Invalid EntityAttributeRemove action for attr {}: entity not created yet", remove.attribute)))?;
 
                     entity
                         .attributes
@@ -380,10 +417,10 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
 
                     if let Some(old) = entity {
                         if old != &upsert.schema {
-                            bail!(
+                            return Err(UnifyMigrationsError::new(format!(
                                 "Unsupported EntityUpsert action for entity {} - merging upsert with previous create is not supported yet", 
                                   upsert.schema.ident
-                            );
+                            )));
                         }
                     } else {
                         entities.push(upsert.schema);
@@ -397,7 +434,10 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, anyhow:
 
                     if let Some(old) = old_create {
                         if old != &create.schema {
-                            bail!("Duplicate IndexCreate action for attr {} - merging multiple creates is not supported yet", create.schema.ident);
+                            return Err(UnifyMigrationsError::new(format!(
+                                "Duplicate IndexCreate action for attr {} - merging multiple creates is not supported yet",
+                                create.schema.ident
+                            )));
                         }
                     } else {
                         indexes.push(create.schema);

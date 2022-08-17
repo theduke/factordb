@@ -1,12 +1,6 @@
 use std::collections::btree_map;
 
-use anyhow::bail;
-
-use crate::AnyError;
-
-use super::DataMap;
-
-use super::Value;
+use super::{DataMap, Value};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -75,7 +69,7 @@ impl Patch {
         self
     }
 
-    pub fn apply_map(self, mut target: DataMap) -> Result<DataMap, AnyError> {
+    pub fn apply_map(self, mut target: DataMap) -> Result<DataMap, PatchOpError> {
         for op in self.0 {
             op.apply_map(&mut target)?;
         }
@@ -210,16 +204,35 @@ impl std::fmt::Display for PatchPath {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum PatchOpErrorKind {
+    EmpthPath,
+    ListIndexForMap,
+    UnsupportedValue { message: String },
+    ExistingValueMismatch { expected: Value, actual: Value },
+}
+
+#[derive(Clone, Debug)]
+pub struct PatchOpError {
+    pub path: PatchPath,
+    pub kind: PatchOpErrorKind,
+}
+
+impl PatchOpError {
+    pub fn new(path: PatchPath, kind: PatchOpErrorKind) -> Self {
+        Self { kind, path }
+    }
+}
+
 impl PatchOp {
-    fn apply_map(self, target: &mut DataMap) -> Result<(), AnyError> {
+    fn apply_map(self, target: &mut DataMap) -> Result<(), PatchOpError> {
         match self {
             PatchOp::Add { path, value } => match path.0.as_slice() {
-                [] => {
-                    bail!("Invalid empty path");
-                }
-                [PatchPathElem::ListIndex(_), ..] => {
-                    bail!("Invalid list index into map");
-                }
+                [] => Err(PatchOpError::new(path.clone(), PatchOpErrorKind::EmpthPath)),
+                [PatchPathElem::ListIndex(_), ..] => Err(PatchOpError::new(
+                    path.clone(),
+                    PatchOpErrorKind::ListIndexForMap,
+                )),
                 [PatchPathElem::Key(key)] => match target.get_mut(key) {
                     None => {
                         target.insert(key.to_string(), value);
@@ -236,7 +249,13 @@ impl PatchOp {
                         Ok(())
                     }
                     Some(Value::Map(_)) => {
-                        bail!("Tried to add value to a map");
+                        // FIXME: implement adding to map!
+                        Err(PatchOpError::new(
+                            path.clone(),
+                            PatchOpErrorKind::UnsupportedValue {
+                                message: "can't add to a map".to_string(),
+                            },
+                        ))
                     }
                     Some(literal) => {
                         *literal = Value::List(vec![literal.clone(), value]);
@@ -252,12 +271,11 @@ impl PatchOp {
                 path,
                 value: old_value,
             } => match path.0.as_slice() {
-                [] => {
-                    bail!("Invalid empty path");
-                }
-                [PatchPathElem::ListIndex(_), ..] => {
-                    bail!("Invalid list index into map");
-                }
+                [] => Err(PatchOpError::new(path.clone(), PatchOpErrorKind::EmpthPath)),
+                [PatchPathElem::ListIndex(_), ..] => Err(PatchOpError::new(
+                    path.clone(),
+                    PatchOpErrorKind::ListIndexForMap,
+                )),
                 [PatchPathElem::Key(key)] => {
                     if let Some(old_value) = old_value {
                         match target.entry(key.to_string()) {
@@ -276,7 +294,13 @@ impl PatchOp {
                                     }
                                     _ => {
                                         // Value does not match the given old_value, so don't remove.
-                                        bail!("Could not remove key: specified old value does not match");
+                                        Err(PatchOpError::new(
+                                            path,
+                                            PatchOpErrorKind::ExistingValueMismatch {
+                                                expected: old_value,
+                                                actual: current_value.get().clone(),
+                                            },
+                                        ))
                                     }
                                 }
                             }
@@ -297,12 +321,11 @@ impl PatchOp {
                 current_value: old_value,
                 must_replace,
             } => match path.0.as_slice() {
-                [] => {
-                    bail!("Invalid empty path");
-                }
-                [PatchPathElem::ListIndex(_), ..] => {
-                    bail!("Invalid list index into map");
-                }
+                [] => Err(PatchOpError::new(path.clone(), PatchOpErrorKind::EmpthPath)),
+                [PatchPathElem::ListIndex(_), ..] => Err(PatchOpError::new(
+                    path.clone(),
+                    PatchOpErrorKind::ListIndexForMap,
+                )),
                 [PatchPathElem::Key(key)] => {
                     if let Some(old_value) = old_value {
                         match target.entry(key.to_string()) {
@@ -320,7 +343,14 @@ impl PatchOp {
                                     }
                                     _ if !must_replace => Ok(()),
                                     _ => {
-                                        bail!("Could not replace key: expected value does not match current value");
+                                        // Value does not match the given old_value, so don't remove.
+                                        Err(PatchOpError::new(
+                                            path,
+                                            PatchOpErrorKind::ExistingValueMismatch {
+                                                expected: old_value,
+                                                actual: current_value.get().clone(),
+                                            },
+                                        ))
                                     }
                                 }
                             }

@@ -11,44 +11,6 @@ pub use self::index::IndexSchema;
 
 use crate::data::IdOrIdent;
 
-pub fn validate_namespace_name(value: &str) -> Result<(), crate::AnyError> {
-    if value.is_empty() {
-        return Err(anyhow::anyhow!("invalid namespace: name is empty"));
-    }
-    if !value
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '.' || c == '_')
-    {
-        return Err(anyhow::anyhow!(
-            "invalid namespace: must only contain alphanumeric chars, '.' or '_'"
-        ));
-    }
-    Ok(())
-}
-
-pub fn validate_name(value: &str) -> Result<(), crate::AnyError> {
-    if value.is_empty() {
-        return Err(anyhow::anyhow!("invalid name: name is empty"));
-    }
-    if !value.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return Err(anyhow::anyhow!(
-            "invalid name: must only contain alphanumeric chars  or '_'"
-        ));
-    }
-    Ok(())
-}
-
-pub fn validate_namespaced_ident(value: &str) -> Result<(&str, &str), crate::AnyError> {
-    let (ns, name) = value.split_once('/').ok_or_else(|| {
-        anyhow::anyhow!("Invalid namespaced name: must be of format 'namespace/name'")
-    })?;
-
-    validate_namespace_name(ns)?;
-    validate_name(name)?;
-
-    Ok((ns, name))
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum SchemaItem {
     Attribute(Attribute),

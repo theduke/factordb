@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use chrono::TimeZone;
 
-use super::Value;
+use super::{value::ValueCoercionError, Value, ValueType};
 
 /// A timestamp stored as UNIX timestamp in milliseconds.
 #[derive(
@@ -46,16 +46,18 @@ impl Timestamp {
 }
 
 impl TryFrom<Value> for Timestamp {
-    type Error = anyhow::Error;
+    type Error = ValueCoercionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::UInt(x) => Ok(Self::from_millis(x)),
             Value::Int(x) if x >= 0 => Ok(Self::from_millis(x as u64)),
-            _ => Err(anyhow::anyhow!(
-                "Invalid timestamp: expected a millisecond number, got {:?}",
-                value.value_type()
-            )),
+            _ => Err(ValueCoercionError {
+                expected_type: ValueType::DateTime,
+                actual_type: value.value_type(),
+                path: None,
+                message: Some("Invalid timestamp: expected a millisecond number".to_string()),
+            }),
         }
     }
 }

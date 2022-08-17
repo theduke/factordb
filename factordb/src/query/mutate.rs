@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
-    data::{patch::Patch, DataMap, Id},
-    prelude::{Expr, Value},
+    data::{patch::Patch, DataMap, Id, NilIdError, Value},
     schema::AttrMapExt,
 };
+
+use super::expr::Expr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -34,11 +35,11 @@ pub struct Merge {
 }
 
 impl Merge {
-    pub fn try_from_map(map: DataMap) -> Result<Self, crate::AnyError> {
+    pub fn try_from_map(map: DataMap) -> Result<Self, NilIdError> {
         let id = map
             .get_id()
             .and_then(Id::as_non_nil)
-            .ok_or_else(|| anyhow::anyhow!("Merge data must have a non-nil id"))?;
+            .ok_or_else(|| NilIdError::with_message("Merge data must have a non-nil id"))?;
         Ok(Self { id, data: map })
     }
 }
@@ -62,11 +63,11 @@ pub struct Remove {
 }
 
 impl Remove {
-    pub fn try_from_map(map: DataMap) -> Result<Self, crate::AnyError> {
+    pub fn try_from_map(map: DataMap) -> Result<Self, NilIdError> {
         let id = map
             .get_id()
             .and_then(Id::as_non_nil)
-            .ok_or_else(|| anyhow::anyhow!("Remove data must have a non-nil id"))?;
+            .ok_or_else(|| NilIdError::with_message("Remove data must have a non-nil id"))?;
         Ok(Self { id, data: map })
     }
 }
@@ -129,11 +130,8 @@ impl Mutate {
         Self::Merge(Merge { id, data })
     }
 
-    pub fn merge_from_map(data: DataMap) -> Result<Self, crate::AnyError> {
-        let id = data
-            .get_id()
-            .ok_or_else(|| anyhow::anyhow!("Update requires an id"))?;
-        Ok(Self::Merge(Merge { id, data }))
+    pub fn merge_map(data: DataMap) -> Result<Self, NilIdError> {
+        Merge::try_from_map(data).map(Self::Merge)
     }
 
     pub fn patch(id: Id, patch: Patch) -> Self {
