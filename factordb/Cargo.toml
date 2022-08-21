@@ -21,7 +21,7 @@ unstable = []
 factor_core = { version = "0.1", path = "../factor_core"}
 factor_macros = { version = "0.1", path = "../factor_macros" }
 
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.58" }
 chrono = { version = "0.4.19", features = ["serde"] }
 fnv = "1.0.7"
 futures = "0.3.21"
