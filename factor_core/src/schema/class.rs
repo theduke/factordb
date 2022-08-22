@@ -237,7 +237,7 @@ pub struct Class {
     pub title: Option<String>,
     #[serde(rename = "factor/description")]
     pub description: Option<String>,
-    #[serde(rename = "factor/classAttributes", default)]
+    #[serde(rename = "factor/entityAttributes", default)]
     pub attributes: Vec<ClassAttribute>,
     #[serde(rename = "factor/extend", default)]
     pub extends: Vec<String>,

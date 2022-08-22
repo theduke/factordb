@@ -773,7 +773,7 @@ mod tests {
         "factor/subject": "test/MyClass",
         "factor/set": {
             "factor/type": "factor/Class",
-            "factor/classAttributes": [
+            "factor/entityAttributes": [
             ]
         }
     },
@@ -781,7 +781,7 @@ mod tests {
         "factor/subject": "test/MyChildClass",
         "factor/set": {
             "factor/type": "factor/Class",
-            "factor/classAttributes": [
+            "factor/entityAttributes": [
                 {
                     "factor/attribute": "factor/title",
                     "factor/required": true

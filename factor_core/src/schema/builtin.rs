@@ -395,8 +395,8 @@ pub struct AttrClassAttributes;
 
 impl AttributeMeta for AttrClassAttributes {
     const NAMESPACE: &'static str = "factor";
-    const PLAIN_NAME: &'static str = "classAttributes";
-    const QUALIFIED_NAME: &'static str = "factor/classAttributes";
+    const PLAIN_NAME: &'static str = "entityAttributes";
+    const QUALIFIED_NAME: &'static str = "factor/entityAttributes";
     type Type = Vec<ClassAttribute>;
 
     fn schema() -> Attribute {
