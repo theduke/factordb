@@ -119,3 +119,12 @@ impl<'de, K: serde::Deserialize<'de> + Ord> serde::Deserialize<'de> for ValueMap
         Ok(Self(inner))
     }
 }
+
+impl<K> IntoIterator for ValueMap<K> {
+    type Item = (K, Value);
+    type IntoIter = std::collections::btree_map::IntoIter<K, Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
