@@ -1,8 +1,8 @@
-use factor_core::schema::builtin::{AttrDescription, AttrTitle};
-use factordb::{
+use factdb::{
     macros::{Attribute, Class},
     AttributeMeta, ClassMeta, DataMap, Db, Expr, Id, Migration, Select,
 };
+use factor_core::schema::builtin::{AttrDescription, AttrTitle};
 use serde::{Deserialize, Serialize};
 
 #[derive(Attribute)]

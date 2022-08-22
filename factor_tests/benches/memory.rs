@@ -3,7 +3,7 @@ use criterion::{
 };
 use factor_tests::Todo;
 
-use factordb::{
+use factdb::{
     prelude::{Db, Expr, Id, Select},
     schema::{builtin::AttrTitle, AttributeMeta},
 };
@@ -17,8 +17,8 @@ async fn select_single_with_title_eq(db: &Db) {
 }
 
 fn bench_filtering(c: &mut Criterion) {
-    let mem = factordb::backend::memory::MemoryDb::new();
-    let db = factordb::Db::new(mem);
+    let mem = factdb::backend::memory::MemoryDb::new();
+    let db = factdb::Db::new(mem);
 
     futures::executor::block_on(async {
         factor_tests::apply_schema(&db).await.unwrap();

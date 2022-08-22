@@ -10,7 +10,7 @@ harness = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-factordb = { path = "../factordb" }
+factdb = { path = "../factdb" }
 factor_engine = { path = "../factor_engine" }
 factor_core = { path = "../factor_core" }
 

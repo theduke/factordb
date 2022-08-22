@@ -16,7 +16,7 @@ quote = "1.0.20"
 syn = "1.0.98"
 
 [dev-dependencies]
-factordb = { path = "../factordb" }
+factdb = { path = "../factdb" }
 factor_core = { path = "../factor_core" }
 
 serde = "1.0.137"

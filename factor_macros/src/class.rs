@@ -254,7 +254,7 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
             }
             extends_field = Some((*field_name).clone());
             schema_extends.push(quote! {
-                <#field_ty as factordb::ClassMeta>::IDENT.into(),
+                <#field_ty as factdb::ClassMeta>::IDENT.into(),
             });
         } else if field_attrs.is_relation {
             todo!()
@@ -272,34 +272,34 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
             let prop = &field_attrs.attribute.unwrap();
 
             let cardinality = match &field.ty {
-                x if is_option(x) => quote!(factordb::Cardinality::Optional),
+                x if is_option(x) => quote!(factdb::Cardinality::Optional),
                 ty if is_vec(ty) => {
                     // TODO: use custom attr to signal Vec = optional?
                     quote!({
                         assert_eq!(
-                            <#prop as factordb::AttributeMeta>::schema().value_type,
-                            <#ty as factordb::ValueTypeDescriptor>::value_type(),
+                            <#prop as factdb::AttributeMeta>::schema().value_type,
+                            <#ty as factdb::ValueTypeDescriptor>::value_type(),
                             "an entity field with type Vec<_> must point to an attribute that is a List ( ValueType::List<INNER_TYPE> )"
                         );
-                        factordb::Cardinality::Required
+                        factdb::Cardinality::Required
                     })
                 }
-                _ => quote!(factordb::Cardinality::Required),
+                _ => quote!(factdb::Cardinality::Required),
             };
 
             if *field_name == "id" {
                 have_id = true;
             } else {
                 schema_attributes.push(quote! {
-                    factordb::ClassAttribute {
-                        attribute: <#prop as factordb::AttributeMeta>::IDENT,
+                    factdb::ClassAttribute {
+                        attribute: <#prop as factdb::AttributeMeta>::IDENT,
                         cardinality: #cardinality,
                     },
                 });
 
                 serialize_fields.push(quote! {
                     map.serialize_entry(
-                        <#prop as factordb::AttributeMeta>::QUALIFIED_NAME,
+                        <#prop as factdb::AttributeMeta>::QUALIFIED_NAME,
                         &self.#field_name,
                     )?;
                 });
@@ -320,15 +320,15 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
     let full_name = format!("{}/{}", namespace, entity_name);
 
     TokenStream::from(quote! {
-        impl factordb::ClassMeta for #struct_ident {
+        impl factdb::ClassMeta for #struct_ident {
             const NAMESPACE: &'static str = #namespace;
             const PLAIN_NAME: &'static str = #entity_name;
             const QUALIFIED_NAME: &'static str = #full_name;
-            const IDENT: factordb::IdOrIdent = factordb::IdOrIdent::new_static(Self::QUALIFIED_NAME);
+            const IDENT: factdb::IdOrIdent = factdb::IdOrIdent::new_static(Self::QUALIFIED_NAME);
 
-            fn schema() -> factordb::Class {
-                factordb::Class {
-                    id: factordb::Id::nil(),
+            fn schema() -> factdb::Class {
+                factdb::Class {
+                    id: factdb::Id::nil(),
                     ident: #full_name.to_string(),
                     title: Some(#title.to_string()),
                     description: None,
@@ -343,13 +343,13 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
             }
         }
 
-        impl factordb::ClassContainer for #struct_ident {
-            fn id(&self) -> factordb::Id {
+        impl factdb::ClassContainer for #struct_ident {
+            fn id(&self) -> factdb::Id {
                 *#id_accessor
             }
 
-            fn entity_type(&self) -> factordb::IdOrIdent {
-                <Self as factordb::ClassMeta>::IDENT
+            fn entity_type(&self) -> factdb::IdOrIdent {
+                <Self as factdb::ClassMeta>::IDENT
             }
         }
 

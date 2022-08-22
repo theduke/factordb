@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 
-factordb = { path = "../factordb" }
+factdb = { path = "../factdb" }
 factor_engine = { path = "../factor_engine" }
 futures = "0.3.23"
 serde = { version = "1.0.143", features = ["derive"] }

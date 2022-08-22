@@ -1,5 +1,5 @@
+use factdb::{AttributeMeta, ClassAttribute, ClassMeta, Id, ValueType};
 use factor_macros::{Attribute, Class};
-use factordb::{AttributeMeta, ClassAttribute, ClassMeta, Id, ValueType};
 
 use factor_core::schema::builtin::AttrDescription;
 
@@ -39,7 +39,7 @@ struct Child {
 
 #[test]
 fn test_attr_derive() {
-    use factordb::Attribute;
+    use factdb::Attribute;
 
     assert_eq!(
         Attribute {
@@ -59,7 +59,7 @@ fn test_attr_derive() {
 #[test]
 fn test_entity_derive() {
     assert_eq!(
-        factordb::Class {
+        factdb::Class {
             id: Id::nil(),
             ident: "test/Entity1".into(),
             title: Some("Entity1".to_string()),
@@ -67,15 +67,15 @@ fn test_entity_derive() {
             attributes: vec![
                 ClassAttribute {
                     attribute: AttrSomeTitle::IDENT,
-                    cardinality: factordb::Cardinality::Required,
+                    cardinality: factdb::Cardinality::Required,
                 },
                 ClassAttribute {
                     attribute: AttrDescription::IDENT,
-                    cardinality: factordb::Cardinality::Optional,
+                    cardinality: factdb::Cardinality::Optional,
                 },
                 ClassAttribute {
                     attribute: AttrLength::IDENT,
-                    cardinality: factordb::Cardinality::Required,
+                    cardinality: factdb::Cardinality::Required,
                 },
             ],
             extends: Vec::new(),

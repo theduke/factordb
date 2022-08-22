@@ -1,4 +1,4 @@
-use factordb::{Attribute, Db, Migration, ValueType};
+use factdb::{Attribute, Db, Migration, ValueType};
 
 async fn custom() {
     let backend = factor_engine::backend::log::LogDb::open(
@@ -7,7 +7,7 @@ async fn custom() {
     .await
     .unwrap();
     let engine = factor_engine::Engine::new(backend);
-    // let backend = factordb::backend::memory::MemoryDb::new();
+    // let backend = factdb::backend::memory::MemoryDb::new();
     let db = Db::new(engine);
 
     db.migrate(

@@ -3,7 +3,7 @@
 mod pool;
 
 use anyhow::Context;
-use factordb::{
+use factdb::{
     data::{DataMap, Ident},
     query::select::{Item, Page},
     registry::SharedRegistry,
@@ -31,13 +31,13 @@ impl SqliteDb {
             .await?;
 
         // First register all attributes.
-        let mut registry = factordb::registry::Registry::new();
+        let mut registry = factdb::registry::Registry::new();
         for item in schema_items {
             match item {
-                factordb::schema::SchemaItem::Attribute(attr) => {
+                factdb::schema::SchemaItem::Attribute(attr) => {
                     registry.register_attribute(attr)?;
                 }
-                factordb::schema::SchemaItem::Entity(entity) => {
+                factdb::schema::SchemaItem::Entity(entity) => {
                     registry.register_entity(entity, false)?;
                 }
             }
@@ -53,7 +53,7 @@ impl SqliteDb {
         })
     }
 
-    fn migrate(con: &Connection) -> Result<Vec<factordb::schema::SchemaItem>, AnyError> {
+    fn migrate(con: &Connection) -> Result<Vec<factdb::schema::SchemaItem>, AnyError> {
         let res = con.query_row_and_then("SELECT MAX(version) FROM migrations", [], |row| {
             row.get::<_, u64>(0)
         });
@@ -98,11 +98,11 @@ impl SqliteDb {
         Self::load_schema(con)
     }
 
-    fn load_schema(con: &Connection) -> Result<Vec<factordb::schema::SchemaItem>, AnyError> {
+    fn load_schema(con: &Connection) -> Result<Vec<factdb::schema::SchemaItem>, AnyError> {
         con.prepare("SELECT id, content FROM schema_entities")?
             .query_and_then([], |row| -> Result<_, AnyError> {
                 let content: Vec<u8> = row.get("content")?;
-                let item: factordb::schema::SchemaItem = serde_json::from_slice(&content)?;
+                let item: factdb::schema::SchemaItem = serde_json::from_slice(&content)?;
                 Ok(item)
             })?
             .collect()
@@ -134,7 +134,7 @@ impl SqliteDb {
         let data = match res {
             Ok(data) => data,
             Err(rusqlite::Error::QueryReturnedNoRows) => {
-                return Err(factordb::error::EntityNotFound::new(ident).into());
+                return Err(factdb::error::EntityNotFound::new(ident).into());
             }
             Err(other) => {
                 return Err(other.into());
@@ -154,48 +154,48 @@ impl SqliteDb {
     }
 }
 
-impl factordb::backend::Backend for SqliteDb {
+impl factdb::backend::Backend for SqliteDb {
     fn registry(&self) -> &SharedRegistry {
         &self.registry
     }
 
     fn entity(
         &self,
-        id: factordb::data::Ident,
-    ) -> factordb::backend::BackendFuture<factordb::data::DataMap> {
+        id: factdb::data::Ident,
+    ) -> factdb::backend::BackendFuture<factdb::data::DataMap> {
         let s = self.clone();
         async move { s.entity(id).await }.boxed()
     }
 
     fn select(
         &self,
-        _query: factordb::query::select::Select,
-    ) -> factordb::backend::BackendFuture<Page<Item>> {
+        _query: factdb::query::select::Select,
+    ) -> factdb::backend::BackendFuture<Page<Item>> {
         todo!()
     }
 
     fn apply_batch(
         &self,
-        _batch: factordb::query::mutate::BatchUpdate,
-    ) -> factordb::backend::BackendFuture<()> {
+        _batch: factdb::query::mutate::BatchUpdate,
+    ) -> factdb::backend::BackendFuture<()> {
         todo!()
     }
 
     fn migrate(
         &self,
-        _migration: factordb::query::migrate::Migration,
-    ) -> factordb::backend::BackendFuture<()> {
+        _migration: factdb::query::migrate::Migration,
+    ) -> factdb::backend::BackendFuture<()> {
         todo!()
     }
 
-    fn purge_all_data(&self) -> factordb::backend::BackendFuture<()> {
+    fn purge_all_data(&self) -> factdb::backend::BackendFuture<()> {
         let s = self.clone();
         async move { s.purge_all_data().await }.boxed()
     }
 
     fn migrations(
         &self,
-    ) -> factordb::backend::BackendFuture<Vec<factordb::query::migrate::Migration>> {
+    ) -> factdb::backend::BackendFuture<Vec<factdb::query::migrate::Migration>> {
         todo!()
     }
 }

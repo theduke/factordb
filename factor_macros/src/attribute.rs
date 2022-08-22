@@ -129,20 +129,20 @@ pub fn derive_attribute(tokens: TokenStream) -> TokenStream {
     let full_name = format!("{}/{}", namespace, name);
 
     let out = quote! {
-        impl factordb::AttributeMeta for #ident {
+        impl factdb::AttributeMeta for #ident {
             const NAMESPACE: &'static str = #namespace;
             const PLAIN_NAME: &'static str = #name;
             const QUALIFIED_NAME: &'static str = #full_name;
-            const IDENT: factordb::IdOrIdent = factordb::IdOrIdent::new_static(Self::QUALIFIED_NAME);
+            const IDENT: factdb::IdOrIdent = factdb::IdOrIdent::new_static(Self::QUALIFIED_NAME);
             type Type = #type_;
 
-            fn schema() -> factordb::Attribute {
-                factordb::Attribute {
-                    id: factordb::Id::nil(),
+            fn schema() -> factdb::Attribute {
+                factdb::Attribute {
+                    id: factdb::Id::nil(),
                     ident: #full_name.to_string(),
                     title: #title,
                     description: None,
-                    value_type: <Self::Type as factordb::ValueTypeDescriptor>::value_type(),
+                    value_type: <Self::Type as factdb::ValueTypeDescriptor>::value_type(),
                     index: #index,
                     unique: #unique,
                     strict: #strict,

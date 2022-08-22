@@ -1,5 +1,5 @@
 [package]
-name = "factordb"
+name = "factdb"
 version = "0.1.0"
 authors = ["Christoph Herzog <chris@theduke.at>"]
 edition = "2018"

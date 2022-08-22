@@ -1,4 +1,4 @@
-use factordb::{
+use factdb::{
     macros::{Attribute, Class},
     AttributeMeta, ClassMeta, Db, Expr, Id, Migration, Select,
 };
