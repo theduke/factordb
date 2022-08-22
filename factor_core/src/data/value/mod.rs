@@ -601,7 +601,7 @@ impl Value {
     ///
     /// [`Unit`]: Value::Unit
     #[must_use]
-    pub fn is_unit(&self) -> bool {
+    pub fn is_nil(&self) -> bool {
         matches!(self, Self::Unit)
     }
 }

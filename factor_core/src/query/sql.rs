@@ -310,7 +310,6 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
         }
         SqlExpr::BinaryOp { left, op, right } => match (*left, *right) {
             (SqlExpr::AnyOp(any), other) | (other, SqlExpr::AnyOp(any)) => {
-                dbg!(&any, &other);
                 let target = match *any {
                     SqlExpr::Identifier(ident) => Expr::Attr(ident.value.into()),
                     other => {
