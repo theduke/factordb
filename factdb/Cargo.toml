@@ -12,8 +12,8 @@ default = ["sql", "mongodb-query", "unstable"]
 sql = ["sqlparser"]
 mongodb-query = ["mongodb-language-model"]
 
-jsonschema = ["schemars"]
-typescript-schema = ["ts-rs"]
+jsonschema = ["factor_core/jsonschema"]
+typescript-schema = ["factor_core/typescript-schema"]
 
 unstable = []
 
