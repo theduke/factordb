@@ -8,6 +8,12 @@ use std::{borrow::Cow, str::FromStr};
 #[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Id(pub uuid::Uuid);
 
+impl Default for Id {
+    fn default() -> Self {
+        Self::nil()
+    }
+}
+
 impl From<uuid::Uuid> for Id {
     fn from(id: uuid::Uuid) -> Self {
         Self(id)

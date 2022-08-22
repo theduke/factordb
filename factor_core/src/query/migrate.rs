@@ -381,14 +381,14 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, UnifyMi
                     let old_attr = entity
                         .attributes
                         .iter_mut()
-                        .find(|a| a.attribute == add.attribute.clone().into());
+                        .find(|a| a.attribute == add.attribute);
 
                     if let Some(old) = old_attr {
-                        old.cardinality = add.cardinality;
+                        old.required = add.cardinality.is_required();
                     } else {
                         entity.attributes.push(schema::ClassAttribute {
                             attribute: add.attribute.clone().into(),
-                            cardinality: add.cardinality,
+                            required: add.cardinality.is_required(),
                         });
                     }
                 }
@@ -399,10 +399,10 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, UnifyMi
                     let old_attr = entity
                         .attributes
                         .iter_mut()
-                        .find(|a| a.attribute == change.attribute.clone().into())
+                        .find(|a| a.attribute == change.attribute)
                         .ok_or_else(|| UnifyMigrationsError::new(format!("Invalid EntityAttributeChangeCardinality action for attr {}: attribute not added yet", change.attribute)))?;
 
-                    old_attr.cardinality = change.new_cardinality;
+                    old_attr.required = change.new_cardinality.is_required();
                 }
                 SchemaAction::EntityAttributeRemove(remove) => {
                     let entity = entities.iter_mut().find(|e| e.ident == remove.entity_type)
@@ -410,7 +410,7 @@ pub fn unify_migrations(migrations: Vec<Migration>) -> Result<Migration, UnifyMi
 
                     entity
                         .attributes
-                        .retain(|a| a.attribute != remove.attribute.clone().into());
+                        .retain(|a| a.attribute != remove.attribute);
                 }
                 SchemaAction::EntityUpsert(upsert) => {
                     let entity = entities.iter().find(|e| e.ident == upsert.schema.ident);

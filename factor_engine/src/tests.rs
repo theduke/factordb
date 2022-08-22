@@ -157,7 +157,7 @@ async fn apply_test_schema(db: &Db) {
             description: None,
             attributes: vec![ClassAttribute {
                 attribute: "test/int_list".into(),
-                cardinality: schema::Cardinality::Optional,
+                required: false,
             }],
             extends: Vec::new(),
             strict: false,
@@ -169,7 +169,7 @@ async fn apply_test_schema(db: &Db) {
             description: None,
             attributes: vec![ClassAttribute {
                 attribute: "test/int_list".into(),
-                cardinality: schema::Cardinality::Optional,
+                required: false,
             }],
             extends: Vec::new(),
             strict: false,
@@ -504,8 +504,8 @@ async fn test_entity_attr_add_with_default(db: &Db) {
         title: None,
         description: None,
         attributes: vec![ClassAttribute {
-            attribute: AttrTitle::IDENT.clone(),
-            cardinality: schema::Cardinality::Required,
+            attribute: AttrTitle::QUALIFIED_NAME.to_string(),
+            required: true,
         }],
         extends: vec![],
         strict: false,
@@ -570,7 +570,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
         .unwrap()
         .attributes
         .iter()
-        .find(|a| a.attribute.as_name().unwrap() == "test/int")
+        .find(|a| a.attribute == "test/int")
         .expect("attribute not added to schema!");
 
     // The previously created entity should now have the new attribute with the default value.
@@ -604,7 +604,7 @@ async fn test_entity_attr_change_cardinality_from_required_to_optional(f: &Db) {
                 description: None,
                 attributes: vec![ClassAttribute {
                     attribute: "test/tochange".into(),
-                    cardinality: schema::Cardinality::Required,
+                    required: true,
                 }],
                 extends: vec![],
                 strict: false,

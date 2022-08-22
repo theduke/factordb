@@ -69,7 +69,7 @@ impl Registry {
                 .iter()
                 .map(|item| item.schema.clone())
                 .collect(),
-            entities: self
+            classes: self
                 .entities
                 .iter()
                 .map(|item| item.schema.clone())
@@ -233,7 +233,7 @@ impl Registry {
                 assert_eq!(local_id, ATTR_TYPE_LOCAL);
             }
         }
-        for entity in schema.entities {
+        for entity in schema.classes {
             self.register_class(entity.clone(), true)
                 .unwrap_or_else(|_| {
                     panic!(
@@ -324,7 +324,7 @@ impl Registry {
             .iter()
             .filter_map(|e| {
                 let has_attr = e.schema.attributes.iter().any(|a| {
-                    self.require_attr_by_ident(&a.attribute).unwrap().local_id == attr.local_id
+                    self.require_attr_by_name(&a.attribute).unwrap().local_id == attr.local_id
                 });
 
                 if has_attr {
@@ -498,9 +498,9 @@ impl Registry {
         for field in &entity.schema.attributes {
             // TODO: create a static list of fields for each entity so that
             // we don't have to do this lookup each time.
-            let attr = self.attrs.must_get_by_ident(&field.attribute)?;
+            let attr = self.attrs.must_get_by_name(&field.attribute)?;
 
-            match (data.get_mut(&attr.schema.ident), field.cardinality) {
+            match (data.get_mut(&attr.schema.ident), field.cardinality()) {
                 // Handle optional fields that have a Unit value.
                 (Some(Value::Unit), Cardinality::Optional) => {
                     // Remove the unit value.

@@ -271,8 +271,8 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
         } else {
             let prop = &field_attrs.attribute.unwrap();
 
-            let cardinality = match &field.ty {
-                x if is_option(x) => quote!(factdb::Cardinality::Optional),
+            let required = match &field.ty {
+                x if is_option(x) => quote!(false),
                 ty if is_vec(ty) => {
                     // TODO: use custom attr to signal Vec = optional?
                     quote!({
@@ -281,10 +281,10 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
                             <#ty as factdb::ValueTypeDescriptor>::value_type(),
                             "an entity field with type Vec<_> must point to an attribute that is a List ( ValueType::List<INNER_TYPE> )"
                         );
-                        factdb::Cardinality::Required
+                        true
                     })
                 }
-                _ => quote!(factdb::Cardinality::Required),
+                _ => quote!(true),
             };
 
             if *field_name == "id" {
@@ -292,8 +292,8 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
             } else {
                 schema_attributes.push(quote! {
                     factdb::ClassAttribute {
-                        attribute: <#prop as factdb::AttributeMeta>::IDENT,
-                        cardinality: #cardinality,
+                        attribute: <#prop as factdb::AttributeMeta>::QUALIFIED_NAME.to_string(),
+                        required: #required,
                     },
                 });
 

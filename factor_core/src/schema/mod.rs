@@ -3,11 +3,14 @@ pub mod builtin;
 mod attribute;
 pub use self::attribute::{AttrMapExt, Attribute, AttributeMeta};
 
-mod entity;
-pub use self::entity::{Cardinality, Class, ClassAttribute, ClassContainer, ClassMeta};
+mod class;
+pub use self::class::{Cardinality, Class, ClassAttribute, ClassContainer, ClassMeta};
 
 mod index;
 pub use self::index::IndexSchema;
+
+mod commit;
+pub use commit::{PreBatchCommit, PreCommit, PreMigration, StaticSchema};
 
 use crate::data::IdOrIdent;
 
@@ -25,7 +28,7 @@ pub struct DbSchema {
     // FIXME: make these private and provide accessors.
     // They should no tbe pub because of the sentinel 0 id.
     pub attributes: Vec<Attribute>,
-    pub entities: Vec<Class>,
+    pub classes: Vec<Class>,
     pub indexes: Vec<IndexSchema>,
 }
 
@@ -37,8 +40,12 @@ impl DbSchema {
         })
     }
 
+    pub fn attr_by_ident(&self, ident: &str) -> Option<&Attribute> {
+        self.attributes.iter().find(|attr| attr.ident == ident)
+    }
+
     pub fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&Class> {
-        self.entities.iter().find(|entity| match &ident {
+        self.classes.iter().find(|entity| match &ident {
             IdOrIdent::Id(id) => entity.id == *id,
             IdOrIdent::Name(name) => entity.ident.as_str() == name,
         })
@@ -57,7 +64,7 @@ impl DbSchema {
             if let Some(attr) = parent_entity
                 .attributes
                 .iter()
-                .find(|a| &a.attribute == attr)
+                .find(|a| Some(a.attribute.as_str()) == attr.as_name())
             {
                 return Some(attr);
             } else if let Some(attr) = self.parent_entity_attr(parent_ident, attr) {
@@ -70,7 +77,7 @@ impl DbSchema {
 
     pub fn merge(mut self, other: Self) -> Self {
         self.attributes.extend(other.attributes);
-        self.entities.extend(other.entities);
+        self.classes.extend(other.classes);
         self.indexes.extend(other.indexes);
 
         self

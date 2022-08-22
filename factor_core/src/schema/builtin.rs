@@ -7,7 +7,7 @@
 
 use crate::{
     data::{value_type::ConstrainedRefType, Id, IdOrIdent, Ident, ValueType},
-    schema::{Attribute, AttributeMeta, Cardinality, Class, ClassAttribute, ClassMeta},
+    schema::{Attribute, AttributeMeta, Class, ClassAttribute, ClassMeta},
 };
 
 use super::IndexSchema;
@@ -307,8 +307,8 @@ impl ClassMeta for AttributeConstraintReferenceClasses {
             title: Some("Reference classes constraint".into()),
             description: None,
             attributes: vec![ClassAttribute {
-                attribute: AttrClasses::IDENT,
-                cardinality: Cardinality::Required,
+                attribute: AttrClasses::QUALIFIED_NAME.to_string(),
+                required: true,
             }],
             extends: vec![],
             strict: false,
@@ -328,14 +328,14 @@ impl ClassMeta for super::Attribute {
             title: Some("Attribute".into()),
             description: None,
             attributes: vec![
-                ATTR_ID.into(),
-                ATTR_IDENT.into(),
-                ClassAttribute::from(ATTR_TITLE).into_optional(),
-                ClassAttribute::from(ATTR_DESCRIPTION).into_optional(),
-                ATTR_VALUETYPE.into(),
-                ATTR_UNIQUE.into(),
-                ATTR_INDEX.into(),
-                ATTR_STRICT.into(),
+                ClassAttribute::from_schema_required::<AttrId>(),
+                ClassAttribute::from_schema_required::<AttrIdent>(),
+                ClassAttribute::from_schema_optional::<AttrTitle>(),
+                ClassAttribute::from_schema_optional::<AttrDescription>(),
+                ClassAttribute::from_schema_required::<AttrValueType>(),
+                ClassAttribute::from_schema_required::<AttrUnique>(),
+                ClassAttribute::from_schema_required::<AttrIndex>(),
+                ClassAttribute::from_schema_required::<AttrStrict>(),
             ],
             extends: Vec::new(),
             strict: true,
@@ -395,7 +395,7 @@ pub struct AttrClassAttributes;
 
 impl AttributeMeta for AttrClassAttributes {
     const NAMESPACE: &'static str = "factor";
-    const PLAIN_NAME: &'static str = "entityAttributes";
+    const PLAIN_NAME: &'static str = "classAttributes";
     const QUALIFIED_NAME: &'static str = "factor/classAttributes";
     type Type = Vec<ClassAttribute>;
 
@@ -480,7 +480,7 @@ impl AttributeMeta for AttrIsRelation {
 
 impl ClassMeta for super::Class {
     const NAMESPACE: &'static str = "factor";
-    const PLAIN_NAME: &'static str = "Entity";
+    const PLAIN_NAME: &'static str = "Class";
     const QUALIFIED_NAME: &'static str = "factor/Class";
 
     fn schema() -> Class {
@@ -490,20 +490,14 @@ impl ClassMeta for super::Class {
             title: Some("Class".into()),
             description: None,
             attributes: vec![
-                ATTR_ID.into(),
-                ATTR_IDENT.into(),
-                ClassAttribute::from(ATTR_TITLE).into_optional(),
-                ClassAttribute::from(ATTR_DESCRIPTION).into_optional(),
-                ATTR_STRICT.into(),
-                ATTR_ISRELATION.into(),
-                ClassAttribute {
-                    attribute: ATTR_EXTEND.into(),
-                    cardinality: Cardinality::Required,
-                },
-                ClassAttribute {
-                    attribute: ATTR_ATTRIBUTES.into(),
-                    cardinality: Cardinality::Required,
-                },
+                ClassAttribute::from_schema_required::<AttrId>(),
+                ClassAttribute::from_schema_required::<AttrIdent>(),
+                ClassAttribute::from_schema_optional::<AttrTitle>(),
+                ClassAttribute::from_schema_optional::<AttrDescription>(),
+                ClassAttribute::from_schema_required::<AttrStrict>(),
+                ClassAttribute::from_schema_required::<AttrIsRelation>(),
+                ClassAttribute::from_schema_required::<AttrExtend>(),
+                ClassAttribute::from_schema_required::<AttrClassAttributes>(),
             ],
             extends: Vec::new(),
             strict: true,
@@ -571,14 +565,11 @@ impl ClassMeta for IndexSchemaType {
             title: Some("Index".into()),
             description: None,
             attributes: vec![
-                ATTR_ID.into(),
-                ATTR_IDENT.into(),
-                ClassAttribute::from(ATTR_TITLE).into_optional(),
-                ClassAttribute::from(ATTR_DESCRIPTION).into_optional(),
-                ClassAttribute {
-                    attribute: ATTR_INDEX_ATTRIBUTES.into(),
-                    cardinality: Cardinality::Required,
-                },
+                ClassAttribute::from_schema_required::<AttrId>(),
+                ClassAttribute::from_schema_required::<AttrIdent>(),
+                ClassAttribute::from_schema_optional::<AttrTitle>(),
+                ClassAttribute::from_schema_optional::<AttrDescription>(),
+                ClassAttribute::from_schema_required::<AttrIndexAttributes>(),
             ],
             extends: Vec::new(),
             strict: true,
@@ -626,7 +617,7 @@ pub fn builtin_db_schema() -> super::DbSchema {
             AttrIndexAttributes::schema(),
             AttrCount::schema(),
         ],
-        entities: vec![
+        classes: vec![
             Attribute::schema(),
             Class::schema(),
             IndexSchemaType::schema(),

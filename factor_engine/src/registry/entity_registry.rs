@@ -96,7 +96,7 @@ impl EntityRegistry {
         }
 
         for field in &schema.attributes {
-            let attr = attrs.must_get_by_ident(&field.attribute)?;
+            let attr = attrs.must_get_by_name(&field.attribute)?;
             nested_attribute_names.insert(attr.schema.ident.clone());
         }
 
@@ -323,9 +323,9 @@ impl EntityRegistry {
             extended_ids.insert(parent.schema.id);
 
             for field in &parent.schema.attributes {
-                let attr = attrs.must_get_by_ident(&field.attribute)?;
+                let attr = attrs.must_get_by_name(&field.attribute)?;
                 if let Some(existing_field) = extended_fields.get(&attr.schema.id) {
-                    if field.cardinality != existing_field.cardinality {
+                    if field.required != existing_field.required {
                         return Err(anyhow!(
                             "Invalid extend of parent entity '{}': the attribute '{}' already exists with a different cardinality", 
                             parent.schema.ident,
@@ -342,7 +342,7 @@ impl EntityRegistry {
         let mut attr_set = HashSet::new();
 
         for field in &entity.attributes {
-            let attr = attrs.must_get_by_ident(&field.attribute)?;
+            let attr = attrs.must_get_by_name(&field.attribute)?;
 
             if attr_set.contains(&attr.schema.id) {
                 return Err(anyhow!("Duplicate attribute: '{}'", attr.schema.ident,));
@@ -350,7 +350,7 @@ impl EntityRegistry {
             attr_set.insert(attr.schema.id);
 
             if let Some(extended_field) = extended_fields.get(&attr.schema.id) {
-                if field.cardinality != extended_field.cardinality {
+                if field.required != extended_field.required {
                     return Err(anyhow!(
                         "Invalid field '{}': the attribute already exists with a different cardinality on a parent entity",  
                         attr.schema.ident

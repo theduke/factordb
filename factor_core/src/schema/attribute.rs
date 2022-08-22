@@ -9,7 +9,7 @@ use super::ClassContainer;
 #[cfg_attr(feature = "typescript-schema", derive(ts_rs::TS))]
 #[cfg_attr(feature = "typescript-schema", ts(export))]
 pub struct Attribute {
-    #[serde(rename = "factor/id")]
+    #[serde(rename = "factor/id", default)]
     pub id: Id,
     #[serde(rename = "factor/ident")]
     pub ident: String,
@@ -19,13 +19,13 @@ pub struct Attribute {
     pub description: Option<String>,
     #[serde(rename = "factor/valueType")]
     pub value_type: ValueType,
-    #[serde(rename = "factor/unique")]
+    #[serde(rename = "factor/unique", default)]
     pub unique: bool,
-    #[serde(rename = "factor/index")]
+    #[serde(rename = "factor/index", default)]
     pub index: bool,
     /// If an attribute is set to strict, this attribute can only be used
     /// in entities with a class that specifies the attribute.
-    #[serde(rename = "factor/isStrict")]
+    #[serde(rename = "factor/isStrict", default)]
     pub strict: bool,
 }
 

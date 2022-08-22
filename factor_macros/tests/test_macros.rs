@@ -66,16 +66,16 @@ fn test_entity_derive() {
             description: None,
             attributes: vec![
                 ClassAttribute {
-                    attribute: AttrSomeTitle::IDENT,
-                    cardinality: factdb::Cardinality::Required,
+                    attribute: AttrSomeTitle::QUALIFIED_NAME.to_string(),
+                    required: true,
                 },
                 ClassAttribute {
-                    attribute: AttrDescription::IDENT,
-                    cardinality: factdb::Cardinality::Optional,
+                    attribute: AttrDescription::QUALIFIED_NAME.to_string(),
+                    required: false,
                 },
                 ClassAttribute {
-                    attribute: AttrLength::IDENT,
-                    cardinality: factdb::Cardinality::Required,
+                    attribute: AttrLength::QUALIFIED_NAME.to_string(),
+                    required: true,
                 },
             ],
             extends: Vec::new(),

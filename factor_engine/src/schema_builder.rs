@@ -40,11 +40,11 @@ fn diff_attributes(old: &[ClassAttribute], new: &[ClassAttribute]) -> Vec<Entity
 
     for old_attr in old {
         if let Some(new_attr) = new.iter().find(|attr| attr.attribute == old_attr.attribute) {
-            if old_attr.cardinality != new_attr.cardinality {
+            if old_attr.required != new_attr.required {
                 patches.push(EntityAttributePatch::CardinalityChanged {
-                    old: old_attr.cardinality,
-                    new: new_attr.cardinality,
-                    attribute: old_attr.attribute.clone(),
+                    old: old_attr.cardinality(),
+                    new: new_attr.cardinality(),
+                    attribute: old_attr.attribute.clone().into(),
                 })
             }
         } else {
@@ -317,7 +317,7 @@ fn build_attribute_delete(
     // Ensure that attribute is not used by any entity definition.
     for entity in reg.iter_entities() {
         for field in &entity.schema.attributes {
-            let field_attr = reg.require_attr_by_ident(&field.attribute)?;
+            let field_attr = reg.require_attr_by_name(&field.attribute)?;
             if field_attr.schema.id == attr.schema.id {
                 return Err(anyhow!(
                     "Can't delete attribute '{}': still in use by entity '{}'",
@@ -380,7 +380,7 @@ fn build_entity_attribute_add(
         .schema
         .attributes
         .iter()
-        .any(|a| a.attribute == attr.schema.id.into())
+        .any(|a| a.attribute == attr.schema.ident)
     {
         bail!(
             "Entity '{}' already has the attribute '{}'",
@@ -415,7 +415,7 @@ fn build_entity_attribute_add(
 
     entity.schema.attributes.push(ClassAttribute {
         attribute: attr.schema.ident.into(),
-        cardinality: add.cardinality,
+        required: add.cardinality.is_required(),
     });
 
     let action = ResolvedAction {
@@ -441,7 +441,7 @@ fn build_entity_attribute_change_cardinality(
         )
     })?;
 
-    match (field.cardinality, change.new_cardinality) {
+    match (field.cardinality(), change.new_cardinality) {
         (Cardinality::Optional, Cardinality::Optional) => {
             bail!("Cardinality is unchanged");
         }
@@ -480,7 +480,7 @@ fn build_entity_attribute_remove(
     let mut new_entity = entity.schema.clone();
     new_entity
         .attributes
-        .retain(|a| a.attribute != attr.schema.ident());
+        .retain(|a| a.attribute != attr.schema.ident);
     reg.update_class(new_entity, true)?;
 
     let ops = if change.delete_values {
@@ -581,11 +581,11 @@ fn build_entity_upsert(
         for diff in diffs {
             match diff {
                 EntityAttributePatch::Added(new_attr) => {
-                    if new_attr.cardinality != Cardinality::Required {
+                    if !new_attr.required {
                         new_attrs.push(new_attr);
                     } else {
                         bail!(
-                            "Entity upsert with new attribute '{:?}' is invalid - new attributes must have a cardinality of Optional or Many",
+                            "Entity upsert with new attribute '{:?}' is invalid - new attributes must be optional",
                             new_attr.attribute,
                         );
                     }
