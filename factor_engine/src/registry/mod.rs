@@ -489,7 +489,7 @@ impl Registry {
     // }
     //
 
-    fn validate_entity_data(
+    fn validate_class_data(
         &self,
         data: &mut DataMap,
         entity: &RegisteredEntity,
@@ -500,7 +500,12 @@ impl Registry {
             // we don't have to do this lookup each time.
             let attr = self.attrs.must_get_by_name(&field.attribute)?;
 
-            match (data.get_mut(&attr.schema.ident), field.cardinality()) {
+            dbg!(("validating field", &field));
+
+            match (
+                dbg!(data.get_mut(&attr.schema.ident)),
+                dbg!(field.cardinality()),
+            ) {
                 // Handle optional fields that have a Unit value.
                 (Some(Value::Unit), Cardinality::Optional) => {
                     // Remove the unit value.
@@ -529,10 +534,11 @@ impl Registry {
         // Validate extended parent fields.
         for parent_id in &entity.extends {
             let parent = self.entities.get(*parent_id).unwrap();
-            self.validate_entity_data(data, parent, ops)?;
+            self.validate_class_data(data, parent, ops)?;
         }
 
         // Validate extra attributes
+        let mut to_remove = Vec::new();
         for (key, value) in data.iter_mut() {
             if key == AttrType::QUALIFIED_NAME || key == AttrId::QUALIFIED_NAME {
                 continue;
@@ -541,9 +547,16 @@ impl Registry {
                 if entity.schema.strict {
                     bail!("Invalid attribute '{}' for entity '{}': entity type is strict and does not allow additional attributes", key, entity.schema.ident);
                 }
-                let attr = self.require_attr_by_name(key)?;
-                self.validate_attr_value(attr, value, ops)?;
+                if value.is_nil() {
+                    to_remove.push(key.clone());
+                } else {
+                    let attr = self.require_attr_by_name(key)?;
+                    self.validate_attr_value(attr, value, ops)?;
+                }
             }
+        }
+        for key in to_remove {
+            data.remove(&key);
         }
 
         Ok(())
@@ -556,12 +569,14 @@ impl Registry {
     ) -> Result<DataMap, anyhow::Error> {
         if let Some(ty) = data.get_type() {
             let entity = self.entities.must_get_by_ident(&ty)?;
-            self.validate_entity_data(&mut data, entity, ops)?;
+            dbg!("validating class");
+            self.validate_class_data(&mut data, entity, ops)?;
         } else {
             let mut to_remove = Vec::new();
+            dbg!("validating raw attributes");
             for (key, value) in &mut data.0 {
                 let attr = self.attrs.must_get_by_name(key)?;
-                if value.is_unit() {
+                if value.is_nil() {
                     to_remove.push(key.clone());
                 } else {
                     self.validate_attr_value(attr, value, ops)?;
