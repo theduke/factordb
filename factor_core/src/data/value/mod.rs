@@ -596,6 +596,14 @@ impl Value {
             None
         }
     }
+
+    /// Returns `true` if the value is [`Unit`].
+    ///
+    /// [`Unit`]: Value::Unit
+    #[must_use]
+    pub fn is_unit(&self) -> bool {
+        matches!(self, Self::Unit)
+    }
 }
 
 impl From<bool> for Value {

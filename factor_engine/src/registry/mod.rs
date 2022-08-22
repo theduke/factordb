@@ -558,9 +558,18 @@ impl Registry {
             let entity = self.entities.must_get_by_ident(&ty)?;
             self.validate_entity_data(&mut data, entity, ops)?;
         } else {
+            let mut to_remove = Vec::new();
             for (key, value) in &mut data.0 {
                 let attr = self.attrs.must_get_by_name(key)?;
-                self.validate_attr_value(attr, value, ops)?;
+                if value.is_unit() {
+                    to_remove.push(key.clone());
+                } else {
+                    self.validate_attr_value(attr, value, ops)?;
+                }
+            }
+
+            for key in to_remove {
+                data.remove(&key);
             }
         }
 
