@@ -117,7 +117,7 @@ fn build_entity(
         .iter()
         .map(|ident| {
             schema
-                .resolve_entity(ident)
+                .class_by_ident(ident)
                 .ok_or_else(|| anyhow!("Parent entity {ident} not found"))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -157,7 +157,7 @@ fn build_entity(
         }
         field_names.insert(field.attribute.clone());
 
-        if let Some(parent_attr) = schema.parent_entity_attr(&entity.ident(), &attr.ident()) {
+        if let Some(parent_attr) = schema.parent_class_attr(&entity.ident, &attr.ident()) {
             if parent_attr.required == field.required {
                 continue;
             }

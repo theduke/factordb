@@ -566,7 +566,7 @@ async fn test_entity_attr_add_with_default(db: &Db) {
     db.schema()
         .await
         .unwrap()
-        .resolve_entity(&ty.into())
+        .class_by_ident(&ty)
         .unwrap()
         .attributes
         .iter()

@@ -527,8 +527,8 @@ impl Registry {
         }
 
         // Validate extended parent fields.
-        for parent_ident in &entity.schema.extends {
-            let parent = self.entities.must_get_by_ident(parent_ident)?;
+        for parent_id in &entity.extends {
+            let parent = self.entities.get(*parent_id).unwrap();
             self.validate_entity_data(data, parent, ops)?;
         }
 

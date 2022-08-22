@@ -240,7 +240,7 @@ pub struct Class {
     #[serde(rename = "factor/classAttributes", default)]
     pub attributes: Vec<ClassAttribute>,
     #[serde(rename = "factor/extend", default)]
-    pub extends: Vec<IdOrIdent>,
+    pub extends: Vec<String>,
     /// If a schema is set to strict, additional attributes not specified
     /// by the schema will be rejected.
     #[serde(rename = "factor/isStrict", default)]
@@ -300,7 +300,7 @@ impl Class {
         self
     }
 
-    pub fn with_extend(mut self, extend: impl Into<IdOrIdent>) -> Self {
+    pub fn with_extend(mut self, extend: impl Into<String>) -> Self {
         self.extends.push(extend.into());
         self
     }

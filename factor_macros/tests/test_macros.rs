@@ -85,7 +85,7 @@ fn test_entity_derive() {
     );
 
     let schema = Child::schema();
-    assert_eq!(schema.extends, vec![Entity1::IDENT]);
+    assert_eq!(schema.extends, vec![Entity1::QUALIFIED_NAME.to_string()]);
 }
 
 // #[test]

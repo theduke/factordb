@@ -254,7 +254,7 @@ pub fn derive_class(tokens: TokenStream) -> TokenStream {
             }
             extends_field = Some((*field_name).clone());
             schema_extends.push(quote! {
-                <#field_ty as factdb::ClassMeta>::IDENT.into(),
+                <#field_ty as factdb::ClassMeta>::QUALIFIED_NAME.to_string(),
             });
         } else if field_attrs.is_relation {
             todo!()

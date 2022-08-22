@@ -90,7 +90,7 @@ impl EntityRegistry {
         let mut nested_attribute_names = FnvHashSet::<String>::default();
 
         for parent_name in &schema.extends {
-            let parent = self.must_get_by_ident(parent_name)?;
+            let parent = self.must_get_by_name(parent_name)?;
             parent_ids.insert(parent.local_id);
             nested_attribute_names.extend(parent.nested_attribute_names.clone());
         }
@@ -157,15 +157,6 @@ impl EntityRegistry {
             Some(item)
         }
     }
-
-    // pub fn must_get(&self, id: LocalEntityId) -> Result<&RegisteredEntity, EntityNotFound> {
-    //     let item = self.get_maybe_deleted(id);
-    //     if item.is_deleted {
-    //         Err(EntityNotFound::new(item.schema.ident.clone().into()))
-    //     } else {
-    //         Ok(item)
-    //     }
-    // }
 
     pub fn get_by_uid(&self, uid: Id) -> Option<&RegisteredEntity> {
         self.uids.get(&uid).and_then(|id| self.get(*id))
@@ -312,7 +303,7 @@ impl EntityRegistry {
 
         for parent_ident in &entity.extends {
             let parent = self
-                .must_get_by_ident(parent_ident)
+                .must_get_by_name(parent_ident)
                 .context("Invalid parent")?;
             if parent.schema.id == entity.id {
                 return Err(anyhow!("Entity can't extend itself"));

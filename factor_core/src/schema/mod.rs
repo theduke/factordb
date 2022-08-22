@@ -44,30 +44,30 @@ impl DbSchema {
         self.attributes.iter().find(|attr| attr.ident == ident)
     }
 
-    pub fn resolve_entity(&self, ident: &IdOrIdent) -> Option<&Class> {
+    pub fn resolve_class(&self, ident: &IdOrIdent) -> Option<&Class> {
         self.classes.iter().find(|entity| match &ident {
             IdOrIdent::Id(id) => entity.id == *id,
             IdOrIdent::Name(name) => entity.ident.as_str() == name,
         })
     }
 
+    pub fn class_by_ident(&self, ident: &str) -> Option<&Class> {
+        self.classes.iter().find(|entity| entity.ident == ident)
+    }
+
     /// Find the attribute definition for a given attribute by searching the parents of an entity.
-    pub fn parent_entity_attr(
-        &self,
-        entity: &IdOrIdent,
-        attr: &IdOrIdent,
-    ) -> Option<&ClassAttribute> {
-        let entity = self.resolve_entity(entity)?;
+    pub fn parent_class_attr(&self, entity: &str, attr: &IdOrIdent) -> Option<&ClassAttribute> {
+        let entity = self.class_by_ident(entity)?;
 
         for parent_ident in &entity.extends {
-            let parent_entity = self.resolve_entity(parent_ident)?;
+            let parent_entity = self.class_by_ident(parent_ident)?;
             if let Some(attr) = parent_entity
                 .attributes
                 .iter()
                 .find(|a| Some(a.attribute.as_str()) == attr.as_name())
             {
                 return Some(attr);
-            } else if let Some(attr) = self.parent_entity_attr(parent_ident, attr) {
+            } else if let Some(attr) = self.parent_class_attr(parent_ident, attr) {
                 return Some(attr);
             }
         }
