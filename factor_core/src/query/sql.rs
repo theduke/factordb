@@ -341,7 +341,6 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
                     sqlparser::ast::BinaryOperator::NotEq => BinaryOp::Neq,
                     sqlparser::ast::BinaryOperator::And => BinaryOp::And,
                     sqlparser::ast::BinaryOperator::Or => BinaryOp::Or,
-                    sqlparser::ast::BinaryOperator::Like => BinaryOp::Contains,
                     // sqlparser::ast::BinaryOperator::Plus => todo!(),
                     // sqlparser::ast::BinaryOperator::Minus => todo!(),
                     // sqlparser::ast::BinaryOperator::Multiply => todo!(),
@@ -431,92 +430,139 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
                     return Err(SqlParseError::new("national string literal not supported"));
                 }
                 SqlValue::HexStringLiteral(_) => {
-                    return Err(SqlParseError::new(format!("hex literals not supported")));
+                    return Err(SqlParseError::new("hex literals not supported".to_string()));
                 }
                 SqlValue::Boolean(v) => Value::Bool(v),
                 SqlValue::Interval { .. } => {
-                    return Err(SqlParseError::new(format!("INTERVAL not supported")));
+                    return Err(SqlParseError::new("INTERVAL not supported".to_string()));
                 }
                 SqlValue::Null => Value::Unit,
                 SqlValue::EscapedStringLiteral(_) => {
-                    return Err(SqlParseError::new(format!(
-                        "escaped string literal not supported"
-                    )));
+                    return Err(SqlParseError::new(
+                        "escaped string literal not supported".to_string(),
+                    ));
                 }
             };
             Expr::Literal(value)
         }
         SqlExpr::TypedString { .. } => {
-            return Err(SqlParseError::new(format!(
-                "no types strings are supported"
-            )));
+            return Err(SqlParseError::new("no types strings are supported"));
         }
         SqlExpr::MapAccess { .. } => {
-            return Err(SqlParseError::new(format!("map accessors not supported")));
+            return Err(SqlParseError::new("map accessors not supported"));
         }
         SqlExpr::Function(_) => {
-            return Err(SqlParseError::new(format!("functions not supported")));
+            return Err(SqlParseError::new("functions not supported"));
         }
         SqlExpr::Case { .. } => {
-            return Err(SqlParseError::new(format!("CASE is not supported")));
+            return Err(SqlParseError::new("CASE is not supported"));
         }
         SqlExpr::Exists { .. } => {
-            return Err(SqlParseError::new(format!("EXISTS is not supported")));
+            return Err(SqlParseError::new("EXISTS is not supported"));
         }
         SqlExpr::Subquery(_) => {
-            return Err(SqlParseError::new(format!("subqueries are not supported")));
+            return Err(SqlParseError::new("subqueries are not supported"));
         }
         SqlExpr::ListAgg(_) => {
-            return Err(SqlParseError::new(format!("LISTAGG is not supported")));
+            return Err(SqlParseError::new("LISTAGG is not supported"));
         }
         SqlExpr::GroupingSets(_) => {
-            return Err(SqlParseError::new(format!(
-                "GROUPTING SETS are not supported"
-            )));
+            return Err(SqlParseError::new("GROUPTING SETS are not supported"));
         }
         SqlExpr::Cube(_) => {
-            return Err(SqlParseError::new(format!("CUBE is not supported")));
+            return Err(SqlParseError::new("CUBE is not supported"));
         }
         SqlExpr::Rollup(_) => {
-            return Err(SqlParseError::new(format!("ROLLUP is not supported")));
+            return Err(SqlParseError::new("ROLLUP is not supported"));
         }
         SqlExpr::Tuple(_) => {
-            return Err(SqlParseError::new(format!("ROW/TUPLE is not supported")));
+            return Err(SqlParseError::new("ROW/TUPLE is not supported"));
         }
         SqlExpr::ArrayIndex { .. } => {
-            return Err(SqlParseError::new(format!("Array Index is not supported")));
+            return Err(SqlParseError::new("Array Index is not supported"));
         }
         SqlExpr::Array(_) => {
-            return Err(SqlParseError::new(format!("Array Index is not supported")));
+            return Err(SqlParseError::new("Array Index is not supported"));
         }
         SqlExpr::InUnnest { .. } => {
-            return Err(SqlParseError::new(format!("UNNEST is not supported")));
+            return Err(SqlParseError::new("UNNEST is not supported"));
         }
         SqlExpr::JsonAccess { .. } => {
-            return Err(SqlParseError::new(format!("json accessors not supported")));
+            return Err(SqlParseError::new("json accessors not supported"));
         }
         SqlExpr::CompositeAccess { .. } => {
-            return Err(SqlParseError::new(format!(
-                "composite accessors not supported"
-            )));
+            return Err(SqlParseError::new("composite accessors not supported"));
         }
         SqlExpr::IsFalse(_) => {
-            return Err(SqlParseError::new(format!("IS FALSE is not supported")));
+            return Err(SqlParseError::new("IS FALSE is not supported"));
         }
         SqlExpr::IsTrue(_) => {
-            return Err(SqlParseError::new(format!("IS TRUE is not supported")));
+            return Err(SqlParseError::new("IS TRUE is not supported"));
         }
         SqlExpr::AnyOp(_) => {
-            return Err(SqlParseError::new(format!("ANY(x) is not supported")));
+            return Err(SqlParseError::new("ANY(x) is not supported"));
         }
         SqlExpr::AllOp(_) => {
-            return Err(SqlParseError::new(format!("ALL(x) is not supported")));
+            return Err(SqlParseError::new("ALL(x) is not supported"));
         }
         SqlExpr::Position { .. } => {
-            return Err(SqlParseError::new(format!("POSITION is not supported")));
+            return Err(SqlParseError::new("POSITION is not supported"));
         }
         SqlExpr::AtTimeZone { .. } => {
-            return Err(SqlParseError::new(format!("AT TIME ZONE is not supported")));
+            return Err(SqlParseError::new("AT TIME ZONE is not supported"));
+        }
+        SqlExpr::IsNotFalse(inner) => {
+            let expr = build_expr(*inner)?;
+            Expr::neq(expr, Value::Bool(false))
+        }
+        SqlExpr::IsNotTrue(inner) => {
+            let expr = build_expr(*inner)?;
+            Expr::neq(expr, Value::Bool(true))
+        }
+        SqlExpr::IsUnknown(_) => {
+            return Err(SqlParseError::new("IS UNKNOWN is not supported"));
+        }
+        SqlExpr::IsNotUnknown(_) => {
+            return Err(SqlParseError::new("IS NOT UNKNOWN is not supported"));
+        }
+        SqlExpr::Like {
+            negated,
+            expr,
+            pattern,
+            escape_char: _,
+        } => {
+            let left = build_expr(*expr)?;
+            let right = build_expr(*pattern)?;
+            let expr = Expr::contains(left, right);
+            if negated {
+                Expr::not(expr)
+            } else {
+                expr
+            }
+        }
+        SqlExpr::ILike {
+            negated,
+            expr,
+            pattern,
+            escape_char: _,
+        } => {
+            let left = build_expr(*expr)?;
+            let right = build_expr(*pattern)?;
+            let expr = Expr::contains(left, right);
+            if negated {
+                Expr::not(expr)
+            } else {
+                expr
+            }
+        }
+        SqlExpr::SimilarTo { .. } => {
+            return Err(SqlParseError::new("SIMILAR TO is not supported"));
+        }
+        SqlExpr::SafeCast { .. } => {
+            return Err(SqlParseError::new("SAFE CAST is not supported"));
+        }
+        SqlExpr::ArraySubquery(_) => {
+            return Err(SqlParseError::new("ARRAY() subquery is not supported"));
         }
     };
 
