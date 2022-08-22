@@ -368,10 +368,9 @@ impl LogDb {
                             .mem
                             .write()
                             .unwrap()
-                            .apply_batch(batch)
+                            .apply_batch(batch.clone())
                             .context(format!(
-                                "Could not apply event '{}' to memory state",
-                                event_id
+                                "Could not apply event '{event_id}' to memory state ({batch:?})",
                             ))?;
                     }
                     LogOp::Migrate(migration) => {
@@ -381,9 +380,8 @@ impl LogDb {
                             .unwrap()
                             .migrate(migration.clone())
                             .context(format!(
-                                "Could not apply event '{}' to memory state",
-                                event_id
-                            ))?;
+                            "Could not apply event '{event_id}' to memory state ({migration:?})",
+                        ))?;
                         migrations.push(migration);
                     }
                 }
