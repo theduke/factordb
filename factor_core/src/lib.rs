@@ -8,3 +8,5 @@ pub mod db;
 pub mod error;
 pub mod query;
 pub mod schema;
+
+pub mod simple_db;

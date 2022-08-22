@@ -95,7 +95,7 @@ pub fn schema_to_typescript(
     module.add_newlines(1);
 
     let entities = schema
-        .entities
+        .classes
         .iter()
         .map(|entity| build_entity(entity, schema))
         .collect::<Result<Vec<Vec<_>>, _>>()?
@@ -140,7 +140,7 @@ fn build_entity(
         .iter()
         .map(|attr| -> Result<_, anyhow::Error> {
             let s = schema
-                .resolve_attr(&attr.attribute)
+                .attr_by_ident(&attr.attribute)
                 .ok_or_else(|| anyhow!("Attribute {} not found", attr.attribute))?;
             Ok((attr.clone(), s.clone()))
         })
@@ -158,7 +158,7 @@ fn build_entity(
         field_names.insert(field.attribute.clone());
 
         if let Some(parent_attr) = schema.parent_entity_attr(&entity.ident(), &attr.ident()) {
-            if parent_attr.cardinality == field.cardinality {
+            if parent_attr.required == field.required {
                 continue;
             }
         }
@@ -166,7 +166,7 @@ fn build_entity(
         let ty = field_ts_type(field, attr);
         let def = FieldDef {
             name: attr.ident.clone(),
-            is_optional: field.cardinality.is_optional(),
+            is_optional: !field.required,
             ty,
         };
 
@@ -425,9 +425,10 @@ fn make_save_ident(name: &str) -> String {
 
 fn field_ts_type(field: &schema::ClassAttribute, attr: &schema::Attribute) -> Type {
     let inner = value_to_ts_type(&attr.value_type);
-    match field.cardinality {
-        schema::Cardinality::Optional => Type::Union(vec![inner, Type::Null]),
-        schema::Cardinality::Required => inner,
+    if field.required {
+        inner
+    } else {
+        Type::Union(vec![inner, Type::Null])
     }
 }
 

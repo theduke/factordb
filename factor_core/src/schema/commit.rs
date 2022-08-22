@@ -33,6 +33,9 @@ pub struct PreMigration {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct StaticSchema {
+    #[serde(rename = "factor/ident")]
+    pub ident: String,
+
     #[serde(rename = "factor/imports", default)]
     pub imports: Vec<String>,
 
