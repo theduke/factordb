@@ -219,6 +219,19 @@ impl Value {
                         })
                     }
                 }
+                Value::String(s) => {
+                    if let Ok(intval) = s.parse::<i64>() {
+                        *self = Value::Int(intval);
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::Int,
+                            actual_type: ValueType::String,
+                            path: None,
+                            message: None,
+                        })
+                    }
+                }
                 other => Err(ValueCoercionError {
                     expected_type: ValueType::Int,
                     actual_type: other.value_type(),
@@ -256,6 +269,19 @@ impl Value {
                         })
                     }
                 }
+                Value::String(s) => {
+                    if let Ok(intval) = s.parse::<u64>() {
+                        *self = Value::UInt(intval);
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::UInt,
+                            actual_type: ValueType::String,
+                            path: None,
+                            message: None,
+                        })
+                    }
+                }
                 other => Err(ValueCoercionError {
                     expected_type: ValueType::Int,
                     actual_type: other.value_type(),
@@ -273,6 +299,19 @@ impl Value {
                     Ok(())
                 }
                 Value::Float(_) => Ok(()),
+                Value::String(s) => {
+                    if let Ok(floatval) = s.parse::<f64>() {
+                        *self = Value::Float(floatval.into());
+                        Ok(())
+                    } else {
+                        Err(ValueCoercionError {
+                            expected_type: ValueType::Float,
+                            actual_type: ValueType::String,
+                            path: None,
+                            message: None,
+                        })
+                    }
+                }
                 other => Err(ValueCoercionError {
                     expected_type: ValueType::Float,
                     actual_type: other.value_type(),
