@@ -415,13 +415,46 @@ where
                 .visit_map(de::value::MapDeserializer::new(v.0.into_iter().map(
                     |(k, v)| (ValueDeserializer::new(k), ValueDeserializer::new(v)),
                 ))),
-            Value::Bytes(v) => visitor.visit_byte_buf(v),
+            // FIXME: this is horrible. why is this called despine the custom bytes/byte_buf impl below?
+            Value::Bytes(v) => visitor.visit_seq(de::value::SeqDeserializer::new(
+                v.into_iter().map(Value::from).map(ValueDeserializer::new),
+            )),
             Value::Id(id) => {
                 if self.is_human_readable() {
                     visitor.visit_string(id.to_string())
                 } else {
                     visitor.visit_bytes(id.as_uuid().as_bytes())
                 }
+            }
+        }
+    }
+
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        match self.value {
+            Value::Bytes(bytes) => visitor.visit_bytes(&bytes),
+            other => {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Other(&format!("{:?}", other)),
+                    &"byte array",
+                ));
+            }
+        }
+    }
+
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: de::Visitor<'de>,
+    {
+        match self.value {
+            Value::Bytes(bytes) => visitor.visit_byte_buf(bytes),
+            other => {
+                return Err(de::Error::invalid_value(
+                    de::Unexpected::Other(&format!("{:?}", other)),
+                    &"byte array",
+                ));
             }
         }
     }
@@ -487,7 +520,7 @@ where
 
     forward_to_deserialize_any! {
         bool u8 u16 u32 u64 i8 i16 i32 i64 f32 f64 char str string unit
-        seq bytes byte_buf map unit_struct
+        seq map unit_struct
         tuple_struct struct tuple ignored_any identifier
     }
 }

@@ -927,7 +927,9 @@ impl TryFrom<Value> for Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use crate::data::{from_value, from_value_map, to_value, to_value_map, Id, ValueMap};
+    use crate::data::{
+        from_value, from_value_map, map, to_value, to_value_map, Id, Value, ValueMap,
+    };
 
     #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
     struct TestData {
@@ -970,7 +972,14 @@ mod tests {
 
         // Now round-trip through a map.
         let map: ValueMap<String> = to_value_map(data.clone()).unwrap();
+        dbg!(&map);
         let data3: TestData = from_value_map(map).unwrap();
         assert_eq!(data, data3);
+    }
+
+    #[test]
+    fn test_value_deser_bytes() {
+        let x: Vec<u8> = from_value(Value::Bytes(vec![1, 2, 3])).unwrap();
+        assert_eq!(x, vec![1, 2, 3]);
     }
 }
