@@ -909,6 +909,22 @@ impl TryFrom<Value> for url::Url {
     }
 }
 
+impl TryFrom<Value> for Vec<u8> {
+    type Error = ValueCoercionError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(v) => Ok(v),
+            other => Err(ValueCoercionError {
+                expected_type: ValueType::Bytes,
+                actual_type: other.value_type(),
+                path: None,
+                message: None,
+            }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::data::{from_value, from_value_map, to_value, to_value_map, Id, ValueMap};
