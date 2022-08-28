@@ -1,12 +1,19 @@
 use std::{collections::HashMap, convert::TryInto};
 
-use crate::{data::Value, query::select::Aggregation};
+use crate::{
+    data::{
+        patch::{Patch, PatchPathElem},
+        Value,
+    },
+    query::select::Aggregation,
+};
 
 use super::{
     expr::{BinaryOp, Expr},
+    mutate::{MutateSelect, MutateSelectAction},
     select::{Order, Select, Sort},
 };
-use sqlparser::ast::{Expr as SqlExpr, SelectItem, Value as SqlValue};
+use sqlparser::ast::{self, Expr as SqlExpr, SelectItem, TableFactor, Value as SqlValue};
 
 #[derive(Debug)]
 pub struct SqlParseError {
@@ -43,9 +50,82 @@ impl std::error::Error for SqlParseError {
     }
 }
 
-pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
-    use sqlparser::ast::Statement;
+#[derive(Clone, Debug)]
+pub enum ParsedSqlQuery {
+    Select(Select),
+    Mutate(MutateSelect),
+}
 
+impl ParsedSqlQuery {
+    pub fn as_mutate(&self) -> Option<&MutateSelect> {
+        if let Self::Mutate(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+/// Contains all data from [`slqparser::ast::Insert`].
+/// Wrapper needed for code convenience, since it's a flat enum.
+struct SqlDelete {
+    table_name: TableFactor,
+    using: Option<TableFactor>,
+    selection: Option<ast::Expr>,
+}
+
+struct SqlUpdate {
+    /// TABLE
+    table: ast::TableWithJoins,
+    /// Column assignments
+    assignments: Vec<ast::Assignment>,
+    /// Table which provide value to be set
+    from: Option<ast::TableWithJoins>,
+    /// WHERE
+    selection: Option<ast::Expr>,
+}
+
+pub fn parse_sql(sql: &str) -> Result<ParsedSqlQuery, SqlParseError> {
+    match parse_single_statement(sql)? {
+        ast::Statement::Query(q) => build_select(*q).map(ParsedSqlQuery::Select),
+        ast::Statement::Update {
+            table,
+            assignments,
+            from,
+            selection,
+        } => {
+            let update = SqlUpdate {
+                table,
+                assignments,
+                from,
+                selection,
+            };
+            build_update(update).map(ParsedSqlQuery::Mutate)
+        }
+        ast::Statement::Delete {
+            table_name,
+            using,
+            selection,
+        } => {
+            let del = SqlDelete {
+                table_name,
+                using,
+                selection,
+            };
+            build_delete(del).map(ParsedSqlQuery::Mutate)
+        }
+        _other => Err(SqlParseError::new(
+            "Unsupported SQL statement: expected SELECT/UPDATE/DELETE",
+        )),
+    }
+}
+
+pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
+    let query = parse_query(sql)?;
+    build_select(query)
+}
+
+fn parse_single_statement(sql: &str) -> Result<ast::Statement, SqlParseError> {
     let statements =
         sqlparser::parser::Parser::parse_sql(&sqlparser::dialect::GenericDialect {}, sql).map_err(
             |err| SqlParseError {
@@ -53,38 +133,100 @@ pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
                 cause: Some(err),
             },
         )?;
-    let stmt = if statements.is_empty() {
-        return Err(SqlParseError::new("No statement detected"));
+    if statements.is_empty() {
+        Err(SqlParseError::new("No statement detected"))
     } else if statements.len() > 1 {
-        return Err(SqlParseError::new("Only a single statement is allowed"));
+        Err(SqlParseError::new("Only a single statement is allowed"))
     } else {
-        statements.into_iter().next().unwrap()
-    };
+        Ok(statements.into_iter().next().unwrap())
+    }
+}
 
-    let query = if let Statement::Query(q) = stmt {
-        q
+fn parse_query(sql: &str) -> Result<ast::Query, SqlParseError> {
+    let stmt = parse_single_statement(sql)?;
+    if let ast::Statement::Query(q) = stmt {
+        Ok(*q)
     } else {
-        return Err(SqlParseError::new("Expected a `SELECT` statement"));
-    };
+        Err(SqlParseError::new("Expected a `SELECT` statement"))
+    }
+}
 
+fn validate_table_factor(factor: &ast::TableFactor) -> Result<(), SqlParseError> {
+    match factor {
+        ast::TableFactor::Table {
+            name,
+            alias,
+            args,
+            with_hints,
+        } => {
+            let table_name = if name.0.len() == 1 {
+                name.0[0].value.clone()
+            } else {
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
+            };
+
+            match table_name.as_str() {
+                "entities" | "e" => {}
+                _other => {
+                    return Err(SqlParseError::new(
+                        "must select from the entities/e table: SELECT * FROM entities / SELECT * FROM e",
+                    ));
+                }
+            }
+
+            if alias.is_some() {
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
+            }
+            if args.is_some() {
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
+            }
+            if !with_hints.is_empty() {
+                return Err(SqlParseError::new(
+                    "must select from the entities table: SELECT * FROM entities",
+                ));
+            }
+        }
+        _other => {
+            return Err(SqlParseError::new(
+                "must select from the entities table: SELECT * FROM entities",
+            ));
+        }
+    };
+    Ok(())
+}
+
+fn validate_table_with_joins(t: &ast::TableWithJoins) -> Result<(), SqlParseError> {
+    validate_table_factor(&t.relation)?;
+    if !t.joins.is_empty() {
+        return Err(SqlParseError::new("JOINs are not supported"));
+    }
+    Ok(())
+}
+
+pub fn build_select(query: ast::Query) -> Result<Select, SqlParseError> {
     let select = match *query.body {
-        sqlparser::ast::SetExpr::Select(s) => s,
-        sqlparser::ast::SetExpr::Query(_) => {
+        ast::SetExpr::Select(s) => s,
+        ast::SetExpr::Query(_) => {
             return Err(SqlParseError::new("subqueries are not supported"));
         }
-        sqlparser::ast::SetExpr::SetOperation { .. } => {
+        ast::SetExpr::SetOperation { .. } => {
             return Err(SqlParseError::new(
                 "set operations (union/intersect/...) are not supported",
             ));
         }
-        sqlparser::ast::SetExpr::Values(_) => {
+        ast::SetExpr::Values(_) => {
             return Err(SqlParseError::new("literal value select not supported"));
         }
-        sqlparser::ast::SetExpr::Insert(_) => {
+        ast::SetExpr::Insert(_) => {
             return Err(SqlParseError::new("INSERT not supported"));
         }
     };
-
     if select.distinct {
         return Err(SqlParseError::new("DISTINCT is not supported"));
     }
@@ -122,8 +264,7 @@ pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
 
     let mut aggregate = Vec::<Aggregation>::new();
 
-    if select.projection.len() == 1 && select.projection[0] == sqlparser::ast::SelectItem::Wildcard
-    {
+    if select.projection.len() == 1 && select.projection[0] == ast::SelectItem::Wildcard {
         // Select all attributes.
     } else {
         for proj in select.projection {
@@ -147,44 +288,7 @@ pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
         ));
     }
     let table_with_joins = select.from[0].clone();
-    match table_with_joins.relation {
-        sqlparser::ast::TableFactor::Table {
-            name,
-            alias,
-            args,
-            with_hints,
-        } => {
-            if name.0.len() != 1 || name.0[0].value != "entities" {
-                return Err(SqlParseError::new(
-                    "must select from the entities table: SELECT * FROM entities",
-                ));
-            }
-            if alias.is_some() {
-                return Err(SqlParseError::new(
-                    "must select from the entities table: SELECT * FROM entities",
-                ));
-            }
-            if args.is_some() {
-                return Err(SqlParseError::new(
-                    "must select from the entities table: SELECT * FROM entities",
-                ));
-            }
-            if !with_hints.is_empty() {
-                return Err(SqlParseError::new(
-                    "must select from the entities table: SELECT * FROM entities",
-                ));
-            }
-        }
-        _other => {
-            return Err(SqlParseError::new(
-                "must select from the entities table: SELECT * FROM entities",
-            ));
-        }
-    };
-
-    if !table_with_joins.joins.is_empty() {
-        return Err(SqlParseError::new("JOINs are not supported"));
-    }
+    validate_table_with_joins(&table_with_joins)?;
 
     let limit = match query.limit {
         Some(SqlExpr::Value(SqlValue::Number(num, _))) => num.parse::<u64>().map_err(|_| {
@@ -241,7 +345,7 @@ pub fn parse_select(sql: &str) -> Result<Select, SqlParseError> {
 /// or (false, None) if not a count expression.
 fn select_item_as_count(item: &SelectItem) -> (bool, Option<String>) {
     match item {
-        SelectItem::UnnamedExpr(sqlparser::ast::Expr::Function(f)) => {
+        SelectItem::UnnamedExpr(ast::Expr::Function(f)) => {
             if f.name.0.len() == 1 && f.name.0[0].value == "count" && f.args.is_empty() {
                 (true, None)
             } else {
@@ -249,7 +353,7 @@ fn select_item_as_count(item: &SelectItem) -> (bool, Option<String>) {
             }
         }
         SelectItem::ExprWithAlias {
-            expr: sqlparser::ast::Expr::Function(f),
+            expr: ast::Expr::Function(f),
             alias,
         } => {
             if f.name.0.len() == 1 && f.name.0[0].value == "count" && f.args.is_empty() {
@@ -320,7 +424,7 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
                 let value = build_expr(other)?;
 
                 match op {
-                    sqlparser::ast::BinaryOperator::Eq => Expr::in_(value, target),
+                    ast::BinaryOperator::Eq => Expr::in_(value, target),
                     _ => {
                         return Err(SqlParseError::new(format!(
                             "Unsupported ANY operator {:?}: ANY(_) is only supported with =, like ",
@@ -333,37 +437,35 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
                 let left = build_expr(left)?;
                 let right = build_expr(right)?;
                 let op = match op {
-                    sqlparser::ast::BinaryOperator::Gt => BinaryOp::Gt,
-                    sqlparser::ast::BinaryOperator::Lt => BinaryOp::Lt,
-                    sqlparser::ast::BinaryOperator::GtEq => BinaryOp::Gte,
-                    sqlparser::ast::BinaryOperator::LtEq => BinaryOp::Lte,
-                    sqlparser::ast::BinaryOperator::Eq => BinaryOp::Eq,
-                    sqlparser::ast::BinaryOperator::NotEq => BinaryOp::Neq,
-                    sqlparser::ast::BinaryOperator::And => BinaryOp::And,
-                    sqlparser::ast::BinaryOperator::Or => BinaryOp::Or,
-                    // sqlparser::ast::BinaryOperator::Plus => todo!(),
-                    // sqlparser::ast::BinaryOperator::Minus => todo!(),
-                    // sqlparser::ast::BinaryOperator::Multiply => todo!(),
-                    // sqlparser::ast::BinaryOperator::Divide => todo!(),
-                    // sqlparser::ast::BinaryOperator::Modulo => todo!(),
-                    // sqlparser::ast::BinaryOperator::StringConcat => todo!(),
-                    // sqlparser::ast::BinaryOperator::Spaceship => todo!(),
-                    // sqlparser::ast::BinaryOperator::Xor => todo!(),
-                    // sqlparser::ast::BinaryOperator::NotLike => todo!(),
-                    // sqlparser::ast::BinaryOperator::ILike => todo!(),
-                    // sqlparser::ast::BinaryOperator::NotILike => todo!(),
-                    // sqlparser::ast::BinaryOperator::BitwiseOr => todo!(),
-                    // sqlparser::ast::BinaryOperator::BitwiseAnd => todo!(),
-                    // sqlparser::ast::BinaryOperator::BitwiseXor => todo!(),
-                    // sqlparser::ast::BinaryOperator::PGBitwiseXor => todo!(),
-                    // sqlparser::ast::BinaryOperator::PGBitwiseShiftLeft => todo!(),
-                    // sqlparser::ast::BinaryOperator::PGBitwiseShiftRight => todo!(),
-                    // sqlparser::ast::BinaryOperator::PGRegexNotMatch => todo!(),
-                    // sqlparser::ast::BinaryOperator::PGRegexNotIMatch => todo!(),
-                    sqlparser::ast::BinaryOperator::PGRegexMatch => BinaryOp::RegexMatch,
-                    sqlparser::ast::BinaryOperator::PGRegexIMatch => {
-                        BinaryOp::RegexMatchCaseInsensitive
-                    }
+                    ast::BinaryOperator::Gt => BinaryOp::Gt,
+                    ast::BinaryOperator::Lt => BinaryOp::Lt,
+                    ast::BinaryOperator::GtEq => BinaryOp::Gte,
+                    ast::BinaryOperator::LtEq => BinaryOp::Lte,
+                    ast::BinaryOperator::Eq => BinaryOp::Eq,
+                    ast::BinaryOperator::NotEq => BinaryOp::Neq,
+                    ast::BinaryOperator::And => BinaryOp::And,
+                    ast::BinaryOperator::Or => BinaryOp::Or,
+                    // ast::BinaryOperator::Plus => todo!(),
+                    // ast::BinaryOperator::Minus => todo!(),
+                    // ast::BinaryOperator::Multiply => todo!(),
+                    // ast::BinaryOperator::Divide => todo!(),
+                    // ast::BinaryOperator::Modulo => todo!(),
+                    // ast::BinaryOperator::StringConcat => todo!(),
+                    // ast::BinaryOperator::Spaceship => todo!(),
+                    // ast::BinaryOperator::Xor => todo!(),
+                    // ast::BinaryOperator::NotLike => todo!(),
+                    // ast::BinaryOperator::ILike => todo!(),
+                    // ast::BinaryOperator::NotILike => todo!(),
+                    // ast::BinaryOperator::BitwiseOr => todo!(),
+                    // ast::BinaryOperator::BitwiseAnd => todo!(),
+                    // ast::BinaryOperator::BitwiseXor => todo!(),
+                    // ast::BinaryOperator::PGBitwiseXor => todo!(),
+                    // ast::BinaryOperator::PGBitwiseShiftLeft => todo!(),
+                    // ast::BinaryOperator::PGBitwiseShiftRight => todo!(),
+                    // ast::BinaryOperator::PGRegexNotMatch => todo!(),
+                    // ast::BinaryOperator::PGRegexNotIMatch => todo!(),
+                    ast::BinaryOperator::PGRegexMatch => BinaryOp::RegexMatch,
+                    ast::BinaryOperator::PGRegexIMatch => BinaryOp::RegexMatchCaseInsensitive,
                     other => {
                         return Err(SqlParseError::new(format!(
                             "Comparison operator {} not supported",
@@ -378,7 +480,7 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
         SqlExpr::UnaryOp { op, expr } => {
             let expr = build_expr(*expr)?;
             match op {
-                sqlparser::ast::UnaryOperator::Not => Expr::not(expr),
+                ast::UnaryOperator::Not => Expr::not(expr),
                 other => {
                     return Err(SqlParseError::new(format!(
                         "Unary operator '{}' not supported",
@@ -569,10 +671,63 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
     Ok(e)
 }
 
+fn build_delete(del: SqlDelete) -> Result<MutateSelect, SqlParseError> {
+    validate_table_factor(&del.table_name)?;
+    if del.using.is_some() {
+        return Err(SqlParseError::new("USING is not supported"));
+    }
+    let selection = del
+        .selection
+        .ok_or_else(|| SqlParseError::new("DELETE must have a WHERE clause"))?;
+    let filter = build_expr(selection)?;
+    Ok(MutateSelect {
+        filter,
+        variables: Default::default(),
+        action: MutateSelectAction::Delete,
+    })
+}
+
+fn build_update(up: SqlUpdate) -> Result<MutateSelect, SqlParseError> {
+    validate_table_with_joins(&up.table)?;
+    if up.from.is_some() {
+        return Err(SqlParseError::new("FROM is not supported"));
+    }
+    let selection = up
+        .selection
+        .ok_or_else(|| SqlParseError::new("UPDATE must have a WHERE clause"))?;
+    let filter = build_expr(selection)?;
+
+    let mut patch = Patch::new();
+
+    for assign in up.assignments {
+        let path: Vec<PatchPathElem> = assign
+            .id
+            .into_iter()
+            .map(|ident| PatchPathElem::Key(ident.value))
+            .collect();
+        let value_expr = build_expr(assign.value)?;
+        let value = match value_expr {
+            Expr::Literal(lit) => lit,
+            _other => {
+                return Err(SqlParseError::new(
+                    "UPDATE assignments only support literal values for now (field = LITERAL)",
+                ));
+            }
+        };
+        patch = patch.replace(path, value);
+    }
+
+    Ok(MutateSelect {
+        filter,
+        variables: Default::default(),
+        action: MutateSelectAction::Patch(patch),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::schema::{
-        builtin::{AttrIdent, AttrTitle, AttrType},
+        builtin::{AttrId, AttrIdent, AttrTitle, AttrType},
         AttributeMeta,
     };
 
@@ -664,6 +819,34 @@ mod tests {
                 Expr::attr_ident("a"),
                 "hello"
             ))
+        );
+    }
+
+    #[test]
+    fn test_sql_parse_delete() {
+        let m1 = parse_sql(r#"DELETE FROM entities WHERE "factor/id" = 42"#).unwrap();
+        assert_eq!(
+            m1.as_mutate().unwrap(),
+            &MutateSelect {
+                filter: Expr::eq(AttrId::expr(), 42u64),
+                variables: Default::default(),
+                action: MutateSelectAction::Delete,
+            }
+        );
+    }
+
+    #[test]
+    fn test_sql_parse_update() {
+        let m1 =
+            parse_sql(r#"UPDATE entities SET "factor/title" = 'hello' WHERE "factor/id" = 42"#)
+                .unwrap();
+        assert_eq!(
+            m1.as_mutate().unwrap(),
+            &MutateSelect {
+                filter: Expr::eq(AttrId::expr(), 42u64),
+                variables: Default::default(),
+                action: MutateSelectAction::Patch(Patch::new().replace("factor/title", "hello")),
+            }
         );
     }
 }

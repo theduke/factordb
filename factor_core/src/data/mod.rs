@@ -1,29 +1,3 @@
-mod id;
-pub use id::{Id, IdOrIdent, NilIdError};
-
-mod reference;
-pub use self::reference::Ref;
-
-mod ident;
-pub use ident::{Ident, InvalidIdentError};
-
-mod map;
-pub mod patch;
-pub mod value;
-pub mod value_type;
-
-pub use self::{
-    map::ValueMap,
-    value::{from_value, from_value_map, to_value, to_value_map, Value},
-    value_type::ValueType,
-};
-
-mod time;
-pub use time::Timestamp;
-
-pub type DataMap = ValueMap<String>;
-pub type IdMap = fnv::FnvHashMap<Id, Value>;
-
 #[macro_export]
 macro_rules! map {
 
@@ -115,3 +89,29 @@ macro_rules! tymap {
 
     };
 }
+
+mod id;
+pub use id::{Id, IdOrIdent, NilIdError};
+
+mod reference;
+pub use self::reference::Ref;
+
+mod ident;
+pub use ident::{Ident, InvalidIdentError};
+
+mod map;
+pub mod patch;
+pub mod value;
+pub mod value_type;
+
+pub use self::{
+    map::ValueMap,
+    value::{from_value, from_value_map, to_value, to_value_map, Value},
+    value_type::ValueType,
+};
+
+mod time;
+pub use time::Timestamp;
+
+pub type DataMap = ValueMap<String>;
+pub type IdMap = fnv::FnvHashMap<Id, Value>;

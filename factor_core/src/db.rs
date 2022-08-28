@@ -7,6 +7,7 @@ use crate::{
         self,
         migrate::Migration,
         mutate::{Batch, Mutate},
+        select::Page,
     },
     schema::{self, ClassContainer},
 };
@@ -99,6 +100,10 @@ impl Db {
         self.create(id, data).await
     }
 
+    pub async fn mutate(&self, mutate: Mutate) -> Result<(), anyhow::Error> {
+        self.batch(mutate.into()).await
+    }
+
     pub async fn replace(&self, id: Id, data: DataMap) -> Result<(), anyhow::Error> {
         self.batch(Mutate::replace(id, data).into()).await
     }
@@ -113,6 +118,23 @@ impl Db {
 
     pub async fn delete(&self, id: Id) -> Result<(), anyhow::Error> {
         self.batch(Mutate::delete(id).into()).await
+    }
+
+    /// Execute a SQL statement.
+    ///
+    /// Supported statements are SELECT, UPDATE and DELETE.
+    pub async fn sql(
+        &self,
+        sql: String,
+    ) -> Result<query::select::Page<query::select::Item>, anyhow::Error> {
+        match crate::query::sql::parse_sql(&sql)? {
+            query::sql::ParsedSqlQuery::Select(sel) => self.select(sel).await,
+            query::sql::ParsedSqlQuery::Mutate(m) => {
+                self.mutate(Mutate::Select(m)).await?;
+                // TODO: support selections/returning?
+                Ok(Page::new())
+            }
+        }
     }
 
     /// Run a migration.
