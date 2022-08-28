@@ -1,9 +1,12 @@
-use std::{collections::HashMap, convert::TryInto};
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+};
 
 use crate::{
     data::{
         patch::{Patch, PatchPathElem},
-        Value,
+        Value, ValueType,
     },
     query::select::Aggregation,
 };
@@ -14,6 +17,8 @@ use super::{
     select::{Order, Select, Sort},
 };
 use sqlparser::ast::{self, Expr as SqlExpr, SelectItem, TableFactor, Value as SqlValue};
+use url::ParseError;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct SqlParseError {
@@ -489,8 +494,50 @@ fn build_expr(expr: SqlExpr) -> Result<Expr, SqlParseError> {
                 }
             }
         }
-        SqlExpr::Cast { .. } => {
-            return Err(SqlParseError::new("CAST not supported"));
+        SqlExpr::Cast { expr, data_type } => {
+            use ast::DataType;
+
+            let e = build_expr(*expr)?;
+            let mut value = match e {
+                Expr::Literal(v) => v,
+                _other => {
+                    return Err(SqlParseError::new(
+                        "Invalid CAST: cast is only supported with literal values",
+                    ));
+                }
+            };
+
+            let res = match data_type {
+                DataType::Uuid => value.coerce_mut(&ValueType::Ref),
+                DataType::Text
+                | DataType::String
+                | DataType::Char(_)
+                | DataType::Varchar(_)
+                | DataType::Nvarchar(_) => value.coerce_mut(&ValueType::String),
+                DataType::TinyInt(_)
+                | DataType::SmallInt(_)
+                | DataType::Int(_)
+                | DataType::Integer(_)
+                | DataType::BigInt(_) => value.coerce_mut(&ValueType::Int),
+                DataType::UnsignedTinyInt(_)
+                | DataType::UnsignedSmallInt(_)
+                | DataType::UnsignedInt(_)
+                | DataType::UnsignedInteger(_)
+                | DataType::UnsignedBigInt(_) => value.coerce_mut(&ValueType::UInt),
+                DataType::Binary(_) | DataType::Varbinary(_) | DataType::Blob(_) => {
+                    value.coerce_mut(&ValueType::Bytes)
+                }
+                DataType::Float(_) | DataType::Double | DataType::Real => {
+                    value.coerce_mut(&ValueType::Float)
+                }
+                DataType::Boolean => value.coerce_mut(&ValueType::Bool),
+                _other => {
+                    return Err(SqlParseError::new("Unsupported cast"));
+                }
+            };
+
+            res.map_err(|err| SqlParseError::new(format!("Unsupported cast: {err}")))?;
+            Expr::Literal(value)
         }
         SqlExpr::TryCast { .. } => {
             return Err(SqlParseError::new("TRY_CAST not supported"));
@@ -726,9 +773,14 @@ fn build_update(up: SqlUpdate) -> Result<MutateSelect, SqlParseError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::schema::{
-        builtin::{AttrId, AttrIdent, AttrTitle, AttrType},
-        AttributeMeta,
+    use std::str::FromStr;
+
+    use crate::{
+        data::Id,
+        schema::{
+            builtin::{AttrId, AttrIdent, AttrTitle, AttrType},
+            AttributeMeta,
+        },
     };
 
     use super::*;
@@ -819,6 +871,11 @@ mod tests {
                 Expr::attr_ident("a"),
                 "hello"
             ))
+        );
+
+        assert_eq!(
+            parse_select(r#" SELECT * FROM entities WHERE '92a2e6d5-5b45-4356-8b36-2b6127df5a58'::uuid = ANY("my/attr" ) "#).unwrap(),
+            Select::new().with_filter(Expr::in_(Id::from_str("92a2e6d5-5b45-4356-8b36-2b6127df5a58").unwrap(), Expr::attr_ident("my/attr")))
         );
     }
 
