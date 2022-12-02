@@ -1,0 +1,140 @@
+{
+  "factor/ident": "factor/database_schema",
+  "factor/migrations": [
+    {
+      "factor/description": "Base schema",
+      "factor/commits": [
+        {
+          "factor/subject": "factor/Class",
+          "factor/set": {
+            "factor/type": "factor/Class"
+          }
+        },
+        {
+          "factor/subject": "factor/DataType",
+          "factor/set": {
+            "factor/type": "factor/Class"
+          }
+        },
+        {
+          "factor/subject": "factor/Property",
+          "factor/set": {
+            "factor/type": "factor/Class",
+            "factor/properties": [
+              {
+                  "factor/type": "factor/ClassProperty",
+                  "factor/property": "factor/datatype",
+                  "factor/required": true
+              },
+              {
+                "factor/type": "factor/ClassProperty",
+                "factor/property": "factor/required",
+                "factor/required": true
+              }
+            ]
+          }
+        },
+        {
+          "factor/subject": "factor/Constraint",
+          "factor/set": {
+            "factor/type": "factor/Class"
+          }
+        },
+
+        {
+          "factor/subject": "factor/ConstraintIntegerRange/minimum",
+          "factor/set": {
+            "factor/type": "factor/Property",
+            "factor/datatype": "factor/type/Integer"
+          }
+        },
+        {
+          "factor/subject": "factor/ConstraintIntegerRange/maximum",
+          "factor/set": {
+            "factor/type": "factor/Property",
+            "factor/datatype": "factor/type/Integer"
+          }
+        },
+        {
+          "factor/subject": "factor/ConstraintIntegerRange",
+          "factor/set": {
+            "factor/type": "factor/Constraint",
+            "factor/properties": [
+              {
+                "factor/type": "factor/ClassProperty",
+                "factor/property": "factor/ConstraintIntegerRange/minimum",
+                "factor/required": true
+              },
+              {
+                "factor/type": "factor/ClassProperty",
+                "factor/property": "factor/ConstraintIntegerRange/maximum",
+                "factor/required": true
+              }
+            ]
+          }
+        },
+
+        {
+          "factor/subject": "factor/type/Boolean",
+          "factor/set": {
+            "factor/type": "factor/DataType"
+          }
+        },
+        {
+          "factor/subject": "factor/type/Integer",
+          "factor/set": {
+            "factor/type": "factor/DataType"
+          }
+        },
+        {
+          "factor/subject": "factor/type/Float",
+          "factor/set": {
+            "factor/type": "factor/DataType"
+          }
+        },
+        {
+          "factor/subject": "factor/type/String",
+          "factor/set": {
+            "factor/type": "factor/DataType"
+          }
+        },
+        {
+          "factor/subject": "factor/type/Bytes",
+          "factor/set": {
+            "factor/type": "factor/DataType"
+          }
+        },
+        {
+          "factor/subject": "factor/type/Timestamp",
+          "factor/set": {
+            "factor/type": "factor/DataType",
+	          "factor/extends": ["factor/type/integer"]
+          }
+        },
+        {
+          "factor/subject": "factor/type/duration",
+          "factor/set": {
+            "factor/type": "factor/DataType",
+	          "factor/extends": ["factor/type/integer"]
+          }
+        },
+
+        {
+          "factor/subject": "factor/",
+          "factor/set": {
+            "factor/type": "factor/Class",
+            "factor/entityAttributes": [
+              {
+                "factor/attribute": "factor/title",
+                "factor/required": true
+              }
+            ],
+            "factor/extend": [
+              "test/MyClass"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

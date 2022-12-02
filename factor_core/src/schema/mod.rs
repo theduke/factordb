@@ -1,4 +1,5 @@
 pub mod builtin;
+pub mod dsl;
 
 mod attribute;
 pub use self::attribute::{AttrMapExt, Attribute, AttributeMeta};
@@ -8,9 +9,6 @@ pub use self::class::{Cardinality, Class, ClassAttribute, ClassContainer, ClassM
 
 mod index;
 pub use self::index::IndexSchema;
-
-mod commit;
-pub use commit::{PreBatchCommit, PreCommit, PreMigration, StaticSchema};
 
 use crate::data::IdOrIdent;
 

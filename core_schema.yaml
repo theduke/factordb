@@ -1,0 +1,86 @@
+id: factor/Schema
+namespace: factor
+migrations:
+  - id: create_core_types
+    commits:
+
+      # Base classes.
+      - subject: DataType
+        set:
+          factor/type: factor/Class
+
+      - subject: Class
+        set:
+          factor/type: factor/Class
+          factor/classProperties:
+            - factor/type: factor/ClassProperty
+              factor/property: factor/classProperties
+              factor/required: true
+
+      - subject: Property
+        set:
+          factor/type: factor/Class
+          factor/classProperties:
+            - factor/type: factor/ClassProperty
+              factor/property: factor/valueType
+              factor/required: true
+
+      - subject: ClassProperty
+        set:
+          factor/type: factor/Class
+          factor/classProperties:
+            - factor/type: factor/ClassProperty
+              factor/property: factor/property
+              factor/required: true
+            - factor/type: factor/ClassProperty
+              factor/property: factor/required
+              factor/required: true
+
+
+      # Base properties.
+
+      - subject: type
+        set:
+          factor/type: factor/Property
+          factor/valueType: factor/Reference
+      - subject: valueType
+        set:
+          factor/type: factor/Property
+          factor/valueType: factor/Reference
+      - subject: factor/type
+        set:
+          factor/type: factor/Property
+          factor/valueType: factor/Reference
+      - subject: factor/property
+        set:
+          factor/type: factor/Property
+          factor/valueType: factor/Reference
+      - subject: factor/required
+        set:
+          factor/type: factor/Property
+          factor/valueType: factor/Boolean
+      - subject: classProperties
+        set:
+          factor/type: Property
+          factor/valueType: factor/ClassProperty
+
+      # Data types.
+
+      - subject: Reference
+        set:
+          type: DataType
+      - subject: Boolean
+        set:
+          type: DataType
+      - subject: Integer
+        set:
+          type: DataType
+      - subject: Float
+        set:
+          type: DataType
+      - subject: String
+        set:
+          type: DataType
+      - subject: Bytes
+        set:
+          type: DataType

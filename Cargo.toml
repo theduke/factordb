@@ -8,6 +8,7 @@ members = [
     "factor_macros",
     "factor_tools",
     "factor_tests",
+    "factor_cli",
     "./examples",
 
     # Backends

@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    convert::{TryFrom, TryInto},
-};
+use std::{collections::HashMap, convert::TryInto};
 
 use crate::{
     data::{
@@ -17,8 +14,6 @@ use super::{
     select::{Order, Select, Sort},
 };
 use sqlparser::ast::{self, Expr as SqlExpr, SelectItem, TableFactor, Value as SqlValue};
-use url::ParseError;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct SqlParseError {

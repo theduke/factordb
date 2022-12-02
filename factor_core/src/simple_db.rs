@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use anyhow::{bail, Context};
+
 use crate::{
     data::{DataMap, Id, IdOrIdent},
     schema::{
         builtin::{AttrId, AttrIdent},
-        AttrMapExt, AttributeMeta, PreCommit,
+        dsl, AttrMapExt, AttributeMeta,
     },
 };
 
@@ -66,7 +68,101 @@ impl SimpleDb {
         })
     }
 
-    pub fn apply_pre_commit(mut self, commit: PreCommit) -> Result<Self, anyhow::Error> {
+    pub fn resolve_commit(
+        &self,
+        config: &NamespaceConfig,
+        commit: dsl::DslCommit,
+        skip_resolve_namespaced: bool,
+    ) -> Result<dsl::DslCommit, anyhow::Error> {
+        fn has_namespace(value: &str) -> bool {
+            value.contains('/')
+        }
+
+        let ctx = NamespaceContext::from_simple_db(&config, &self)?;
+
+        dbg!(&ctx);
+
+        let mut c = commit;
+
+        let ns = &config.namespace;
+
+        if !has_namespace(&c.subject) {
+            c.subject = format!("{ns}/{}", c.subject);
+        }
+
+        if let Some(set) = c.set.take() {
+            let mut new_set = DataMap::new();
+
+            for (key, value) in set.iter() {
+                let full_key = if has_namespace(key) {
+                    key.clone()
+                } else {
+                    ctx.objects
+                        .get(key)
+                        .with_context(|| format!("Could not resolve property '{key}'"))?
+                        .clone()
+                };
+
+                if !(has_namespace(key) && skip_resolve_namespaced) {
+                    let property = self
+                        .entity_by_ident(&full_key)
+                        .with_context(|| format!("Could not resolve property '{full_key}'"))?;
+
+                    // Make sure the object is a property.
+                    // TODO: use const for factor/Property
+                    if !property
+                        // TODO: use const
+                        .get("factor/type")
+                        .and_then(|t| t.as_str())
+                        .filter(|c| *c == "factor/Property")
+                        .is_some()
+                    {
+                        dbg!(&property);
+                        bail!("Invalid property '{key}': entity is not a property");
+                    }
+
+                    // If the property type is Ref, resolve the target.
+                    // TODO: use const
+                    let ty_raw = property.get("factor/valueType").with_context(|| {
+                        format!("invalid property {full_key}: property has no valueType")
+                    })?;
+                    let ty = ty_raw.as_str().with_context(|| {
+                        format!("invalid property {full_key}: factor/valueType must be a string")
+                    })?;
+
+                    // TODO: use const
+                    // TODO: handle arrays of references and other nested references...
+                    let final_value = if ty == "factor/Reference" {
+                        let target = value.as_str().with_context(|| {
+                        "invalid property value {full_key}: {value:?} - references must be a string"
+                    })?;
+
+                        let full_target = if has_namespace(target) {
+                            target.to_string()
+                        } else {
+                            ctx.objects
+                                .get(target)
+                                .with_context(|| format!("Could not resolve entity {target}"))?
+                                .clone()
+                        };
+                        full_target.into()
+                    } else {
+                        value.clone()
+                    };
+
+                    new_set.insert(full_key, final_value);
+                } else {
+                    new_set.insert(full_key, value.clone());
+                }
+            }
+
+            c.set = Some(new_set);
+        }
+
+        Ok(c)
+    }
+
+    pub fn apply_dsl_commit(mut self, commit: dsl::DslCommit) -> Result<Self, anyhow::Error> {
         let subject = IdOrIdent::new_str(&commit.subject);
 
         let old_opt = match &subject {
@@ -103,10 +199,76 @@ impl SimpleDb {
                     AttrIdent::QUALIFIED_NAME.to_string(),
                     ident.to_string().into(),
                 );
+            } else {
+                data.insert(AttrIdent::QUALIFIED_NAME.to_string(), commit.subject.into());
             }
             self.entities.insert(id, data);
         }
 
         Ok(self)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NamespaceConfig {
+    pub namespace: String,
+    pub imports: Vec<NamespaceImport>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct NamespaceImport {
+    pub source: String,
+    pub alias: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct NamespaceContext {
+    /// Map from flat name to namespaced name.
+    pub objects: HashMap<String, String>,
+}
+
+impl NamespaceContext {
+    fn from_simple_db(config: &NamespaceConfig, db: &SimpleDb) -> Result<Self, anyhow::Error> {
+        let mut objects = HashMap::new();
+
+        let mut prefixes: Vec<String> = config
+            .imports
+            .iter()
+            .map(|imp| {
+                if imp.source.ends_with('/') {
+                    imp.source.clone()
+                } else {
+                    format!("{}/", imp.source)
+                }
+            })
+            .collect();
+        prefixes.push(format!("{}/", config.namespace));
+
+        for entity in db.entities.values() {
+            let Some(id_raw) = entity.get(AttrIdent::QUALIFIED_NAME) else {
+                continue;
+            };
+            let id = id_raw
+                .as_str()
+                .with_context(|| format!("Invalid databse state: factor/ident is not a string"))?;
+
+            let is_match = prefixes.iter().any(|prefix| id.starts_with(prefix));
+            if !is_match {
+                continue;
+            }
+
+            let plain = id.split('/').last().unwrap();
+
+            if let Some(existing) = objects.get(plain) {
+                bail!(
+                    "name clash for id '{id}':  context already has name {plain} as id {existing}"
+                )
+            }
+            objects.insert(plain.to_string(), id.to_string());
+        }
+
+        dbg!(db, config, &objects);
+
+        Ok(Self { objects })
     }
 }

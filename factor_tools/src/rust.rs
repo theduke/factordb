@@ -2,11 +2,11 @@ use std::collections::HashSet;
 use std::fmt::Write;
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use factor_core::{
     data::{from_value_map, ValueType},
     schema::{
-        builtin::AttrIdent, AttrMapExt, Attribute, AttributeMeta, Class, ClassMeta, StaticSchema,
+        builtin::AttrIdent, dsl::DslSchema, AttrMapExt, Attribute, AttributeMeta, Class, ClassMeta,
     },
     simple_db::SimpleDb,
 };
@@ -413,19 +413,18 @@ fn value_type_to_expr(ty: &ValueType) -> Expr {
 }
 
 pub fn generate_schema(
-    schema: &StaticSchema,
+    schema: DslSchema,
     with_builtins: bool,
+    skip_resolve_namespaced: bool,
 ) -> Result<String, anyhow::Error> {
-    let mut db = SimpleDb::new();
+    let db = SimpleDb::new();
+    let db = schema.apply_to_simple_db(db, skip_resolve_namespaced)?;
+    dbg!(&db);
 
-    for migration in &schema.migrations {
-        for commit in &migration.commits {
-            db = db.apply_pre_commit(commit.clone())?;
-        }
-    }
     let mut schema = Schema::default();
 
-    for raw_attr in db.entities_by_type(Attribute::QUALIFIED_NAME) {
+    // for raw_attr in db.entities_by_type(Attribute::QUALIFIED_NAME) {
+    for raw_attr in db.entities_by_type("factor/Property") {
         let id = raw_attr.get_id().unwrap();
         let ident = raw_attr
             .get(AttrIdent::QUALIFIED_NAME)
@@ -733,21 +732,34 @@ pub fn generate_schema(
 pub fn generate_schema_from_json(
     contents: &str,
     with_builtins: bool,
+    skip_resolve_namespaced: bool,
 ) -> Result<String, anyhow::Error> {
     let jd = &mut serde_json::Deserializer::from_str(contents);
-    let schema: StaticSchema = serde_path_to_error::deserialize(jd)?;
-    generate_schema(&schema, with_builtins)
+    let schema: DslSchema = serde_path_to_error::deserialize(jd)?;
+    generate_schema(schema, with_builtins, skip_resolve_namespaced)
 }
 
 pub fn generate_schema_from_file(
     path: impl Into<PathBuf>,
     with_builtins: bool,
+    skip_resolve_namespaced: bool,
 ) -> Result<String, anyhow::Error> {
     let path = path.into();
     let contents = std::fs::read_to_string(&path)
         .with_context(|| format!("Could not read file '{}'", path.display()))?;
-    let schema: StaticSchema = serde_json::from_str(&contents)?;
-    generate_schema(&schema, with_builtins)
+
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    let schema = match ext.unwrap_or_default() {
+        "json" => serde_json::from_str(&contents)?,
+        "yaml" | "yml" => serde_yaml::from_str(&contents)?,
+        other => {
+            bail!("Invalid schema extension '{other}': expected a yaml or json file");
+        }
+    };
+    dbg!(&schema);
+
+    generate_schema(schema, with_builtins, skip_resolve_namespaced)
 }
 
 #[cfg(test)]
