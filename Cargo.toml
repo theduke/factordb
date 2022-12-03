@@ -15,3 +15,13 @@ members = [
     # also needs deadpool-sqlite to upgrade to rusqlite 0.26
     #"factor_sqlite",
 ]
+
+[workspace.dependencies]
+anyhow = "1.0.66"
+serde = "1.0.148"
+serde_json = "1.0.85"
+futures = "0.3.25"
+uuid = "1.2.2"
+tokio = "1.22.0"
+tracing = "0.1.37"
+url = "2.3.1"

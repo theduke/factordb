@@ -12,12 +12,14 @@ bundled = ["rusqlite/bundled"]
 default = ["bundled"]
 
 [dependencies]
+factdb = { path = "../factdb" }
+
+anyhow.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+tokio = { workspace = true, features = ["macros"] }
+
 rusqlite = { version = "0.26.1", features = ["uuid"] }
 deadpool = { version = "0.9.1", features = ["managed", "rt_tokio_1"], default-features = false }
 deadpool-sqlite = "0.3.0"
-factdb = { path = "../factdb" }
-futures = "0.3.17"
 async-trait = "0.1.51"
-tokio = { version = "1.13.0", features = ["macros"] }
-anyhow = "1.0.45"
-serde_json = "1.0.68"

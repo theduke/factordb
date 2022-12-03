@@ -14,13 +14,13 @@ factdb = { path = "../factdb" }
 factor_engine = { path = "../factor_engine" }
 factor_core = { path = "../factor_core" }
 
+anyhow.workspace = true
+serde = { workspace = true, features = ["derive"] }
+futures.workspace = true
+uuid.workspace = true
 
-anyhow = "1.0.58"
 criterion = { version = "0.3.5", features = ["async_futures"] }
-futures = "0.3.21"
 rand = "0.8.5"
-serde = { version = "1.0.137", features = ["derive"] }
-uuid = "1.1.2"
 
 [dev-dependencies]
 criterion = "0.3.5"
