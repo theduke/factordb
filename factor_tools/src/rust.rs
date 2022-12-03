@@ -378,8 +378,8 @@ fn value_type_to_rust_type(value_type: &ValueType, schema: &Schema) -> String {
         ValueType::DateTime => "factdb::Timestamp".to_string(),
         ValueType::Url => "url::Url".to_string(),
         ValueType::Ref => "String".to_string(),
-        ValueType::Ident(constraints) => todo!(),
-        ValueType::RefConstrained(constraints) => todo!(),
+        ValueType::Ident(_constraints) => todo!(),
+        ValueType::RefConstrained(_constraints) => todo!(),
         ValueType::EmbeddedEntity => "factdb::DataMap".to_string(),
         ValueType::Const(_) => todo!(),
     }

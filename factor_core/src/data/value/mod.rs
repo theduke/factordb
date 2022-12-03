@@ -927,9 +927,7 @@ impl TryFrom<Value> for Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use crate::data::{
-        from_value, from_value_map, map, to_value, to_value_map, Id, Value, ValueMap,
-    };
+    use crate::data::{from_value, from_value_map, to_value, to_value_map, Id, Value, ValueMap};
 
     #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
     struct TestData {

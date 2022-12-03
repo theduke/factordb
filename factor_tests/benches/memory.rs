@@ -1,11 +1,12 @@
 use criterion::{
     async_executor::FuturesExecutor, criterion_group, criterion_main, BenchmarkId, Criterion,
 };
+use factor_engine::{backend::memory::MemoryDb, Engine};
 use factor_tests::Todo;
 
 use factdb::{
-    prelude::{Db, Expr, Id, Select},
     schema::{builtin::AttrTitle, AttributeMeta},
+    Db, Expr, Id, Select,
 };
 
 async fn select_single_with_title_eq(db: &Db) {
@@ -17,8 +18,9 @@ async fn select_single_with_title_eq(db: &Db) {
 }
 
 fn bench_filtering(c: &mut Criterion) {
-    let mem = factdb::backend::memory::MemoryDb::new();
-    let db = factdb::Db::new(mem);
+    let mem = MemoryDb::new();
+    let engine = Engine::new(mem);
+    let db = engine.into_client();
 
     futures::executor::block_on(async {
         factor_tests::apply_schema(&db).await.unwrap();

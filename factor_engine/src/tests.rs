@@ -75,7 +75,6 @@ async fn test_db_with_test_schema(db: &Db) {
         db,
         [
             test_schema_contains_builtins,
-            test_ref_insert_with_id_or_ident,
             test_select_in_with_list,
             test_select,
             test_query_in,
@@ -212,25 +211,25 @@ async fn test_attr_disallows_multiple_values(db: &Db) {
     assert!(is_coercion);
 }
 
-async fn test_ref_insert_with_id_or_ident(db: &Db) {
-    // let ident = "insert_ident1";
-    // let id1 = Id::random();
-    // db.create(id1, map! {"factor/ident": ident}).await.unwrap();
+// async fn test_ref_insert_with_id_or_ident(db: &Db) {
+//     // let ident = "insert_ident1";
+//     // let id1 = Id::random();
+//     // db.create(id1, map! {"factor/ident": ident}).await.unwrap();
 
-    // let id3 = Id::random();
-    // db.create(id3, map! {"test/ref": id1}).await.unwrap();
+//     // let id3 = Id::random();
+//     // db.create(id3, map! {"test/ref": id1}).await.unwrap();
 
-    // let id2 = Id::random();
-    // db.create(id2, map! {"test/ref": ident}).await.unwrap();
+//     // let id2 = Id::random();
+//     // db.create(id2, map! {"test/ref": ident}).await.unwrap();
 
-    // let tuple2 = db.entity(id2).await.unwrap();
-    // let tuple3 = db.entity(id3).await.unwrap();
+//     // let tuple2 = db.entity(id2).await.unwrap();
+//     // let tuple3 = db.entity(id3).await.unwrap();
 
-    // tuple3.get("test/ref").unwrap().as_id().unwrap();
-    // tuple2.get("test/ref").unwrap().as_id().unwrap();
+//     // tuple3.get("test/ref").unwrap().as_id().unwrap();
+//     // tuple2.get("test/ref").unwrap().as_id().unwrap();
 
-    // TODO: enable!
-}
+//     // TODO: enable!
+// }
 
 #[allow(clippy::as_conversions)]
 async fn test_attr_corcions(db: &Db) {

@@ -189,18 +189,18 @@ impl ValueTypeDescriptor for Ident {
     }
 }
 
-pub fn validate_name(value: &str) -> Result<(), InvalidIdentError> {
-    if value.is_empty() {
-        return Err(InvalidIdentError::new(value, "namespace is empty"));
-    }
-    if is_valid_name(value) {
-        return Err(InvalidIdentError::new(
-            value,
-            "namespace contains invalid characters (allowed: [a-zA-Z0-9._])",
-        ));
-    }
-    Ok(())
-}
+// pub fn validate_name(value: &str) -> Result<(), InvalidIdentError> {
+//     if value.is_empty() {
+//         return Err(InvalidIdentError::new(value, "namespace is empty"));
+//     }
+//     if is_valid_name(value) {
+//         return Err(InvalidIdentError::new(
+//             value,
+//             "namespace contains invalid characters (allowed: [a-zA-Z0-9._])",
+//         ));
+//     }
+//     Ok(())
+// }
 
 #[cfg(test)]
 mod tests {
