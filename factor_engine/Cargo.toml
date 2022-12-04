@@ -23,8 +23,8 @@ futures.workspace = true
 uuid = { workspace = true, features = ["serde", "v4"] }
 tracing.workspace = true
 url = { workspace = true, features = ["serde"] }
+time = { workspace = true, features = ["serde"] }
 
-chrono = { version = "0.4.19", features = ["serde"] }
 fnv = "1.0.7"
 ordered-float = { version = "3.0.0", features = ["serde"] }
 sqlparser = "0.21.0"

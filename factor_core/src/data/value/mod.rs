@@ -5,6 +5,7 @@ pub use serde_serialize::{to_value, to_value_map, ValueSerializeError};
 
 mod serde_serialize;
 pub use serde_deserialize::{from_value, from_value_map, ValueDeserializeError};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -410,8 +411,8 @@ impl Value {
                         if let Ok(x) = s.parse::<u64>() {
                             *self = Value::UInt(x);
                             Ok(())
-                        } else if let Ok(t) = chrono::DateTime::parse_from_rfc3339(s) {
-                            *self = Value::UInt(t.timestamp().try_into().unwrap());
+                        } else if let Ok(t) = OffsetDateTime::parse(s, &Rfc3339) {
+                            *self = Value::UInt(super::Timestamp::try_from(t).unwrap().as_millis());
                             Ok(())
                         } else {
                             Err(ValueCoercionError {

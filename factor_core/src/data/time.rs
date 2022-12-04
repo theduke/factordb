@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use chrono::TimeZone;
+use time::OffsetDateTime;
 
 use super::{value::ValueCoercionError, Value, ValueType};
 
@@ -34,14 +34,8 @@ impl Timestamp {
         std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_millis(self.0))
     }
 
-    pub fn to_datetime(&self) -> chrono::DateTime<chrono::Utc> {
-        let seconds = (self.0 / 1000) as i64;
-        let nanos = ((self.0 % 1000) * 1_000_000) as u32;
-        chrono::Utc.timestamp_opt(seconds, nanos).unwrap()
-    }
-
-    pub fn from_chrono_utc_datetime(t: chrono::NaiveDateTime) -> Self {
-        Self(t.timestamp() as u64)
+    pub fn to_datetime(&self) -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp_nanos(self.0 as i128 * 1_000_000).unwrap()
     }
 }
 
@@ -62,19 +56,13 @@ impl TryFrom<Value> for Timestamp {
     }
 }
 
-impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
-    fn from(v: chrono::DateTime<chrono::Utc>) -> Self {
-        Self(v.timestamp() as u64)
+impl From<OffsetDateTime> for Timestamp {
+    fn from(v: OffsetDateTime) -> Self {
+        Self(v.unix_timestamp() as u64 * 1_000)
     }
 }
 
-impl From<chrono::DateTime<chrono::FixedOffset>> for Timestamp {
-    fn from(v: chrono::DateTime<chrono::FixedOffset>) -> Self {
-        Self(v.timestamp() as u64)
-    }
-}
-
-impl From<Timestamp> for chrono::DateTime<chrono::Utc> {
+impl From<Timestamp> for OffsetDateTime {
     fn from(v: Timestamp) -> Self {
         v.to_datetime()
     }

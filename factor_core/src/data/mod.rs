@@ -111,7 +111,7 @@ pub use self::{
 };
 
 mod time;
-pub use time::Timestamp;
+pub use self::time::Timestamp;
 
 pub type DataMap = ValueMap<String>;
 pub type IdMap = fnv::FnvHashMap<Id, Value>;
