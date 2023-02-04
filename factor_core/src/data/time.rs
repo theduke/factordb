@@ -35,7 +35,9 @@ impl Timestamp {
     }
 
     pub fn to_datetime(&self) -> OffsetDateTime {
-        OffsetDateTime::from_unix_timestamp_nanos(self.0 as i128 * 1_000_000).unwrap()
+        OffsetDateTime::from_unix_timestamp_nanos(self.0 as i128 * 1_000)
+            .or_else(|_| OffsetDateTime::from_unix_timestamp(u32::MAX as i64))
+            .unwrap_or(OffsetDateTime::from_unix_timestamp(0).unwrap())
     }
 }
 
