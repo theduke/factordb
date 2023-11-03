@@ -128,7 +128,7 @@ impl std::fmt::Display for NilIdError {
 
 impl std::error::Error for NilIdError {
     #[cfg(feature = "unstable")]
-    fn provide<'a>(&'a self, req: &mut std::any::Demand<'a>) {
+    fn provide<'a>(&'a self, req: &mut std::error::Request<'a>) {
         req.provide_ref(&self.backtrace);
     }
 }

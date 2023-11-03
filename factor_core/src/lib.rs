@@ -1,7 +1,4 @@
-#![cfg_attr(
-    feature = "unstable",
-    feature(provide_any, error_generic_member_access)
-)]
+#![cfg_attr(feature = "unstable", feature(error_generic_member_access))]
 
 #[macro_use]
 pub mod data;
