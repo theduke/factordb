@@ -169,7 +169,9 @@ impl Ord for MemoryValue {
             }
 
             // String
-            (MemoryValue::String(a), MemoryValue::String(b)) => a.cmp(b),
+            (MemoryValue::String(a), MemoryValue::String(b)) => {
+                human_sort::compare(a.as_ref(), b.as_ref())
+            }
             (MemoryValue::String(_), _) => Ordering::Less,
             (_, MemoryValue::String(_)) => Ordering::Greater,
 
